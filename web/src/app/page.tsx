@@ -3,7 +3,8 @@
 import React, { useState } from 'react';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { MobileDrawer } from '@/components/layout/MobileDrawer';
-import { Folder, Layers, Send } from 'lucide-react';
+import { CollectionsNav } from '@/components/layout/CollectionsNav';
+import { Send } from 'lucide-react';
 
 export default function Home() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -14,21 +15,13 @@ export default function Home() {
       <AppHeader
         title="ApiDot"
         isAgentOnline={isAgentOnline}
-        onToggleDrawer={() => setIsDrawerOpen(true)}
+        isDrawerOpen={isDrawerOpen}
+        onToggleDrawer={() => setIsDrawerOpen((prev) => !prev)}
       />
 
       {/* Mobile Drawer */}
       <MobileDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)}>
-        <nav className="space-y-2 text-sm">
-          <div className="flex items-center gap-2 p-2 rounded hover:bg-neutral-800 text-neutral-300 cursor-pointer">
-            <Layers className="w-4 h-4 text-neutral-400" />
-            <span>Coleção Padrão</span>
-          </div>
-          <div className="flex items-center gap-2 p-2 rounded hover:bg-neutral-800 text-neutral-300 cursor-pointer pl-6">
-            <Folder className="w-4 h-4 text-neutral-400" />
-            <span>Autenticação</span>
-          </div>
-        </nav>
+        <CollectionsNav />
       </MobileDrawer>
 
       <div className="flex flex-1 overflow-hidden">
@@ -39,16 +32,7 @@ export default function Home() {
               Coleções & Pastas
             </span>
           </div>
-          <nav className="flex-1 overflow-y-auto space-y-1 text-sm">
-            <div className="flex items-center gap-2 p-2 rounded hover:bg-neutral-800 text-neutral-300 cursor-pointer">
-              <Layers className="w-4 h-4 text-neutral-400" />
-              <span>Coleção Padrão</span>
-            </div>
-            <div className="flex items-center gap-2 p-2 rounded hover:bg-neutral-800 text-neutral-300 cursor-pointer pl-6">
-              <Folder className="w-4 h-4 text-neutral-400" />
-              <span>Autenticação</span>
-            </div>
-          </nav>
+          <CollectionsNav className="flex-1 overflow-y-auto" />
         </aside>
 
         {/* Main Workspace Area (Request & Response panels) */}

@@ -11,12 +11,18 @@ describe('AppHeader', () => {
     expect(screen.getByText('ApiDot')).toBeDefined();
   });
 
-  it('renders agent status badge reflecting connection status', () => {
+  it('renders agent status badge reflecting connection status with consistent labels', () => {
     const { rerender } = render(<AppHeader isAgentOnline={true} />);
-    expect(screen.getByText('Agent Online')).toBeDefined();
+    const onlineText = screen.getByText('Agent Online');
+    expect(onlineText).toBeDefined();
+    const onlineBadge = screen.getByTestId('agent-status-badge');
+    expect(onlineBadge.getAttribute('title')).toBe('Agent Online');
 
     rerender(<AppHeader isAgentOnline={false} />);
-    expect(screen.getByText('Agent Offline')).toBeDefined();
+    const offlineText = screen.getByText('Agent Offline');
+    expect(offlineText).toBeDefined();
+    const offlineBadge = screen.getByTestId('agent-status-badge');
+    expect(offlineBadge.getAttribute('title')).toBe('Agent Offline');
   });
 
   it('calls onToggleDrawer when drawer toggle button is clicked', () => {
@@ -25,5 +31,15 @@ describe('AppHeader', () => {
     const toggleButton = screen.getByRole('button', { name: /toggle drawer|menu/i });
     fireEvent.click(toggleButton);
     expect(handleToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes accessible attributes on the hamburger button reflecting drawer state', () => {
+    const { rerender } = render(<AppHeader isDrawerOpen={false} />);
+    const toggleButton = screen.getByRole('button', { name: /toggle drawer|menu/i });
+    expect(toggleButton.getAttribute('aria-expanded')).toBe('false');
+    expect(toggleButton.getAttribute('aria-controls')).toBe('collections-drawer');
+
+    rerender(<AppHeader isDrawerOpen={true} />);
+    expect(toggleButton.getAttribute('aria-expanded')).toBe('true');
   });
 });
