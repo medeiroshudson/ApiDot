@@ -393,4 +393,33 @@ describe('RequestEditor', () => {
     expect(onSend).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toHaveTextContent(/url é obrigatória/i);
   });
+
+  it('formats unformatted JSON in the body when clicking the format button', () => {
+    render(<RequestEditor initialRequest={{ body: '{"name":"Hudson","active":true}' }} />);
+
+    const bodyTab = screen.getByRole('tab', { name: /body/i });
+    fireEvent.click(bodyTab);
+
+    const bodyInput = screen.getByRole('textbox', { name: /corpo da requisição/i });
+    expect(bodyInput).toHaveValue('{"name":"Hudson","active":true}');
+
+    const formatBtn = screen.getByRole('button', { name: /formatar corpo/i });
+    fireEvent.click(formatBtn);
+
+    const expectedJson = JSON.stringify({ name: 'Hudson', active: true }, null, 2);
+    expect(bodyInput).toHaveValue(expectedJson);
+    expect(screen.getByText(/formatado com sucesso/i)).toBeDefined();
+  });
+
+  it('shows error notice when formatting invalid JSON in the body', () => {
+    render(<RequestEditor initialRequest={{ body: '{ invalid json }' }} />);
+
+    const bodyTab = screen.getByRole('tab', { name: /body/i });
+    fireEvent.click(bodyTab);
+
+    const formatBtn = screen.getByRole('button', { name: /formatar corpo/i });
+    fireEvent.click(formatBtn);
+
+    expect(screen.getByText(/json inválido/i)).toBeDefined();
+  });
 });

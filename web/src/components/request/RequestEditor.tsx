@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Loader2, X } from 'lucide-react';
+import { Send, Loader2, X, Sparkles } from 'lucide-react';
 import { TargetSelector, ExecutionTarget } from './TargetSelector';
 
 export interface AuthConfig {
@@ -110,6 +110,36 @@ export function RequestEditor({
   const handleBodyChange = (newBody: string) => {
     setBody(newBody);
     updateRequest((prev) => ({ ...prev, body: newBody }));
+  };
+
+  const [formatNotice, setFormatNotice] = useState<{ target: 'body' | 'headers'; message: string; isError?: boolean } | null>(null);
+
+  const handleFormatBody = () => {
+    if (!body.trim()) return;
+    try {
+      const parsed = JSON.parse(body);
+      const formatted = JSON.stringify(parsed, null, 2);
+      handleBodyChange(formatted);
+      setFormatNotice({ target: 'body', message: 'Formatado com sucesso!' });
+      setTimeout(() => setFormatNotice(null), 2500);
+    } catch {
+      setFormatNotice({ target: 'body', message: 'JSON inválido para formatação', isError: true });
+      setTimeout(() => setFormatNotice(null), 3000);
+    }
+  };
+
+  const handleFormatHeaders = () => {
+    if (!headers.trim()) return;
+    try {
+      const parsed = JSON.parse(headers);
+      const formatted = JSON.stringify(parsed, null, 2);
+      handleHeadersChange(formatted);
+      setFormatNotice({ target: 'headers', message: 'Formatado com sucesso!' });
+      setTimeout(() => setFormatNotice(null), 2500);
+    } catch {
+      setFormatNotice({ target: 'headers', message: 'JSON inválido para formatação', isError: true });
+      setTimeout(() => setFormatNotice(null), 3000);
+    }
   };
 
   const handleAuthTypeChange = (type: AuthConfig['type']) => {
@@ -298,17 +328,44 @@ export function RequestEditor({
           hidden={activeTab !== 'headers'}
           className={activeTab === 'headers' ? 'h-full flex flex-col' : 'hidden'}
         >
-          <label htmlFor="headers-textarea" className="text-xs text-neutral-400 mb-2">
-            Cabeçalhos HTTP (JSON ou formato Chave: Valor):
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label htmlFor="headers-textarea" className="text-xs text-neutral-400 font-medium">
+              Cabeçalhos HTTP (JSON ou formato Chave: Valor):
+            </label>
+            <div className="flex items-center gap-2">
+              {formatNotice?.target === 'headers' && (
+                <span
+                  role="status"
+                  className={`text-xs font-medium animate-fade-in ${
+                    formatNotice.isError ? 'text-rose-400' : 'text-emerald-400'
+                  }`}
+                >
+                  {formatNotice.message}
+                </span>
+              )}
+              <button
+                type="button"
+                aria-label="Formatar cabeçalhos"
+                onClick={handleFormatHeaders}
+                disabled={isLoading || !headers.trim()}
+                className="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors border border-neutral-700/60 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
+                <span>Formatar</span>
+              </button>
+            </div>
+          </div>
           <textarea
             id="headers-textarea"
             aria-label="Cabeçalhos HTTP"
             value={headers}
             disabled={isLoading}
             onChange={(e) => handleHeadersChange(e.target.value)}
-            placeholder="{\n  &quot;Content-Type&quot;: &quot;application/json&quot;,\n  &quot;Authorization&quot;: &quot;Bearer token&quot;\n}"
-            className="w-full flex-1 min-h-[160px] p-3 text-xs sm:text-sm font-mono bg-neutral-900 border border-neutral-800 rounded-md text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y disabled:opacity-50 disabled:cursor-not-allowed"
+            placeholder={`{
+  "Content-Type": "application/json",
+  "Authorization": "Bearer token"
+}`}
+            className="w-full flex-1 min-h-[160px] p-3 text-xs sm:text-sm font-mono bg-neutral-900 border border-neutral-800 rounded-md text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
 
@@ -319,17 +376,44 @@ export function RequestEditor({
           hidden={activeTab !== 'body'}
           className={activeTab === 'body' ? 'h-full flex flex-col' : 'hidden'}
         >
-          <label htmlFor="body-textarea" className="text-xs text-neutral-400 mb-2">
-            Corpo da requisição (Payload):
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label htmlFor="body-textarea" className="text-xs text-neutral-400 font-medium">
+              Corpo da requisição (Payload):
+            </label>
+            <div className="flex items-center gap-2">
+              {formatNotice?.target === 'body' && (
+                <span
+                  role="status"
+                  className={`text-xs font-medium animate-fade-in ${
+                    formatNotice.isError ? 'text-rose-400' : 'text-emerald-400'
+                  }`}
+                >
+                  {formatNotice.message}
+                </span>
+              )}
+              <button
+                type="button"
+                aria-label="Formatar corpo"
+                onClick={handleFormatBody}
+                disabled={isLoading || !body.trim()}
+                className="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors border border-neutral-700/60 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
+                <span>Formatar</span>
+              </button>
+            </div>
+          </div>
           <textarea
             id="body-textarea"
             aria-label="Corpo da requisição"
             value={body}
             disabled={isLoading}
             onChange={(e) => handleBodyChange(e.target.value)}
-            placeholder="{\n  &quot;key&quot;: &quot;value&quot;\n}"
-            className="w-full flex-1 min-h-[160px] p-3 text-xs sm:text-sm font-mono bg-neutral-900 border border-neutral-800 rounded-md text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y disabled:opacity-50 disabled:cursor-not-allowed"
+            placeholder={`{
+  "name": "Exemplo",
+  "active": true
+}`}
+            className="w-full flex-1 min-h-[160px] p-3 text-xs sm:text-sm font-mono bg-neutral-900 border border-neutral-800 rounded-md text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
 
