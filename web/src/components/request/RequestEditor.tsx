@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Loader2, X, Sparkles } from 'lucide-react';
+import { Send, Loader2, X, Sparkles, Link2 } from 'lucide-react';
 import { TargetSelector, ExecutionTarget } from './TargetSelector';
 import {
   RequestAutocomplete,
@@ -8,6 +8,10 @@ import {
   HTTP_METHOD_BADGES,
   METHOD_COLORS,
 } from './RequestAutocomplete';
+import {
+  DependencyLinkerModal,
+  DependencyRequest,
+} from './DependencyLinkerModal';
 
 export interface AuthConfig {
   type: 'none' | 'bearer' | 'basic' | 'apikey';
@@ -28,12 +32,13 @@ export interface RequestData {
 }
 
 export interface RequestEditorProps {
-  initialRequest?: Partial<RequestData>;
+  initialRequest?: Partial<RequestData> & { id?: string };
+  currentRequestId?: string;
   isAgentOnline?: boolean;
   isLoading?: boolean;
   onSend?: (request: RequestData) => void;
   onChange?: (request: RequestData) => void;
-  availableRequests?: AutocompleteRequest[];
+  availableRequests?: DependencyRequest[];
   availableVariables?: AutocompleteVariable[];
 }
 
@@ -49,6 +54,7 @@ const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'
 
 export function RequestEditor({
   initialRequest,
+  currentRequestId,
   isAgentOnline = false,
   isLoading = false,
   onSend,
@@ -66,6 +72,8 @@ export function RequestEditor({
   );
   const [activeTab, setActiveTab] = useState<TabType>('headers');
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [isLinkerOpen, setIsLinkerOpen] = useState(false);
+  const [activeArea, setActiveArea] = useState<'url' | 'headers' | 'body'>('headers');
 
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const urlInputRef = useRef<HTMLInputElement>(null);
@@ -193,8 +201,58 @@ export function RequestEditor({
       e.preventDefault();
       const nextTab = TABS[targetIndex];
       setActiveTab(nextTab.id);
+      if (nextTab.id === 'headers' || nextTab.id === 'body') {
+        setActiveArea(nextTab.id);
+      }
       tabRefs.current[targetIndex]?.focus();
     }
+  };
+
+  const handleInsertToken = (token: string) => {
+    if (activeArea === 'body') {
+      const textarea = bodyRef.current;
+      if (textarea && typeof textarea.selectionStart === 'number' && typeof textarea.selectionEnd === 'number') {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const nextVal = body.slice(0, start) + token + body.slice(end);
+        handleBodyChange(nextVal);
+        setTimeout(() => {
+          textarea.focus();
+          textarea.setSelectionRange(start + token.length, start + token.length);
+        }, 0);
+      } else {
+        handleBodyChange(body ? `${body}${token}` : token);
+      }
+    } else if (activeArea === 'headers') {
+      const textarea = headersRef.current;
+      if (textarea && typeof textarea.selectionStart === 'number' && typeof textarea.selectionEnd === 'number') {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const nextVal = headers.slice(0, start) + token + headers.slice(end);
+        handleHeadersChange(nextVal);
+        setTimeout(() => {
+          textarea.focus();
+          textarea.setSelectionRange(start + token.length, start + token.length);
+        }, 0);
+      } else {
+        handleHeadersChange(headers ? `${headers}${token}` : token);
+      }
+    } else {
+      const input = urlInputRef.current;
+      if (input && typeof input.selectionStart === 'number' && typeof input.selectionEnd === 'number') {
+        const start = input.selectionStart;
+        const end = input.selectionEnd;
+        const nextVal = url.slice(0, start) + token + url.slice(end);
+        handleUrlChange(nextVal);
+        setTimeout(() => {
+          input.focus();
+          input.setSelectionRange(start + token.length, start + token.length);
+        }, 0);
+      } else {
+        handleUrlChange(url ? `${url}${token}` : token);
+      }
+    }
+    setIsLinkerOpen(false);
   };
 
   return (
@@ -227,6 +285,7 @@ export function RequestEditor({
                 placeholder="https://api.exemplo.com/v1/recurso"
                 value={url}
                 disabled={isLoading}
+                onFocus={() => setActiveArea('url')}
                 onChange={(e) => handleUrlChange(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.defaultPrevented) {
@@ -306,7 +365,12 @@ export function RequestEditor({
                 aria-selected={isActive}
                 aria-controls={`panel-${tab.id}`}
                 tabIndex={isActive ? 0 : -1}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  if (tab.id === 'headers' || tab.id === 'body') {
+                    setActiveArea(tab.id);
+                  }
+                }}
                 onKeyDown={(e) => handleTabKeyDown(e, index)}
                 className={`px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   isActive
@@ -321,6 +385,18 @@ export function RequestEditor({
         </div>
 
         <div className="flex items-center gap-2 py-1.5 shrink-0">
+          <button
+            type="button"
+            aria-label="Vincular"
+            title="Vincular resposta de dependência"
+            onClick={() => setIsLinkerOpen(true)}
+            disabled={isLoading}
+            className="h-8 px-2.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-colors border border-neutral-700/60 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <Link2 className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
+            <span>Vincular</span>
+          </button>
+
           <span className="hidden sm:inline text-xs text-neutral-400 font-medium">Alvo:</span>
           <TargetSelector
             value={target}
@@ -374,6 +450,7 @@ export function RequestEditor({
               aria-label="Cabeçalhos HTTP"
               value={headers}
               disabled={isLoading}
+              onFocus={() => setActiveArea('headers')}
               onChange={(e) => handleHeadersChange(e.target.value)}
               placeholder={`{
   "Content-Type": "application/json",
@@ -432,6 +509,7 @@ export function RequestEditor({
               aria-label="Corpo da requisição"
               value={body}
               disabled={isLoading}
+              onFocus={() => setActiveArea('body')}
               onChange={(e) => handleBodyChange(e.target.value)}
               placeholder={`{
   "name": "Exemplo",
@@ -564,6 +642,14 @@ export function RequestEditor({
           )}
         </div>
       </div>
+
+      <DependencyLinkerModal
+        isOpen={isLinkerOpen}
+        onClose={() => setIsLinkerOpen(false)}
+        onInsertToken={handleInsertToken}
+        availableRequests={availableRequests}
+        currentRequestId={currentRequestId ?? (initialRequest as { id?: string } | undefined)?.id}
+      />
     </div>
   );
 }

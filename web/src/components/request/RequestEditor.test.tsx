@@ -487,4 +487,149 @@ describe('RequestEditor', () => {
     fireEvent.click(screen.getByText('Auth Token'));
     expect(bodyInput).toHaveValue('{"token": "{{$request[\'auth-req\'].response.body.');
   });
+
+  it('renders "Vincular" button and opens DependencyLinkerModal', () => {
+    const mockRequests = [
+      {
+        id: 'req-auth',
+        name: 'Login Auth',
+        method: 'POST',
+        url: 'https://api.example.com/v1/auth',
+        response: {
+          statusCode: 200,
+          body: JSON.stringify({ token: 'xyz123' }),
+        },
+      },
+    ];
+    render(
+      <RequestEditor
+        availableRequests={mockRequests}
+      />
+    );
+
+    const vincularBtn = screen.getByRole('button', { name: /vincular/i });
+    expect(vincularBtn).toBeInTheDocument();
+
+    fireEvent.click(vincularBtn);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('Login Auth')).toBeInTheDocument();
+  });
+
+  it('inserts selected token into the active editor area (body, headers, url)', () => {
+    const mockRequests = [
+      {
+        id: 'req-auth',
+        name: 'Login Auth',
+        method: 'POST',
+        url: 'https://api.example.com/v1/auth',
+        response: {
+          statusCode: 200,
+          body: JSON.stringify({ token: 'xyz123' }),
+        },
+      },
+    ];
+    const onChange = vi.fn();
+    render(
+      <RequestEditor
+        availableRequests={mockRequests}
+        onChange={onChange}
+      />
+    );
+
+    // 1. Switch to Body tab and open modal
+    const bodyTab = screen.getByRole('tab', { name: /body/i });
+    fireEvent.click(bodyTab);
+
+    const vincularBtn = screen.getByRole('button', { name: /vincular/i });
+    fireEvent.click(vincularBtn);
+
+    // In modal, click on token property
+    fireEvent.click(screen.getByText('token'));
+
+    // Should insert token into body textarea and call onChange
+    const bodyInput = screen.getByRole('textbox', { name: /corpo da requisição/i });
+    expect(bodyInput).toHaveValue("{{$request['req-auth'].response.body.token}}");
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: "{{$request['req-auth'].response.body.token}}",
+      })
+    );
+  });
+
+  it('inserts selected token into headers textarea when headers tab is active', () => {
+    const mockRequests = [
+      {
+        id: 'req-auth',
+        name: 'Login Auth',
+        method: 'POST',
+        url: 'https://api.example.com/v1/auth',
+        response: {
+          statusCode: 200,
+          body: JSON.stringify({ token: 'xyz123' }),
+        },
+      },
+    ];
+    const onChange = vi.fn();
+    render(
+      <RequestEditor
+        availableRequests={mockRequests}
+        onChange={onChange}
+      />
+    );
+
+    // Headers tab is active by default
+    const vincularBtn = screen.getByRole('button', { name: /vincular/i });
+    fireEvent.click(vincularBtn);
+
+    // In modal, click on token property
+    fireEvent.click(screen.getByText('token'));
+
+    // Should insert token into headers textarea and call onChange
+    const headersInput = screen.getByRole('textbox', { name: /cabeçalhos http/i });
+    expect(headersInput).toHaveValue("{{$request['req-auth'].response.body.token}}");
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: "{{$request['req-auth'].response.body.token}}",
+      })
+    );
+  });
+
+  it('inserts selected token into URL input when URL input was focused', () => {
+    const mockRequests = [
+      {
+        id: 'req-auth',
+        name: 'Login Auth',
+        method: 'POST',
+        url: 'https://api.example.com/v1/auth',
+        response: {
+          statusCode: 200,
+          body: JSON.stringify({ token: 'xyz123' }),
+        },
+      },
+    ];
+    const onChange = vi.fn();
+    render(
+      <RequestEditor
+        availableRequests={mockRequests}
+        onChange={onChange}
+      />
+    );
+
+    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    fireEvent.focus(urlInput);
+
+    const vincularBtn = screen.getByRole('button', { name: /vincular/i });
+    fireEvent.click(vincularBtn);
+
+    // In modal, click on token property
+    fireEvent.click(screen.getByText('token'));
+
+    // Should insert token into URL input
+    expect(urlInput).toHaveValue("{{$request['req-auth'].response.body.token}}");
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "{{$request['req-auth'].response.body.token}}",
+      })
+    );
+  });
 });
