@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, X } from 'lucide-react';
 import { TargetSelector, ExecutionTarget } from './TargetSelector';
 
 export interface AuthConfig {
@@ -37,6 +37,16 @@ export const TABS = [
 export type TabType = (typeof TABS)[number]['id'];
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
+
+const METHOD_COLORS: Record<string, string> = {
+  GET: 'text-emerald-400 bg-emerald-950/40 border-emerald-800/80 hover:bg-emerald-950/60',
+  POST: 'text-blue-400 bg-blue-950/40 border-blue-800/80 hover:bg-blue-950/60',
+  PUT: 'text-amber-400 bg-amber-950/40 border-amber-800/80 hover:bg-amber-950/60',
+  PATCH: 'text-purple-400 bg-purple-950/40 border-purple-800/80 hover:bg-purple-950/60',
+  DELETE: 'text-rose-400 bg-rose-950/40 border-rose-800/80 hover:bg-rose-950/60',
+  HEAD: 'text-neutral-400 bg-neutral-900 border-neutral-700 hover:bg-neutral-800',
+  OPTIONS: 'text-cyan-400 bg-cyan-950/40 border-cyan-800/80 hover:bg-cyan-950/60',
+};
 
 export function RequestEditor({
   initialRequest,
@@ -155,25 +165,27 @@ export function RequestEditor({
 
   return (
     <div className="flex flex-col h-full bg-neutral-950 text-neutral-100">
-      {/* Top Bar: Method, URL, TargetSelector, Send Button */}
+      {/* Top Bar: Method, Expanded URL, Send Button */}
       <div className="p-3 sm:p-4 border-b border-neutral-800 bg-neutral-900/40 flex flex-col gap-2">
-        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-          <div className="flex items-center gap-2 flex-1">
+        <div className="flex flex-col sm:flex-row gap-2.5 sm:items-center w-full">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
             <select
               aria-label="Método HTTP"
               value={method}
               disabled={isLoading}
               onChange={(e) => handleMethodChange(e.target.value)}
-              className="h-10 px-3 font-semibold text-xs rounded-md bg-neutral-800 border border-neutral-700 text-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`h-11 sm:h-12 px-3 sm:px-4 font-bold text-xs sm:text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 ${
+                METHOD_COLORS[method] || 'text-blue-400 bg-neutral-800 border-neutral-700'
+              }`}
             >
               {HTTP_METHODS.map((m) => (
-                <option key={m} value={m} className="bg-neutral-900 text-neutral-200">
+                <option key={m} value={m} className="bg-neutral-900 text-neutral-200 font-semibold">
                   {m}
                 </option>
               ))}
             </select>
 
-            <div className="flex-1">
+            <div className="flex-1 min-w-0 relative">
               <input
                 type="text"
                 aria-label="URL da requisição"
@@ -189,79 +201,92 @@ export function RequestEditor({
                 }}
                 aria-invalid={!!urlError}
                 aria-describedby={urlError ? 'url-error' : undefined}
-                className={`h-10 w-full px-3 text-sm bg-neutral-900 border rounded-md text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-1 font-mono disabled:opacity-50 disabled:cursor-not-allowed ${
+                className={`h-11 sm:h-12 w-full pl-3.5 pr-9 sm:px-4 text-sm sm:text-base bg-neutral-900/90 border rounded-lg text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-2 font-mono transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                   urlError
-                    ? 'border-rose-500 focus:ring-rose-500'
-                    : 'border-neutral-800 focus:ring-blue-500'
+                    ? 'border-rose-500 focus:ring-rose-500 shadow-sm shadow-rose-950/40'
+                    : 'border-neutral-700/80 hover:border-neutral-600 focus:border-blue-500 focus:ring-blue-500/30'
                 }`}
               />
+              {url && !isLoading && (
+                <button
+                  type="button"
+                  aria-label="Limpar URL"
+                  onClick={() => handleUrlChange('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-200 p-1 rounded-md hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-1 focus:ring-neutral-500"
+                >
+                  <X className="w-4 h-4" aria-hidden="true" />
+                </button>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0">
-            <TargetSelector
-              value={target}
-              isAgentOnline={isAgentOnline}
-              disabled={isLoading}
-              onChange={handleTargetChange}
-            />
-
-            <button
-              type="button"
-              aria-label="Enviar requisição"
-              onClick={handleSend}
-              disabled={isLoading}
-              className="h-10 px-4 rounded-md bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-medium text-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Send className="w-4 h-4" aria-hidden="true" />
-              )}
-              <span>{isLoading ? 'Enviando...' : 'Enviar'}</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            aria-label="Enviar requisição"
+            onClick={handleSend}
+            disabled={isLoading}
+            className="h-11 sm:h-12 px-5 sm:px-6 rounded-lg bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-950/40 focus:outline-none focus:ring-2 focus:ring-blue-400 w-full sm:w-auto shrink-0"
+          >
+            {isLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Send className="w-4 h-4" aria-hidden="true" />
+            )}
+            <span>{isLoading ? 'Enviando...' : 'Enviar'}</span>
+          </button>
         </div>
 
         {urlError && (
-          <span id="url-error" role="alert" className="text-xs text-rose-500 px-1">
+          <span id="url-error" role="alert" className="text-xs text-rose-400 px-1 font-medium">
             {urlError}
           </span>
         )}
       </div>
 
-      {/* Tabs navigation */}
-      <div
-        role="tablist"
-        aria-label="Abas de configuração da requisição"
-        className="flex border-b border-neutral-800 bg-neutral-900/20 px-3 sm:px-4"
-      >
-        {TABS.map((tab, index) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              ref={(el) => {
-                tabRefs.current[index] = el;
-              }}
-              type="button"
-              role="tab"
-              id={`tab-${tab.id}`}
-              aria-selected={isActive}
-              aria-controls={`panel-${tab.id}`}
-              tabIndex={isActive ? 0 : -1}
-              onClick={() => setActiveTab(tab.id)}
-              onKeyDown={(e) => handleTabKeyDown(e, index)}
-              className={`px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                isActive
-                  ? 'border-blue-500 text-white'
-                  : 'border-transparent text-neutral-400 hover:text-neutral-200'
-              }`}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
+      {/* Tabs navigation & Target Selector */}
+      <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/20 px-3 sm:px-4">
+        <div
+          role="tablist"
+          aria-label="Abas de configuração da requisição"
+          className="flex"
+        >
+          {TABS.map((tab, index) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                ref={(el) => {
+                  tabRefs.current[index] = el;
+                }}
+                type="button"
+                role="tab"
+                id={`tab-${tab.id}`}
+                aria-selected={isActive}
+                aria-controls={`panel-${tab.id}`}
+                tabIndex={isActive ? 0 : -1}
+                onClick={() => setActiveTab(tab.id)}
+                onKeyDown={(e) => handleTabKeyDown(e, index)}
+                className={`px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  isActive
+                    ? 'border-blue-500 text-white'
+                    : 'border-transparent text-neutral-400 hover:text-neutral-200'
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-2 py-1.5 shrink-0">
+          <span className="hidden sm:inline text-xs text-neutral-400 font-medium">Alvo:</span>
+          <TargetSelector
+            value={target}
+            isAgentOnline={isAgentOnline}
+            disabled={isLoading}
+            onChange={handleTargetChange}
+          />
+        </div>
       </div>
 
       {/* Tab Panels */}

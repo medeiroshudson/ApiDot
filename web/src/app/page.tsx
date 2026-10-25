@@ -12,6 +12,7 @@ export default function Home() {
   const [isAgentOnline, setIsAgentOnline] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [response, setResponse] = useState<ResponseData | null>(null);
+  const [activeMobilePane, setActiveMobilePane] = useState<'request' | 'response'>('request');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -21,6 +22,7 @@ export default function Home() {
   const handleSend = async (request: RequestData) => {
     setIsLoading(true);
     setResponse(null);
+    setActiveMobilePane('response');
     const startTime = Date.now();
     try {
       let parsedHeaders: Record<string, string> = {};
@@ -126,7 +128,48 @@ export default function Home() {
 
         {/* Main Workspace Area (Request & Response panels) */}
         <main className="flex-1 flex flex-col md:flex-row overflow-hidden bg-neutral-950">
-          <section className="flex-1 border-b md:border-b-0 md:border-r border-neutral-800 overflow-hidden flex flex-col">
+          {/* Mobile Tab Switcher (Requisição vs Resposta) */}
+          <div className="flex md:hidden border-b border-neutral-800 bg-neutral-900/90 px-3 py-1.5 gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveMobilePane('request')}
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                activeMobilePane === 'request'
+                  ? 'bg-neutral-800 text-white shadow-sm'
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              Requisição
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveMobilePane('response')}
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 ${
+                activeMobilePane === 'response'
+                  ? 'bg-neutral-800 text-white shadow-sm'
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <span>Resposta</span>
+              {response && (
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                    response.statusCode >= 200 && response.statusCode < 300
+                      ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                      : 'bg-rose-950 text-rose-400 border border-rose-800'
+                  }`}
+                >
+                  {response.statusCode}
+                </span>
+              )}
+            </button>
+          </div>
+
+          <section
+            className={`flex-1 border-b md:border-b-0 md:border-r border-neutral-800 overflow-hidden flex flex-col ${
+              activeMobilePane === 'request' ? 'flex' : 'hidden md:flex'
+            }`}
+          >
             <RequestEditor
               isAgentOnline={isAgentOnline}
               isLoading={isLoading}
@@ -134,7 +177,11 @@ export default function Home() {
             />
           </section>
 
-          <section className="flex-1 overflow-hidden flex flex-col">
+          <section
+            className={`flex-1 overflow-hidden flex flex-col ${
+              activeMobilePane === 'response' ? 'flex' : 'hidden md:flex'
+            }`}
+          >
             <ResponseViewer response={response} isLoading={isLoading} />
           </section>
         </main>
