@@ -17,6 +17,7 @@ public class Collection
 
     public ICollection<Folder> Folders { get; init; } = [];
     public ICollection<RequestItem> Requests { get; init; } = [];
+    public ICollection<EnvironmentVariable> Variables { get; init; } = [];
 
     public DateTime CreatedAtUtc { get; init; } = DateTime.UtcNow;
 }

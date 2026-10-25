@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using ApiDot.Server.Data;
 using ApiDot.Server.Data.Entities;
 using ApiDot.Core.Enums;
+using ApiDot.Core.Variables;
 
 namespace ApiDot.Server.Tests.Data;
 
@@ -363,6 +364,7 @@ public class DbContextPersistenceTests
         var envVar1 = new EnvironmentVariable
         {
             WorkspaceId = ws.Id,
+            Scope = VariableScope.Environment,
             EnvironmentName = "Production",
             Key = "DUPLICATE_KEY",
             Value = "val1"
@@ -370,6 +372,7 @@ public class DbContextPersistenceTests
         var envVar2 = new EnvironmentVariable
         {
             WorkspaceId = ws.Id,
+            Scope = VariableScope.Environment,
             EnvironmentName = "Production",
             Key = "DUPLICATE_KEY",
             Value = "val2"
@@ -395,6 +398,7 @@ public class DbContextPersistenceTests
         var envDev = new EnvironmentVariable
         {
             WorkspaceId = ws.Id,
+            Scope = VariableScope.Environment,
             EnvironmentName = "Development",
             Key = "API_KEY",
             Value = "dev_val"
@@ -402,6 +406,7 @@ public class DbContextPersistenceTests
         var envProd = new EnvironmentVariable
         {
             WorkspaceId = ws.Id,
+            Scope = VariableScope.Environment,
             EnvironmentName = "Production",
             Key = "API_KEY",
             Value = "prod_val"
@@ -416,5 +421,256 @@ public class DbContextPersistenceTests
             .ToListAsync();
 
         vars.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task Can_Persist_And_Query_Variables_Across_All_VariableScopes()
+    {
+        using var context = CreateInMemoryContext();
+
+        var ws = new Workspace { Name = "Scoped Variables WS" };
+        var col = new Collection { Name = "Orders Collection", Workspace = ws };
+        context.Workspaces.Add(ws);
+        context.Collections.Add(col);
+        await context.SaveChangesAsync();
+
+        var globalVar = new EnvironmentVariable
+        {
+            WorkspaceId = ws.Id,
+            Scope = VariableScope.Global,
+            Key = "GLOBAL_URL",
+            Value = "https://api.example.com",
+            EnvironmentName = null,
+            CollectionId = null,
+            IsActive = true,
+            IsSecret = false
+        };
+
+        var colVar = new EnvironmentVariable
+        {
+            WorkspaceId = ws.Id,
+            Scope = VariableScope.Collection,
+            Key = "AUTH_TOKEN",
+            Value = "col-secret-token",
+            Collection = col,
+            EnvironmentName = null,
+            IsActive = true,
+            IsSecret = true
+        };
+
+        var envVar = new EnvironmentVariable
+        {
+            WorkspaceId = ws.Id,
+            Scope = VariableScope.Environment,
+            Key = "DB_HOST",
+            Value = "staging.db.internal",
+            EnvironmentName = "Staging",
+            CollectionId = null,
+            IsActive = false,
+            IsSecret = false
+        };
+
+        context.EnvironmentVariables.AddRange(globalVar, colVar, envVar);
+        await context.SaveChangesAsync();
+
+        var persisted = await context.EnvironmentVariables
+            .Include(v => v.Collection)
+            .Where(v => v.WorkspaceId == ws.Id)
+            .ToListAsync();
+
+        persisted.Should().HaveCount(3);
+
+        var retrievedGlobal = persisted.Single(v => v.Scope == VariableScope.Global);
+        retrievedGlobal.Key.Should().Be("GLOBAL_URL");
+        retrievedGlobal.Value.Should().Be("https://api.example.com");
+        retrievedGlobal.EnvironmentName.Should().BeNull();
+        retrievedGlobal.CollectionId.Should().BeNull();
+        retrievedGlobal.IsActive.Should().BeTrue();
+        retrievedGlobal.IsSecret.Should().BeFalse();
+
+        var retrievedCol = persisted.Single(v => v.Scope == VariableScope.Collection);
+        retrievedCol.Key.Should().Be("AUTH_TOKEN");
+        retrievedCol.Value.Should().Be("col-secret-token");
+        retrievedCol.CollectionId.Should().Be(col.Id);
+        retrievedCol.Collection.Should().NotBeNull();
+        retrievedCol.Collection!.Name.Should().Be("Orders Collection");
+        retrievedCol.EnvironmentName.Should().BeNull();
+        retrievedCol.IsActive.Should().BeTrue();
+        retrievedCol.IsSecret.Should().BeTrue();
+
+        var retrievedEnv = persisted.Single(v => v.Scope == VariableScope.Environment);
+        retrievedEnv.Key.Should().Be("DB_HOST");
+        retrievedEnv.Value.Should().Be("staging.db.internal");
+        retrievedEnv.EnvironmentName.Should().Be("Staging");
+        retrievedEnv.CollectionId.Should().BeNull();
+        retrievedEnv.IsActive.Should().BeFalse();
+        retrievedEnv.IsSecret.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Duplicate_Key_In_Global_Scope_Throws_DbUpdateException()
+    {
+        using var context = CreateInMemoryContext();
+
+        var ws = new Workspace { Name = "Global Dup Test" };
+        context.Workspaces.Add(ws);
+        await context.SaveChangesAsync();
+
+        var var1 = new EnvironmentVariable
+        {
+            WorkspaceId = ws.Id,
+            Scope = VariableScope.Global,
+            Key = "BASE_URL",
+            Value = "https://v1.example.com"
+        };
+        var var2 = new EnvironmentVariable
+        {
+            WorkspaceId = ws.Id,
+            Scope = VariableScope.Global,
+            Key = "BASE_URL",
+            Value = "https://v2.example.com"
+        };
+
+        context.EnvironmentVariables.Add(var1);
+        await context.SaveChangesAsync();
+
+        context.EnvironmentVariables.Add(var2);
+        var act = () => context.SaveChangesAsync();
+        await act.Should().ThrowAsync<DbUpdateException>();
+    }
+
+    [Fact]
+    public async Task Duplicate_Key_In_Same_Collection_Scope_Throws_DbUpdateException()
+    {
+        using var context = CreateInMemoryContext();
+
+        var ws = new Workspace { Name = "Col Dup Test" };
+        var col = new Collection { Name = "Test Col", Workspace = ws };
+        context.Workspaces.Add(ws);
+        context.Collections.Add(col);
+        await context.SaveChangesAsync();
+
+        var var1 = new EnvironmentVariable
+        {
+            WorkspaceId = ws.Id,
+            Scope = VariableScope.Collection,
+            CollectionId = col.Id,
+            Key = "HEADER_KEY",
+            Value = "val1"
+        };
+        var var2 = new EnvironmentVariable
+        {
+            WorkspaceId = ws.Id,
+            Scope = VariableScope.Collection,
+            CollectionId = col.Id,
+            Key = "HEADER_KEY",
+            Value = "val2"
+        };
+
+        context.EnvironmentVariables.Add(var1);
+        await context.SaveChangesAsync();
+
+        context.EnvironmentVariables.Add(var2);
+        var act = () => context.SaveChangesAsync();
+        await act.Should().ThrowAsync<DbUpdateException>();
+    }
+
+    [Fact]
+    public async Task Duplicate_Key_Across_Different_Scopes_Is_Allowed()
+    {
+        using var context = CreateInMemoryContext();
+
+        var ws = new Workspace { Name = "Cascade Overrides Test" };
+        var col = new Collection { Name = "User API", Workspace = ws };
+        context.Workspaces.Add(ws);
+        context.Collections.Add(col);
+        await context.SaveChangesAsync();
+
+        var globalVar = new EnvironmentVariable
+        {
+            WorkspaceId = ws.Id,
+            Scope = VariableScope.Global,
+            Key = "API_KEY",
+            Value = "global_key"
+        };
+
+        var colVar = new EnvironmentVariable
+        {
+            WorkspaceId = ws.Id,
+            Scope = VariableScope.Collection,
+            CollectionId = col.Id,
+            Key = "API_KEY",
+            Value = "collection_key"
+        };
+
+        var envDev = new EnvironmentVariable
+        {
+            WorkspaceId = ws.Id,
+            Scope = VariableScope.Environment,
+            EnvironmentName = "Development",
+            Key = "API_KEY",
+            Value = "dev_key"
+        };
+
+        var envProd = new EnvironmentVariable
+        {
+            WorkspaceId = ws.Id,
+            Scope = VariableScope.Environment,
+            EnvironmentName = "Production",
+            Key = "API_KEY",
+            Value = "prod_key"
+        };
+
+        context.EnvironmentVariables.AddRange(globalVar, colVar, envDev, envProd);
+        var act = () => context.SaveChangesAsync();
+        await act.Should().NotThrowAsync();
+
+        var variables = await context.EnvironmentVariables
+            .Where(v => v.WorkspaceId == ws.Id && v.Key == "API_KEY")
+            .ToListAsync();
+
+        variables.Should().HaveCount(4);
+    }
+
+    [Fact]
+    public async Task Deleting_Collection_Cascades_To_Collection_Variables()
+    {
+        using var context = CreateInMemoryContext();
+
+        var ws = new Workspace { Name = "Cascade Col Var WS" };
+        var col = new Collection { Name = "Billing Col", Workspace = ws };
+        context.Workspaces.Add(ws);
+        context.Collections.Add(col);
+
+        var globalVar = new EnvironmentVariable
+        {
+            WorkspaceId = ws.Id,
+            Scope = VariableScope.Global,
+            Key = "GLOBAL_SETTING",
+            Value = "always_here"
+        };
+
+        var colVar = new EnvironmentVariable
+        {
+            WorkspaceId = ws.Id,
+            Scope = VariableScope.Collection,
+            Collection = col,
+            Key = "BILLING_SECRET",
+            Value = "billing_val"
+        };
+
+        context.EnvironmentVariables.AddRange(globalVar, colVar);
+        await context.SaveChangesAsync();
+
+        // Delete the collection
+        context.Collections.Remove(col);
+        await context.SaveChangesAsync();
+
+        var remainingVars = await context.EnvironmentVariables
+            .Where(v => v.WorkspaceId == ws.Id)
+            .ToListAsync();
+
+        remainingVars.Should().ContainSingle();
+        remainingVars[0].Key.Should().Be("GLOBAL_SETTING");
     }
 }

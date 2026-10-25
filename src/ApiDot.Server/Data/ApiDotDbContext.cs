@@ -61,6 +61,11 @@ public class ApiDotDbContext(DbContextOptions<ApiDotDbContext> options) : DbCont
                 .WithOne(r => r.Collection)
                 .HasForeignKey(r => r.CollectionId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(c => c.Variables)
+                .WithOne(v => v.Collection)
+                .HasForeignKey(v => v.CollectionId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Folder>(entity =>
@@ -95,7 +100,24 @@ public class ApiDotDbContext(DbContextOptions<ApiDotDbContext> options) : DbCont
             entity.Property(e => e.EnvironmentName).HasMaxLength(64);
             entity.Property(e => e.Key).HasMaxLength(128);
 
-            entity.HasIndex(e => new { e.WorkspaceId, e.EnvironmentName, e.Key }).IsUnique();
+            entity.HasOne(e => e.Collection)
+                .WithMany(c => c.Variables)
+                .HasForeignKey(e => e.CollectionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.WorkspaceId, e.Scope, e.EnvironmentName, e.CollectionId, e.Key }).IsUnique();
+
+            entity.HasIndex(e => new { e.WorkspaceId, e.Key })
+                .IsUnique()
+                .HasFilter("\"Scope\" = 1");
+
+            entity.HasIndex(e => new { e.WorkspaceId, e.CollectionId, e.Key })
+                .IsUnique()
+                .HasFilter("\"Scope\" = 2");
+
+            entity.HasIndex(e => new { e.WorkspaceId, e.EnvironmentName, e.Key })
+                .IsUnique()
+                .HasFilter("\"Scope\" = 3");
         });
 
         modelBuilder.Entity<ExecutionHistory>(entity =>
