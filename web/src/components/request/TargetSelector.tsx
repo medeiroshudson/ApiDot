@@ -35,6 +35,7 @@ export function TargetSelector({
 
       {value === 'Agent' && (
         <span
+          role="status"
           data-testid="target-agent-pulse"
           className={`h-2.5 w-2.5 rounded-full transition-colors ${
             isAgentOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
