@@ -293,6 +293,14 @@ app.MapPut("/api/collections/{id:guid}/openapi", async (
     ApiDotDbContext db,
     CancellationToken cancellationToken) =>
 {
+    if (request is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Request",
+            detail: "A request body is required.");
+    }
+
     var collection = await db.Collections
         .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
 
@@ -304,7 +312,9 @@ app.MapPut("/api/collections/{id:guid}/openapi", async (
             detail: $"Collection with ID '{id}' was not found.");
     }
 
-    if (request?.OpenApiSpecUrl?.Length > 2048)
+    var trimmedUrl = string.IsNullOrWhiteSpace(request.OpenApiSpecUrl) ? null : request.OpenApiSpecUrl.Trim();
+
+    if (trimmedUrl?.Length > 2048)
     {
         return Results.Problem(
             statusCode: StatusCodes.Status400BadRequest,
@@ -312,8 +322,8 @@ app.MapPut("/api/collections/{id:guid}/openapi", async (
             detail: "OpenApiSpecUrl cannot exceed 2048 characters.");
     }
 
-    collection.OpenApiSpecUrl = request?.OpenApiSpecUrl;
-    collection.OpenApiSpecContent = request?.OpenApiSpecContent;
+    collection.OpenApiSpecUrl = trimmedUrl;
+    collection.OpenApiSpecContent = request.OpenApiSpecContent;
 
     await db.SaveChangesAsync(cancellationToken);
 

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using ApiDot.Server.Data;
 using ApiDot.Server.Data.Entities;
+using ApiDot.Server.Models;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -88,8 +89,6 @@ public class CollectionOpenApiEndpointsTests : IClassFixture<WebApplicationFacto
         return col;
     }
 
-    public record OpenApiSpecResponse(string? OpenApiSpecUrl, string? OpenApiSpecContent);
-
     [Fact]
     public async Task GetOpenApi_WhenCollectionNotFound_Returns_404_NotFound_ProblemDetails()
     {
@@ -112,7 +111,7 @@ public class CollectionOpenApiEndpointsTests : IClassFixture<WebApplicationFacto
         var response = await _client.GetAsync($"/api/collections/{col.Id}/openapi");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var dto = await response.Content.ReadFromJsonAsync<OpenApiSpecResponse>();
+        var dto = await response.Content.ReadFromJsonAsync<CollectionOpenApiResponse>();
         dto.Should().NotBeNull();
         dto!.OpenApiSpecUrl.Should().Be("https://petstore.swagger.io/v2/swagger.json");
         dto.OpenApiSpecContent.Should().Be("{\"swagger\":\"2.0\"}");
@@ -135,6 +134,55 @@ public class CollectionOpenApiEndpointsTests : IClassFixture<WebApplicationFacto
     }
 
     [Fact]
+    public async Task PutOpenApi_WhenBodyIsNull_Returns_400_BadRequest_ProblemDetails()
+    {
+        var col = await SeedCollectionAsync();
+
+        var response = await _client.PutAsync($"/api/collections/{col.Id}/openapi", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().Contain("A request body is required.");
+    }
+
+    [Fact]
+    public async Task PutOpenApi_WhenBodyIsEmpty_Returns_400_BadRequest_ProblemDetails()
+    {
+        var col = await SeedCollectionAsync();
+        var emptyContent = new StringContent(string.Empty, System.Text.Encoding.UTF8, "application/json");
+
+        var response = await _client.PutAsync($"/api/collections/{col.Id}/openapi", emptyContent);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
+    }
+
+    [Fact]
+    public async Task PutOpenApi_TrimsSpecUrl_WhenWhitespacePresent()
+    {
+        var col = await SeedCollectionAsync();
+        var updatePayload = new
+        {
+            openApiSpecUrl = "   https://api.example.com/spec.json   ",
+            openApiSpecContent = "{\"openapi\":\"3.0.0\"}"
+        };
+
+        var response = await _client.PutAsJsonAsync($"/api/collections/{col.Id}/openapi", updatePayload);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var dto = await response.Content.ReadFromJsonAsync<CollectionOpenApiResponse>();
+        dto.Should().NotBeNull();
+        dto!.OpenApiSpecUrl.Should().Be("https://api.example.com/spec.json");
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
+        var dbCol = await db.Collections.FindAsync(col.Id);
+        dbCol.Should().NotBeNull();
+        dbCol!.OpenApiSpecUrl.Should().Be("https://api.example.com/spec.json");
+    }
+
+    [Fact]
     public async Task PutOpenApi_UpdatesCollection_And_SubsequentGetReturnsUpdatedData()
     {
         var col = await SeedCollectionAsync();
@@ -148,7 +196,7 @@ public class CollectionOpenApiEndpointsTests : IClassFixture<WebApplicationFacto
         var putResponse = await _client.PutAsJsonAsync($"/api/collections/{col.Id}/openapi", updatePayload);
         putResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var putDto = await putResponse.Content.ReadFromJsonAsync<OpenApiSpecResponse>();
+        var putDto = await putResponse.Content.ReadFromJsonAsync<CollectionOpenApiResponse>();
         putDto.Should().NotBeNull();
         putDto!.OpenApiSpecUrl.Should().Be("https://api.example.com/openapi.json");
         putDto.OpenApiSpecContent.Should().Be("{\"openapi\":\"3.0.1\"}");
@@ -156,7 +204,7 @@ public class CollectionOpenApiEndpointsTests : IClassFixture<WebApplicationFacto
         // Verify with GET
         var getResponse = await _client.GetAsync($"/api/collections/{col.Id}/openapi");
         getResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        var getDto = await getResponse.Content.ReadFromJsonAsync<OpenApiSpecResponse>();
+        var getDto = await getResponse.Content.ReadFromJsonAsync<CollectionOpenApiResponse>();
         getDto.Should().NotBeNull();
         getDto!.OpenApiSpecUrl.Should().Be("https://api.example.com/openapi.json");
         getDto.OpenApiSpecContent.Should().Be("{\"openapi\":\"3.0.1\"}");
@@ -205,7 +253,7 @@ public class CollectionOpenApiEndpointsTests : IClassFixture<WebApplicationFacto
         var response = await _client.PutAsJsonAsync($"/api/collections/{col.Id}/openapi", updatePayload);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var dto = await response.Content.ReadFromJsonAsync<OpenApiSpecResponse>();
+        var dto = await response.Content.ReadFromJsonAsync<CollectionOpenApiResponse>();
         dto.Should().NotBeNull();
         dto!.OpenApiSpecUrl.Should().BeNull();
         dto.OpenApiSpecContent.Should().BeNull();
