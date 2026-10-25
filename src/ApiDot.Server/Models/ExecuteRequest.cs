@@ -16,6 +16,9 @@ public class ExecuteRequest
     public bool IgnoreSslErrors { get; init; } = false;
 
     public Guid? UserId { get; init; }
+    public Guid? WorkspaceId { get; init; }
+    public string? EnvironmentName { get; init; }
+    public Guid? CollectionId { get; init; }
     public Dictionary<string, string>? EnvironmentVariables { get; init; }
     public Dictionary<string, string>? Variables { get; init; }
 
