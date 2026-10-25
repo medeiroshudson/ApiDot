@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Loader2, X, Sparkles } from 'lucide-react';
 import { TargetSelector, ExecutionTarget } from './TargetSelector';
+import { RequestAutocomplete, AutocompleteRequest, AutocompleteVariable } from './RequestAutocomplete';
 
 export interface AuthConfig {
   type: 'none' | 'bearer' | 'basic' | 'apikey';
@@ -26,6 +27,8 @@ export interface RequestEditorProps {
   isLoading?: boolean;
   onSend?: (request: RequestData) => void;
   onChange?: (request: RequestData) => void;
+  availableRequests?: AutocompleteRequest[];
+  availableVariables?: AutocompleteVariable[];
 }
 
 export const TABS = [
@@ -54,6 +57,8 @@ export function RequestEditor({
   isLoading = false,
   onSend,
   onChange,
+  availableRequests = [],
+  availableVariables = [],
 }: RequestEditorProps) {
   const [method, setMethod] = useState(initialRequest?.method || 'GET');
   const [url, setUrl] = useState(initialRequest?.url || '');
@@ -67,6 +72,9 @@ export function RequestEditor({
   const [urlError, setUrlError] = useState<string | null>(null);
 
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const urlInputRef = useRef<HTMLInputElement>(null);
+  const headersRef = useRef<HTMLTextAreaElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setMethod(initialRequest?.method ?? 'GET');
@@ -217,6 +225,7 @@ export function RequestEditor({
 
             <div className="flex-1 min-w-0 relative">
               <input
+                ref={urlInputRef}
                 type="text"
                 aria-label="URL da requisição"
                 placeholder="https://api.exemplo.com/v1/recurso"
@@ -224,7 +233,7 @@ export function RequestEditor({
                 disabled={isLoading}
                 onChange={(e) => handleUrlChange(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
+                  if (e.key === 'Enter' && !e.defaultPrevented) {
                     e.preventDefault();
                     handleSend();
                   }
@@ -236,6 +245,13 @@ export function RequestEditor({
                     ? 'border-rose-500 focus:ring-rose-500 shadow-sm shadow-rose-950/40'
                     : 'border-neutral-700/80 hover:border-neutral-600 focus:border-blue-500 focus:ring-blue-500/30'
                 }`}
+              />
+              <RequestAutocomplete
+                inputRef={urlInputRef}
+                value={url}
+                onChange={handleUrlChange}
+                availableRequests={availableRequests}
+                availableVariables={availableVariables}
               />
               {url && !isLoading && (
                 <button
@@ -355,18 +371,28 @@ export function RequestEditor({
               </button>
             </div>
           </div>
-          <textarea
-            id="headers-textarea"
-            aria-label="Cabeçalhos HTTP"
-            value={headers}
-            disabled={isLoading}
-            onChange={(e) => handleHeadersChange(e.target.value)}
-            placeholder={`{
+          <div className="relative flex-1 flex flex-col">
+            <textarea
+              ref={headersRef}
+              id="headers-textarea"
+              aria-label="Cabeçalhos HTTP"
+              value={headers}
+              disabled={isLoading}
+              onChange={(e) => handleHeadersChange(e.target.value)}
+              placeholder={`{
   "Content-Type": "application/json",
   "Authorization": "Bearer token"
 }`}
-            className="w-full flex-1 min-h-[160px] p-3 text-xs sm:text-sm font-mono bg-neutral-900 border border-neutral-800 rounded-md text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y disabled:opacity-50 disabled:cursor-not-allowed"
-          />
+              className="w-full flex-1 min-h-[160px] p-3 text-xs sm:text-sm font-mono bg-neutral-900 border border-neutral-800 rounded-md text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+            <RequestAutocomplete
+              inputRef={headersRef}
+              value={headers}
+              onChange={handleHeadersChange}
+              availableRequests={availableRequests}
+              availableVariables={availableVariables}
+            />
+          </div>
         </div>
 
         <div
@@ -403,18 +429,28 @@ export function RequestEditor({
               </button>
             </div>
           </div>
-          <textarea
-            id="body-textarea"
-            aria-label="Corpo da requisição"
-            value={body}
-            disabled={isLoading}
-            onChange={(e) => handleBodyChange(e.target.value)}
-            placeholder={`{
+          <div className="relative flex-1 flex flex-col">
+            <textarea
+              ref={bodyRef}
+              id="body-textarea"
+              aria-label="Corpo da requisição"
+              value={body}
+              disabled={isLoading}
+              onChange={(e) => handleBodyChange(e.target.value)}
+              placeholder={`{
   "name": "Exemplo",
   "active": true
 }`}
-            className="w-full flex-1 min-h-[160px] p-3 text-xs sm:text-sm font-mono bg-neutral-900 border border-neutral-800 rounded-md text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y disabled:opacity-50 disabled:cursor-not-allowed"
-          />
+              className="w-full flex-1 min-h-[160px] p-3 text-xs sm:text-sm font-mono bg-neutral-900 border border-neutral-800 rounded-md text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+            <RequestAutocomplete
+              inputRef={bodyRef}
+              value={body}
+              onChange={handleBodyChange}
+              availableRequests={availableRequests}
+              availableVariables={availableVariables}
+            />
+          </div>
         </div>
 
         <div

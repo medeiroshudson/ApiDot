@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { RequestEditor } from './RequestEditor';
 
@@ -421,5 +421,70 @@ describe('RequestEditor', () => {
     fireEvent.click(formatBtn);
 
     expect(screen.getByText(/json inválido/i)).toBeDefined();
+  });
+
+  it('triggers variable autocomplete in URL input when typing {{ and allows selection', () => {
+    const mockVariables = [
+      { key: 'baseUrl', value: 'https://api.example.com', scope: 'env' },
+    ];
+    const onChange = vi.fn();
+    render(
+      <RequestEditor
+        availableVariables={mockVariables}
+        onChange={onChange}
+      />
+    );
+
+    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    fireEvent.change(urlInput, { target: { value: '{{' } });
+
+    expect(screen.getByRole('listbox')).toBeDefined();
+    expect(screen.getByText('baseUrl')).toBeDefined();
+
+    fireEvent.click(screen.getByText('baseUrl'));
+    expect(urlInput).toHaveValue('{{baseUrl}}');
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: '{{baseUrl}}',
+      })
+    );
+  });
+
+  it('triggers request chaining autocomplete in headers and body textareas when typing {{$request[', () => {
+    const mockRequests = [
+      { id: 'auth-req', name: 'Auth Token', method: 'POST' },
+    ];
+    const onChange = vi.fn();
+    render(
+      <RequestEditor
+        availableRequests={mockRequests}
+        onChange={onChange}
+      />
+    );
+
+    // Test headers textarea
+    const headersInput = screen.getByRole('textbox', { name: /cabeçalhos http/i });
+    fireEvent.change(headersInput, { target: { value: 'Authorization: {{$request[' } });
+
+    const listbox = screen.getByRole('listbox');
+    expect(listbox).toBeDefined();
+    expect(screen.getByText('Auth Token')).toBeDefined();
+    expect(within(listbox).getByText('POST')).toBeDefined();
+
+    fireEvent.click(screen.getByText('Auth Token'));
+    expect(headersInput).toHaveValue("Authorization: {{$request['auth-req'].response.body.");
+
+    // Switch to body tab
+    const bodyTab = screen.getByRole('tab', { name: /body/i });
+    fireEvent.click(bodyTab);
+
+    const bodyInput = screen.getByRole('textbox', { name: /corpo da requisição/i });
+    fireEvent.change(bodyInput, { target: { value: '{"token": "{{$request[' } });
+
+    expect(screen.getByRole('listbox')).toBeDefined();
+    expect(screen.getByText('Auth Token')).toBeDefined();
+
+    fireEvent.click(screen.getByText('Auth Token'));
+    expect(bodyInput).toHaveValue('{"token": "{{$request[\'auth-req\'].response.body.');
   });
 });
