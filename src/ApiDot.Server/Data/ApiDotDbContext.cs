@@ -18,10 +18,90 @@ public class ApiDotDbContext(DbContextOptions<ApiDotDbContext> options) : DbCont
 
         base.OnModelCreating(modelBuilder);
 
-        modelBuilder.Entity<Folder>()
-            .HasOne(f => f.ParentFolder)
-            .WithMany(f => f.SubFolders)
-            .HasForeignKey(f => f.ParentFolderId)
-            .OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<Workspace>(entity =>
+        {
+            entity.Property(w => w.Name).HasMaxLength(200);
+
+            entity.HasMany(w => w.Collections)
+                .WithOne(c => c.Workspace)
+                .HasForeignKey(c => c.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(w => w.Folders)
+                .WithOne(f => f.Workspace)
+                .HasForeignKey(f => f.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(w => w.Requests)
+                .WithOne(r => r.Workspace)
+                .HasForeignKey(r => r.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(w => w.EnvironmentVariables)
+                .WithOne(e => e.Workspace)
+                .HasForeignKey(e => e.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(w => w.ExecutionHistories)
+                .WithOne(h => h.Workspace)
+                .HasForeignKey(h => h.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Collection>(entity =>
+        {
+            entity.Property(c => c.Name).HasMaxLength(200);
+
+            entity.HasMany(c => c.Folders)
+                .WithOne(f => f.Collection)
+                .HasForeignKey(f => f.CollectionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(c => c.Requests)
+                .WithOne(r => r.Collection)
+                .HasForeignKey(r => r.CollectionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Folder>(entity =>
+        {
+            entity.Property(f => f.Name).HasMaxLength(200);
+
+            entity.HasOne(f => f.ParentFolder)
+                .WithMany(f => f.SubFolders)
+                .HasForeignKey(f => f.ParentFolderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasMany(f => f.Requests)
+                .WithOne(r => r.Folder)
+                .HasForeignKey(r => r.FolderId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RequestItem>(entity =>
+        {
+            entity.Property(r => r.Name).HasMaxLength(200);
+            entity.Property(r => r.Method).HasMaxLength(16);
+            entity.Property(r => r.Url).HasMaxLength(2048);
+
+            entity.HasMany(r => r.ExecutionHistories)
+                .WithOne(h => h.RequestItem)
+                .HasForeignKey(h => h.RequestItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EnvironmentVariable>(entity =>
+        {
+            entity.Property(e => e.EnvironmentName).HasMaxLength(64);
+            entity.Property(e => e.Key).HasMaxLength(128);
+
+            entity.HasIndex(e => new { e.WorkspaceId, e.EnvironmentName, e.Key }).IsUnique();
+        });
+
+        modelBuilder.Entity<ExecutionHistory>(entity =>
+        {
+            entity.Property(h => h.Method).HasMaxLength(16);
+            entity.Property(h => h.Url).HasMaxLength(2048);
+        });
     }
 }
