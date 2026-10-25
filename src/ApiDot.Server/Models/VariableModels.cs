@@ -1,10 +1,11 @@
 using ApiDot.Core.Variables;
+using ApiDot.Server.Data.Entities;
 
 namespace ApiDot.Server.Models;
 
 public class VariableDto
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid? Id { get; set; }
     public Guid WorkspaceId { get; set; }
     public VariableScope Scope { get; set; } = VariableScope.Global;
     public string? EnvironmentName { get; set; }
@@ -30,4 +31,33 @@ public class ResolveVariablesResponse
 {
     public Dictionary<string, string> Variables { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public List<ResolvedVariable> Computed { get; set; } = [];
+}
+
+public static class VariableMappingExtensions
+{
+    public static VariableDto ToDto(this EnvironmentVariable entity) =>
+        new()
+        {
+            Id = entity.Id,
+            WorkspaceId = entity.WorkspaceId,
+            Scope = entity.Scope,
+            EnvironmentName = entity.EnvironmentName,
+            CollectionId = entity.CollectionId,
+            Key = entity.Key,
+            Value = entity.Value,
+            IsSecret = entity.IsSecret,
+            IsActive = entity.IsActive
+        };
+
+    public static VariableEntry ToEntry(this EnvironmentVariable entity) =>
+        new()
+        {
+            Key = entity.Key,
+            Value = entity.Value,
+            Scope = entity.Scope,
+            EnvironmentName = entity.EnvironmentName,
+            CollectionId = entity.CollectionId,
+            IsActive = entity.IsActive,
+            IsSecret = entity.IsSecret
+        };
 }

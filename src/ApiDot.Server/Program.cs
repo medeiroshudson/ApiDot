@@ -64,29 +64,18 @@ app.MapGet("/api/workspaces/{id:guid}/variables", async (
     }
 
     var variables = await db.EnvironmentVariables
+        .AsNoTracking()
         .Where(v => v.WorkspaceId == id)
         .OrderBy(v => v.Scope)
         .ThenBy(v => v.Key)
-        .Select(v => new VariableDto
-        {
-            Id = v.Id,
-            WorkspaceId = v.WorkspaceId,
-            Scope = v.Scope,
-            EnvironmentName = v.EnvironmentName,
-            CollectionId = v.CollectionId,
-            Key = v.Key,
-            Value = v.Value,
-            IsSecret = v.IsSecret,
-            IsActive = v.IsActive
-        })
         .ToListAsync(cancellationToken);
 
-    return Results.Ok(variables);
+    return Results.Ok(variables.Select(v => v.ToDto()).ToList());
 });
 
 app.MapPut("/api/workspaces/{id:guid}/variables", async (
     Guid id,
-    JsonElement root,
+    BatchSaveVariablesRequest request,
     ApiDotDbContext db,
     CancellationToken cancellationToken) =>
 {
@@ -99,30 +88,7 @@ app.MapPut("/api/workspaces/{id:guid}/variables", async (
             detail: $"Workspace with ID '{id}' was not found.");
     }
 
-    var jsonOptions = new JsonSerializerOptions
-    {
-        PropertyNameCaseInsensitive = true,
-        Converters = { new JsonStringEnumConverter() }
-    };
-
-    List<VariableDto> incoming;
-    if (root.ValueKind == JsonValueKind.Array)
-    {
-        incoming = root.Deserialize<List<VariableDto>>(jsonOptions) ?? [];
-    }
-    else if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("variables", out var varsProp) && varsProp.ValueKind == JsonValueKind.Array)
-    {
-        incoming = varsProp.Deserialize<List<VariableDto>>(jsonOptions) ?? [];
-    }
-    else if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("Variables", out var varsPropUpper) && varsPropUpper.ValueKind == JsonValueKind.Array)
-    {
-        incoming = varsPropUpper.Deserialize<List<VariableDto>>(jsonOptions) ?? [];
-    }
-    else
-    {
-        var batch = root.Deserialize<BatchSaveVariablesRequest>(jsonOptions);
-        incoming = batch?.Variables ?? [];
-    }
+    var incoming = request?.Variables ?? [];
 
     foreach (var v in incoming)
     {
@@ -140,6 +106,14 @@ app.MapPut("/api/workspaces/{id:guid}/variables", async (
                 statusCode: StatusCodes.Status400BadRequest,
                 title: "Invalid Variable",
                 detail: $"Variable '{v.Key}' with Scope 'Collection' must specify a valid {nameof(v.CollectionId)}.");
+        }
+
+        if (v.Scope == VariableScope.Collection && !await db.Collections.AnyAsync(c => c.Id == v.CollectionId && c.WorkspaceId == id, cancellationToken))
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid Variable",
+                detail: $"Collection with ID '{v.CollectionId}' was not found in this workspace.");
         }
 
         if (v.Scope == VariableScope.Environment && string.IsNullOrWhiteSpace(v.EnvironmentName))
@@ -195,8 +169,8 @@ app.MapPut("/api/workspaces/{id:guid}/variables", async (
         .ToListAsync(cancellationToken);
 
     var incomingIds = incoming
-        .Where(v => v.Id != Guid.Empty)
-        .Select(v => v.Id)
+        .Where(v => v.Id.HasValue && v.Id.Value != Guid.Empty)
+        .Select(v => v.Id!.Value)
         .ToHashSet();
 
     var toDelete = existingVars.Where(e => !incomingIds.Contains(e.Id)).ToList();
@@ -206,7 +180,7 @@ app.MapPut("/api/workspaces/{id:guid}/variables", async (
 
     foreach (var item in incoming)
     {
-        if (item.Id != Guid.Empty && existingMap.TryGetValue(item.Id, out var existing))
+        if (item.Id.HasValue && item.Id.Value != Guid.Empty && existingMap.TryGetValue(item.Id.Value, out var existing))
         {
             existing.Key = item.Key.Trim();
             existing.Value = item.Value ?? string.Empty;
@@ -220,7 +194,7 @@ app.MapPut("/api/workspaces/{id:guid}/variables", async (
         {
             var newVar = new EnvironmentVariable
             {
-                Id = item.Id != Guid.Empty ? item.Id : Guid.NewGuid(),
+                Id = item.Id.HasValue && item.Id.Value != Guid.Empty ? item.Id.Value : Guid.NewGuid(),
                 WorkspaceId = id,
                 Key = item.Key.Trim(),
                 Value = item.Value ?? string.Empty,
@@ -234,27 +208,26 @@ app.MapPut("/api/workspaces/{id:guid}/variables", async (
         }
     }
 
-    await db.SaveChangesAsync(cancellationToken);
+    try
+    {
+        await db.SaveChangesAsync(cancellationToken);
+    }
+    catch (DbUpdateException ex)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status409Conflict,
+            title: "Database Conflict",
+            detail: ex.InnerException?.Message ?? ex.Message);
+    }
 
     var saved = await db.EnvironmentVariables
+        .AsNoTracking()
         .Where(v => v.WorkspaceId == id)
         .OrderBy(v => v.Scope)
         .ThenBy(v => v.Key)
-        .Select(v => new VariableDto
-        {
-            Id = v.Id,
-            WorkspaceId = v.WorkspaceId,
-            Scope = v.Scope,
-            EnvironmentName = v.EnvironmentName,
-            CollectionId = v.CollectionId,
-            Key = v.Key,
-            Value = v.Value,
-            IsSecret = v.IsSecret,
-            IsActive = v.IsActive
-        })
         .ToListAsync(cancellationToken);
 
-    return Results.Ok(saved);
+    return Results.Ok(saved.Select(v => v.ToDto()).ToList());
 });
 
 app.MapPost("/api/workspaces/{id:guid}/variables/resolve", async (
@@ -274,26 +247,18 @@ app.MapPost("/api/workspaces/{id:guid}/variables/resolve", async (
     }
 
     var variables = await db.EnvironmentVariables
+        .AsNoTracking()
         .Where(v => v.WorkspaceId == id)
         .ToListAsync(cancellationToken);
 
-    var entries = variables.Select(v => new VariableEntry
-    {
-        Key = v.Key,
-        Value = v.Value,
-        Scope = v.Scope,
-        EnvironmentName = v.EnvironmentName,
-        CollectionId = v.CollectionId,
-        IsActive = v.IsActive,
-        IsSecret = v.IsSecret
-    });
+    var entries = variables.Select(v => v.ToEntry());
 
     var computed = resolver.Resolve(entries, request?.EnvironmentName, request?.CollectionId);
-    var dict = resolver.ResolveToDictionary(entries, request?.EnvironmentName, request?.CollectionId);
+    var dict = computed.ToDictionary(c => c.Key, c => c.Value, StringComparer.OrdinalIgnoreCase);
 
     return Results.Ok(new ResolveVariablesResponse
     {
-        Variables = new Dictionary<string, string>(dict, StringComparer.OrdinalIgnoreCase),
+        Variables = dict,
         Computed = computed.ToList()
     });
 });
@@ -323,19 +288,11 @@ app.MapPost("/api/requests/execute", async (
     if (request.WorkspaceId.HasValue && request.WorkspaceId.Value != Guid.Empty)
     {
         var workspaceVars = await dbContext.EnvironmentVariables
+            .AsNoTracking()
             .Where(v => v.WorkspaceId == request.WorkspaceId.Value)
             .ToListAsync(cancellationToken);
 
-        var entries = workspaceVars.Select(v => new VariableEntry
-        {
-            Key = v.Key,
-            Value = v.Value,
-            Scope = v.Scope,
-            EnvironmentName = v.EnvironmentName,
-            CollectionId = v.CollectionId,
-            IsActive = v.IsActive,
-            IsSecret = v.IsSecret
-        });
+        var entries = workspaceVars.Select(e => e.ToEntry());
 
         var resolvedWorkspaceVars = variableResolver.ResolveToDictionary(
             entries,

@@ -205,7 +205,6 @@ public class VariableEndpointsTests : IClassFixture<WebApplicationFactory<Progra
                 },
                 new VariableDto
                 {
-                    Id = Guid.NewGuid(),
                     WorkspaceId = ws.Id,
                     Scope = VariableScope.Environment,
                     EnvironmentName = "Staging",
@@ -231,7 +230,8 @@ public class VariableEndpointsTests : IClassFixture<WebApplicationFactory<Progra
         currentVars!.Should().HaveCount(2);
 
         currentVars.Should().ContainSingle(v => v.Id == var1Id && v.Key == "KEY_ONE" && v.Value == "updated_value");
-        currentVars.Should().ContainSingle(v => v.Key == "KEY_THREE" && v.Value == "newly_added_value" && v.EnvironmentName == "Staging" && v.IsSecret);
+        var addedVar = currentVars.Single(v => v.Key == "KEY_THREE" && v.Value == "newly_added_value" && v.EnvironmentName == "Staging" && v.IsSecret);
+        addedVar.Id.Should().NotBeNull().And.NotBe(Guid.Empty);
         currentVars.Should().NotContain(v => v.Id == var2Id);
     }
 
@@ -285,6 +285,9 @@ public class VariableEndpointsTests : IClassFixture<WebApplicationFactory<Progra
     public async Task PutVariables_CollectionScope_WithoutCollectionId_Returns_400_ProblemDetails()
     {
         var ws = await SeedWorkspaceAsync("Validation Col WS");
+        var otherWs = await SeedWorkspaceAsync("Other WS");
+        var otherCol = await SeedCollectionAsync(otherWs.Id, "Other Col");
+
         var batchRequest = new BatchSaveVariablesRequest
         {
             Variables =
@@ -304,6 +307,24 @@ public class VariableEndpointsTests : IClassFixture<WebApplicationFactory<Progra
         response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
         var body = await response.Content.ReadAsStringAsync();
         body.Should().Contain("CollectionId");
+
+        var wrongWsCollectionRequest = new BatchSaveVariablesRequest
+        {
+            Variables =
+            [
+                new VariableDto
+                {
+                    Key = "COL_KEY_2",
+                    Value = "col_val_2",
+                    Scope = VariableScope.Collection,
+                    CollectionId = otherCol.Id
+                }
+            ]
+        };
+
+        var response2 = await _client.PutAsJsonAsync($"/api/workspaces/{ws.Id}/variables", wrongWsCollectionRequest);
+        response2.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response2.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
     }
 
     [Fact]
