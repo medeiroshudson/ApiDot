@@ -44,7 +44,7 @@ describe('AppHeader', () => {
   });
 
   it('renders environment dropdown selector with available environments and "Sem Ambiente"', () => {
-    const { rerender } = render(<AppHeader />);
+    const { rerender } = render(<AppHeader environments={['Development', 'Staging', 'Production']} />);
     const select = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' }) as HTMLSelectElement;
     expect(select).toBeDefined();
 
@@ -66,6 +66,13 @@ describe('AppHeader', () => {
       { text: 'Testing', value: 'Testing' },
     ]);
     expect(updatedSelect.value).toBe('Testing');
+  });
+
+  it('defaults environments to an empty array when none are provided', () => {
+    render(<AppHeader />);
+    const select = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' }) as HTMLSelectElement;
+    const options = Array.from(select.options).map((opt) => ({ text: opt.text, value: opt.value }));
+    expect(options).toEqual([{ text: 'Sem Ambiente', value: '' }]);
   });
 
   it('calls onSelectEnvironment with environment name or null when "Sem Ambiente" is selected', () => {
@@ -101,6 +108,14 @@ describe('AppHeader', () => {
 
     const settingsButton = screen.getByRole('button', { name: 'Configurar ambientes e variáveis' });
     expect(settingsButton.getAttribute('aria-label')).toBe('Configurar ambientes e variáveis');
+    expect(settingsButton.getAttribute('aria-haspopup')).toBe('dialog');
     expect(settingsButton.getAttribute('type')).toBe('button');
+  });
+
+  it('handles duplicate environments safely', () => {
+    render(<AppHeader environments={['Dev', 'Dev']} />);
+    const select = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' }) as HTMLSelectElement;
+    const options = Array.from(select.options).map((opt) => opt.text);
+    expect(options).toEqual(['Sem Ambiente', 'Dev', 'Dev']);
   });
 });

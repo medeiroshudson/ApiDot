@@ -12,14 +12,12 @@ export interface AppHeaderProps {
   onOpenEnvironmentSettings?: () => void;
 }
 
-const DEFAULT_ENVIRONMENTS = ['Development', 'Staging', 'Production'];
-
 export function AppHeader({
   title = 'ApiDot',
   isAgentOnline = false,
   isDrawerOpen = false,
   onToggleDrawer,
-  environments = DEFAULT_ENVIRONMENTS,
+  environments = [],
   activeEnvironment = null,
   onSelectEnvironment,
   onOpenEnvironmentSettings,
@@ -53,11 +51,11 @@ export function AppHeader({
             value={activeEnvironment ?? ''}
             onChange={(e) => onSelectEnvironment?.(e.target.value === '' ? null : e.target.value)}
             aria-label="Selecionar ambiente ativo"
-            className="bg-neutral-900 border border-neutral-800 text-xs text-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400 cursor-pointer hover:border-neutral-700 transition-colors"
+            className="bg-neutral-900 border border-neutral-800 text-xs text-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-neutral-400 cursor-pointer hover:border-neutral-700 transition-colors max-w-[120px] sm:max-w-[200px] truncate"
           >
             <option value="">Sem Ambiente</option>
-            {environments.map((env) => (
-              <option key={env} value={env}>
+            {(environments ?? []).map((env, idx) => (
+              <option key={`${env}-${idx}`} value={env}>
                 {env}
               </option>
             ))}
@@ -66,8 +64,9 @@ export function AppHeader({
             type="button"
             onClick={onOpenEnvironmentSettings}
             aria-label="Configurar ambientes e variáveis"
+            aria-haspopup="dialog"
             title="Configurar ambientes e variáveis"
-            className="p-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-400"
+            className="p-2 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-400"
           >
             <Settings className="w-4 h-4" aria-hidden="true" />
           </button>
@@ -83,7 +82,7 @@ export function AppHeader({
               isAgentOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
             }`}
           />
-          <span className="text-neutral-300">
+          <span className="hidden sm:inline text-neutral-300">
             {agentStatusText}
           </span>
         </div>
