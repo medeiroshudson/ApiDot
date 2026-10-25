@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, useId } from 'react';
 import { Variable, Shuffle, Clock, Link2 } from 'lucide-react';
 
 export interface AutocompleteVariable {
@@ -32,7 +32,7 @@ interface SuggestionItem {
   scope?: string;
 }
 
-const METHOD_BADGES: Record<string, string> = {
+export const HTTP_METHOD_BADGES: Record<string, string> = {
   GET: 'text-emerald-400 bg-emerald-950/60 border-emerald-800/80',
   POST: 'text-blue-400 bg-blue-950/60 border-blue-800/80',
   PUT: 'text-amber-400 bg-amber-950/60 border-amber-800/80',
@@ -41,6 +41,8 @@ const METHOD_BADGES: Record<string, string> = {
   HEAD: 'text-neutral-400 bg-neutral-900 border-neutral-700',
   OPTIONS: 'text-cyan-400 bg-cyan-950/60 border-cyan-800/80',
 };
+
+export const METHOD_COLORS = HTTP_METHOD_BADGES;
 
 function getAutocompleteContext(text: string, cursorPos: number) {
   const textBefore = text.slice(0, cursorPos);
@@ -82,6 +84,10 @@ export function RequestAutocomplete({
   className = '',
   children,
 }: RequestAutocompleteProps) {
+  const baseId = useId();
+  const listboxId = `${baseId}-listbox`;
+  const getOptionId = (index: number) => `${baseId}-option-${index}`;
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDismissed, setIsDismissed] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -200,6 +206,61 @@ export function RequestAutocomplete({
   }, [selectedIndex]);
 
   const isOpen = !isDismissed && context !== null && suggestions.length > 0;
+  const activeOptionId = isOpen && suggestions[selectedIndex] ? getOptionId(selectedIndex) : undefined;
+
+  // Manage ARIA combobox attributes on the attached input/textarea
+  useEffect(() => {
+    const el = getTargetElement();
+    if (!el) return;
+
+    if (isOpen) {
+      el.setAttribute('aria-expanded', 'true');
+      el.setAttribute('aria-controls', listboxId);
+      if (activeOptionId) {
+        el.setAttribute('aria-activedescendant', activeOptionId);
+      } else {
+        el.removeAttribute('aria-activedescendant');
+      }
+    } else {
+      el.setAttribute('aria-expanded', 'false');
+      el.removeAttribute('aria-controls');
+      el.removeAttribute('aria-activedescendant');
+    }
+  }, [getTargetElement, isOpen, listboxId, activeOptionId]);
+
+  useEffect(() => {
+    const el = getTargetElement();
+    return () => {
+      if (el) {
+        el.removeAttribute('aria-expanded');
+        el.removeAttribute('aria-controls');
+        el.removeAttribute('aria-activedescendant');
+      }
+    };
+  }, [getTargetElement]);
+
+  // Dismissal on outside click / blur
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePointerDown = (e: MouseEvent | PointerEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+
+      const el = getTargetElement();
+      if (el && el.contains(target)) return;
+      if (containerRef.current && containerRef.current.contains(target)) return;
+
+      setIsDismissed(true);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('mousedown', handlePointerDown);
+    };
+  }, [isOpen, getTargetElement]);
 
   const handleSelect = useCallback(
     (item: SuggestionItem) => {
@@ -212,15 +273,29 @@ export function RequestAutocomplete({
       let insertText = '';
       let shouldStayOpen = false;
 
+      const closeIndex = suffix.indexOf('}}');
+      const nextOpen = suffix.indexOf('{{');
+      const hasClose =
+        closeIndex !== -1 &&
+        (nextOpen === -1 || closeIndex < nextOpen) &&
+        !suffix.slice(0, closeIndex).includes('\n');
+
       if (item.type === 'request') {
         insertText = `{{$request['${item.id}'].response.body.`;
+        if (hasClose) {
+          suffix = suffix.slice(closeIndex);
+        }
       } else if (item.type === 'token' && item.id === '$request[...]') {
         insertText = `{{$request['`;
         shouldStayOpen = true;
+        if (hasClose) {
+          suffix = suffix.slice(closeIndex);
+        }
       } else {
         insertText = `{{${item.id}}}`;
-        if (suffix.startsWith('}}')) {
-          suffix = suffix.slice(2);
+        if (hasClose) {
+          // Cleanly replace until closing }} to avoid duplicate trailing tokens
+          suffix = suffix.slice(closeIndex + 2);
         }
       }
 
@@ -271,6 +346,8 @@ export function RequestAutocomplete({
         e.preventDefault();
         e.stopPropagation();
         setIsDismissed(true);
+      } else if (e.key === 'Tab') {
+        setIsDismissed(true);
       }
     };
 
@@ -281,36 +358,46 @@ export function RequestAutocomplete({
     el.addEventListener('keydown', handleKeyDown);
     el.addEventListener('keyup', handleEventUpdate);
     el.addEventListener('click', handleEventUpdate);
+    el.addEventListener('select', handleEventUpdate);
 
     return () => {
       el.removeEventListener('keydown', handleKeyDown);
       el.removeEventListener('keyup', handleEventUpdate);
       el.removeEventListener('click', handleEventUpdate);
+      el.removeEventListener('select', handleEventUpdate);
     };
   }, [getTargetElement, handleSelect, isOpen, selectedIndex, suggestions, updateCursorFromElement]);
+
+  const liveRegion = (
+    <span className="sr-only" role="status" aria-live="polite">
+      {isOpen && suggestions.length > 0
+        ? `${suggestions.length} ${suggestions.length === 1 ? 'sugestão disponível' : 'sugestões disponíveis'}`
+        : ''}
+    </span>
+  );
 
   const popover = isOpen ? (
     <div
       role="listbox"
-      id="autocomplete-listbox"
+      id={listboxId}
       aria-label="Sugestões de autocompletar"
       className="absolute z-50 left-0 top-full mt-1 w-full min-w-[280px] max-w-md max-h-60 overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl text-neutral-200 py-1"
     >
       {suggestions.map((item, index) => {
         const isSelected = index === selectedIndex;
+        const method = item.method?.toUpperCase() || 'GET';
         return (
           <div
-            key={item.id}
+            key={`${item.type}-${item.id}-${index}`}
             ref={(el) => {
               itemRefs.current[index] = el;
             }}
             role="option"
-            id={`autocomplete-option-${index}`}
+            id={getOptionId(index)}
             aria-selected={isSelected}
             onClick={() => handleSelect(item)}
             onMouseDown={(e) => {
               e.preventDefault();
-              handleSelect(item);
             }}
             className={`px-3 py-2 cursor-pointer text-xs flex items-center justify-between gap-2 transition-colors ${
               isSelected
@@ -323,10 +410,10 @@ export function RequestAutocomplete({
                 <>
                   <span
                     className={`px-1.5 py-0.5 rounded text-[10px] font-bold border shrink-0 ${
-                      METHOD_BADGES[item.method || 'GET'] || METHOD_BADGES.GET
+                      HTTP_METHOD_BADGES[method] || HTTP_METHOD_BADGES.GET
                     }`}
                   >
-                    {item.method || 'GET'}
+                    {method}
                   </span>
                   <span className="truncate">{item.name}</span>
                 </>
@@ -364,6 +451,7 @@ export function RequestAutocomplete({
     return (
       <div ref={containerRef} className={`relative ${className}`}>
         {children}
+        {liveRegion}
         {popover}
       </div>
     );
@@ -371,6 +459,7 @@ export function RequestAutocomplete({
 
   return (
     <div ref={containerRef} className={className}>
+      {liveRegion}
       {popover}
     </div>
   );

@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Loader2, X, Sparkles } from 'lucide-react';
 import { TargetSelector, ExecutionTarget } from './TargetSelector';
-import { RequestAutocomplete, AutocompleteRequest, AutocompleteVariable } from './RequestAutocomplete';
+import {
+  RequestAutocomplete,
+  AutocompleteRequest,
+  AutocompleteVariable,
+  HTTP_METHOD_BADGES,
+  METHOD_COLORS,
+} from './RequestAutocomplete';
 
 export interface AuthConfig {
   type: 'none' | 'bearer' | 'basic' | 'apikey';
@@ -40,16 +46,6 @@ export const TABS = [
 export type TabType = (typeof TABS)[number]['id'];
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
-
-const METHOD_COLORS: Record<string, string> = {
-  GET: 'text-emerald-400 bg-emerald-950/40 border-emerald-800/80 hover:bg-emerald-950/60',
-  POST: 'text-blue-400 bg-blue-950/40 border-blue-800/80 hover:bg-blue-950/60',
-  PUT: 'text-amber-400 bg-amber-950/40 border-amber-800/80 hover:bg-amber-950/60',
-  PATCH: 'text-purple-400 bg-purple-950/40 border-purple-800/80 hover:bg-purple-950/60',
-  DELETE: 'text-rose-400 bg-rose-950/40 border-rose-800/80 hover:bg-rose-950/60',
-  HEAD: 'text-neutral-400 bg-neutral-900 border-neutral-700 hover:bg-neutral-800',
-  OPTIONS: 'text-cyan-400 bg-cyan-950/40 border-cyan-800/80 hover:bg-cyan-950/60',
-};
 
 export function RequestEditor({
   initialRequest,

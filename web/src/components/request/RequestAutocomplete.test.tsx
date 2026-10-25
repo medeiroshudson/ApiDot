@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { RequestAutocomplete } from './RequestAutocomplete';
+import { RequestAutocomplete, HTTP_METHOD_BADGES, METHOD_COLORS } from './RequestAutocomplete';
 
 describe('RequestAutocomplete', () => {
   const mockVariables = [
@@ -220,5 +220,163 @@ describe('RequestAutocomplete', () => {
     fireEvent.click(requestTokenOption);
 
     expect(onChange).toHaveBeenCalledWith("{{$request['");
+  });
+
+  it('dismisses suggestion listbox when clicking outside the input and popover', () => {
+    render(
+      <div>
+        <button data-testid="outside-button">Outside</button>
+        <TestWrapper />
+      </div>
+    );
+
+    const input = screen.getByRole('textbox', { name: /url input/i });
+    fireEvent.change(input, { target: { value: '{{' } });
+
+    expect(screen.getByRole('listbox')).toBeDefined();
+
+    // Clicking outside dismisses
+    const outsideBtn = screen.getByTestId('outside-button');
+    fireEvent.pointerDown(outsideBtn);
+
+    expect(screen.queryByRole('listbox')).toBeNull();
+
+    // Typing again reopens
+    fireEvent.change(input, { target: { value: '{{base' } });
+    expect(screen.getByRole('listbox')).toBeDefined();
+
+    // Clicking inside the input does not dismiss
+    fireEvent.pointerDown(input);
+    expect(screen.getByRole('listbox')).toBeDefined();
+  });
+
+  it('announces available suggestions in a polite live region for screen readers', () => {
+    render(<TestWrapper />);
+
+    const status = screen.getByRole('status');
+    expect(status).toHaveClass('sr-only');
+    expect(status).toHaveAttribute('aria-live', 'polite');
+    expect(status).toHaveTextContent('');
+
+    const input = screen.getByRole('textbox', { name: /url input/i });
+    fireEvent.change(input, { target: { value: '{{' } });
+
+    // 3 mock variables + 3 tokens = 6 suggestions
+    expect(status).toHaveTextContent(/6 sugestões disponíveis/i);
+
+    // Filtering down to 1 suggestion updates live announcement
+    fireEvent.change(input, { target: { value: '{{base' } });
+    expect(status).toHaveTextContent(/1 sugestão disponível/i);
+
+    // Escape dismisses and clears live announcement
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(status).toHaveTextContent('');
+  });
+
+  it('generates unique instance IDs and sets combobox ARIA attributes on attached input', () => {
+    render(
+      <div>
+        <TestWrapper />
+        <TestWrapper />
+      </div>
+    );
+
+    const inputs = screen.getAllByRole('textbox', { name: /url input/i });
+    expect(inputs[0]).toHaveAttribute('aria-expanded', 'false');
+    expect(inputs[0]).not.toHaveAttribute('aria-controls');
+    expect(inputs[0]).not.toHaveAttribute('aria-activedescendant');
+
+    // Trigger autocomplete on first input
+    fireEvent.change(inputs[0], { target: { value: '{{' } });
+
+    const listboxes = screen.getAllByRole('listbox');
+    expect(listboxes).toHaveLength(1);
+    const listboxId1 = listboxes[0].id;
+    expect(listboxId1).toMatch(/-listbox$/);
+
+    // Check combobox attributes on first input
+    expect(inputs[0]).toHaveAttribute('aria-expanded', 'true');
+    expect(inputs[0]).toHaveAttribute('aria-controls', listboxId1);
+    const activeOptionId1 = inputs[0].getAttribute('aria-activedescendant');
+    expect(activeOptionId1).toMatch(/-option-0$/);
+
+    const options = screen.getAllByRole('option');
+    expect(options[0].id).toBe(activeOptionId1);
+    options.forEach((opt, idx) => {
+      expect(opt.id).toMatch(new RegExp(`-option-${idx}$`));
+    });
+
+    // ArrowDown updates aria-activedescendant
+    fireEvent.keyDown(inputs[0], { key: 'ArrowDown' });
+    expect(inputs[0].getAttribute('aria-activedescendant')).toMatch(/-option-1$/);
+
+    // Trigger autocomplete on second input to verify unique IDs across instances
+    fireEvent.change(inputs[1], { target: { value: '{{' } });
+    const bothListboxes = screen.getAllByRole('listbox');
+    expect(bothListboxes).toHaveLength(2);
+    const listboxId2 = bothListboxes[1].id;
+    expect(listboxId2).toMatch(/-listbox$/);
+    expect(listboxId1).not.toBe(listboxId2);
+  });
+
+  it('cleanly replaces tokens up to closing braces in suffix, avoiding duplicate trailing tokens', () => {
+    const onChange = vi.fn();
+    render(<TestWrapper onChange={onChange} />);
+
+    const input = screen.getByRole('textbox', { name: /url input/i }) as HTMLInputElement;
+
+    // Editing "{{base}}" with cursor at 6 (right before closing "}}")
+    fireEvent.change(input, { target: { value: '{{base}}' } });
+    input.setSelectionRange(6, 6);
+    fireEvent.click(input);
+
+    expect(screen.getByRole('listbox')).toBeDefined();
+    fireEvent.click(screen.getByText('baseUrl'));
+
+    // Suffix "}}" should be cleanly replaced, NOT duplicated as "{{baseUrl}}}}"
+    expect(onChange).toHaveBeenCalledWith('{{baseUrl}}');
+
+    // Editing "{{ba_old}} /api" with cursor at 4 (right after "{{ba")
+    fireEvent.change(input, { target: { value: '{{ba_old}} /api' } });
+    input.setSelectionRange(4, 4);
+    fireEvent.click(input);
+
+    fireEvent.click(screen.getByText('baseUrl'));
+    // "_old}}" is cleanly replaced, preserving " /api"
+    expect(onChange).toHaveBeenCalledWith('{{baseUrl}} /api');
+  });
+
+  it('prevents double invocation on mouse click by selecting strictly in onClick', () => {
+    const onChange = vi.fn();
+    render(<TestWrapper onChange={onChange} />);
+
+    const input = screen.getByRole('textbox', { name: /url input/i });
+    fireEvent.change(input, { target: { value: '{{' } });
+    onChange.mockClear();
+
+    const option = screen.getByText('baseUrl');
+    // Simulate real user mouse click: mousedown followed by click
+    fireEvent.mouseDown(option);
+    fireEvent.click(option);
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith('{{baseUrl}}');
+  });
+
+  it('renders uppercase method badges and exports shared HTTP_METHOD_BADGES', () => {
+    expect(HTTP_METHOD_BADGES.GET).toBeDefined();
+    expect(METHOD_COLORS).toBe(HTTP_METHOD_BADGES);
+
+    const customRequests = [
+      { id: 'custom-1', name: 'Custom Lowercase', method: 'post' },
+      { id: 'custom-2', name: 'Custom Default', method: '' },
+    ];
+    render(<TestWrapper availableRequests={customRequests} />);
+
+    const input = screen.getByRole('textbox', { name: /url input/i });
+    fireEvent.change(input, { target: { value: '{{$request[' } });
+
+    expect(screen.getByText('POST')).toBeDefined();
+    expect(screen.getByText('GET')).toBeDefined();
   });
 });
