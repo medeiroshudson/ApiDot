@@ -1,9 +1,11 @@
-import React from 'react';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import React, { act } from 'react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   DependencyLinkerModal,
   DependencyRequest,
+  getChildPath,
+  isValidIdentifier,
 } from './DependencyLinkerModal';
 
 describe('DependencyLinkerModal', () => {
@@ -376,7 +378,9 @@ describe('DependencyLinkerModal', () => {
       const copyButtons = screen.getAllByRole('button', { name: /copiar/i });
       expect(copyButtons.length).toBeGreaterThan(0);
 
-      fireEvent.click(copyButtons[0]);
+      await act(async () => {
+        fireEvent.click(copyButtons[0]);
+      });
       expect(navigator.clipboard.writeText).toHaveBeenCalled();
     });
 
@@ -458,6 +462,445 @@ describe('DependencyLinkerModal', () => {
       expect(onInsertToken).toHaveBeenCalledWith(
         "{{$request['req-array'].response.body[0].name}}"
       );
+    });
+
+    it('formats keys with special characters using bracket notation', () => {
+      const onInsertToken = vi.fn();
+      const specialRequests: DependencyRequest[] = [
+        {
+          id: 'req-special',
+          name: 'Special Keys Req',
+          method: 'GET',
+          response: {
+            statusCode: 200,
+            body: JSON.stringify({
+              'user-name': 'hudson',
+              'content.type': 'json',
+              'first name': 'Hudson',
+              profile: {
+                'contact-phone': '+5511999999999',
+                'home.address': 'Main St',
+              },
+            }),
+          },
+        },
+      ];
+
+      render(
+        <DependencyLinkerModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onInsertToken={onInsertToken}
+          availableRequests={specialRequests}
+        />
+      );
+
+      // Root key with hyphen
+      fireEvent.click(screen.getByText('user-name'));
+      expect(onInsertToken).toHaveBeenCalledWith(
+        "{{$request['req-special'].response.body['user-name']}}"
+      );
+
+      // Root key with dot
+      fireEvent.click(screen.getByText('content.type'));
+      expect(onInsertToken).toHaveBeenCalledWith(
+        "{{$request['req-special'].response.body['content.type']}}"
+      );
+
+      // Root key with space
+      fireEvent.click(screen.getByText('first name'));
+      expect(onInsertToken).toHaveBeenCalledWith(
+        "{{$request['req-special'].response.body['first name']}}"
+      );
+
+      // Nested key with hyphen
+      fireEvent.click(screen.getByText('contact-phone'));
+      expect(onInsertToken).toHaveBeenCalledWith(
+        "{{$request['req-special'].response.body.profile['contact-phone']}}"
+      );
+
+      // Nested key with dot
+      fireEvent.click(screen.getByText('home.address'));
+      expect(onInsertToken).toHaveBeenCalledWith(
+        "{{$request['req-special'].response.body.profile['home.address']}}"
+      );
+    });
+
+    it('properly renders and inserts falsy body values (false, 0, "")', () => {
+      const onInsertToken = vi.fn();
+      const falsyRequests: DependencyRequest[] = [
+        {
+          id: 'req-falsy-bool',
+          name: 'Falsy Bool Req',
+          method: 'GET',
+          response: {
+            statusCode: 200,
+            body: 'false',
+          },
+        },
+        {
+          id: 'req-falsy-zero',
+          name: 'Falsy Zero Req',
+          method: 'GET',
+          response: {
+            statusCode: 200,
+            body: '0',
+          },
+        },
+        {
+          id: 'req-falsy-empty',
+          name: 'Falsy Empty Req',
+          method: 'GET',
+          response: {
+            statusCode: 200,
+            body: '',
+          },
+        },
+      ];
+
+      const { rerender } = render(
+        <DependencyLinkerModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onInsertToken={onInsertToken}
+          availableRequests={falsyRequests}
+        />
+      );
+
+      // Falsy false
+      fireEvent.click(screen.getByText('Falsy Bool Req'));
+      const falseVal = screen.getByText('false');
+      expect(falseVal).toBeInTheDocument();
+      fireEvent.click(falseVal);
+      expect(onInsertToken).toHaveBeenCalledWith(
+        "{{$request['req-falsy-bool'].response.body}}"
+      );
+
+      // Falsy zero
+      fireEvent.click(screen.getByText('Falsy Zero Req'));
+      const zeroVal = screen.getByText('0');
+      expect(zeroVal).toBeInTheDocument();
+      fireEvent.click(zeroVal);
+      expect(onInsertToken).toHaveBeenCalledWith(
+        "{{$request['req-falsy-zero'].response.body}}"
+      );
+
+      // Falsy empty string (should not say "Nenhum corpo de resposta retornado.")
+      fireEvent.click(screen.getByText('Falsy Empty Req'));
+      expect(
+        screen.queryByText('Nenhum corpo de resposta retornado.')
+      ).toBeNull();
+    });
+
+    it('enforces depth guard and lazy expansion (depth >= 2 collapsed by default, depth > 12 truncated)', () => {
+      // Build a deeply nested object with 15 levels
+      let nested: any = { leaf: 'bottom' };
+      for (let i = 15; i >= 1; i--) {
+        nested = { [`level_${i}`]: nested };
+      }
+
+      const deepRequests: DependencyRequest[] = [
+        {
+          id: 'req-deep',
+          name: 'Deep Req',
+          method: 'GET',
+          response: {
+            statusCode: 200,
+            body: JSON.stringify(nested),
+          },
+        },
+      ];
+
+      render(
+        <DependencyLinkerModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onInsertToken={vi.fn()}
+          availableRequests={deepRequests}
+        />
+      );
+
+      // Depth 0: level_1 should be visible and expanded
+      expect(screen.getByText('level_1')).toBeInTheDocument();
+      // Depth 1: level_2 should be visible (since depth 0 is expanded) and expanded (depth 1 < 2)
+      expect(screen.getByText('level_2')).toBeInTheDocument();
+      // Depth 2: level_3 should be rendered, but NOT expanded by default because depth >= 2
+      expect(screen.getByText('level_3')).toBeInTheDocument();
+      expect(screen.queryByText('level_4')).toBeNull();
+
+      // Expand level_3 (depth 2) -> level_4 appears
+      const expandBtn = screen.getByRole('button', { name: /expandir level_3/i });
+      fireEvent.click(expandBtn);
+      expect(screen.getByText('level_4')).toBeInTheDocument();
+    });
+
+    it('renders depth limit message when depth > 12', () => {
+      // Create an object where level 13 has children
+      // We'll test with a helper or direct structure
+      let nested: any = 'final';
+      for (let i = 14; i >= 1; i--) {
+        nested = { child: nested };
+      }
+
+      const deepRequests: DependencyRequest[] = [
+        {
+          id: 'req-deep-limit',
+          name: 'Deep Limit Req',
+          method: 'GET',
+          response: {
+            statusCode: 200,
+            body: JSON.stringify(nested),
+          },
+        },
+      ];
+
+      render(
+        <DependencyLinkerModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onInsertToken={vi.fn()}
+          availableRequests={deepRequests}
+        />
+      );
+
+      // Expand down to level 13
+      // Expand level 2 through 12
+      for (let i = 0; i < 11; i++) {
+        const expandBtns = screen.queryAllByRole('button', { name: /expandir child/i });
+        if (expandBtns.length > 0) {
+          fireEvent.click(expandBtns[0]);
+        }
+      }
+
+      expect(screen.getByText('[Profundidade máxima atingida]')).toBeInTheDocument();
+    });
+  });
+
+  describe('Keyboard Accessibility and Focus Trap', () => {
+    it('focuses search input when modal opens', async () => {
+      render(
+        <DependencyLinkerModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onInsertToken={vi.fn()}
+          availableRequests={mockRequests}
+        />
+      );
+
+      const searchInput = screen.getByPlaceholderText(/buscar requisições.../i);
+      await waitFor(() => {
+        expect(document.activeElement).toBe(searchInput);
+      });
+    });
+
+    it('restores focus to previous active element on modal close', async () => {
+      const triggerBtn = document.createElement('button');
+      triggerBtn.textContent = 'Trigger';
+      document.body.appendChild(triggerBtn);
+      triggerBtn.focus();
+      expect(document.activeElement).toBe(triggerBtn);
+
+      const { rerender } = render(
+        <DependencyLinkerModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onInsertToken={vi.fn()}
+          availableRequests={mockRequests}
+        />
+      );
+
+      rerender(
+        <DependencyLinkerModal
+          isOpen={false}
+          onClose={vi.fn()}
+          onInsertToken={vi.fn()}
+          availableRequests={mockRequests}
+        />
+      );
+
+      await waitFor(() => {
+        expect(document.activeElement).toBe(triggerBtn);
+      });
+      document.body.removeChild(triggerBtn);
+    });
+
+    it('supports keyboard Enter and Space on tree node row to insert token', () => {
+      const onInsertToken = vi.fn();
+      render(
+        <DependencyLinkerModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onInsertToken={onInsertToken}
+          availableRequests={mockRequests}
+        />
+      );
+
+      fireEvent.click(screen.getByText('Login Auth'));
+
+      // Find token row with role="button"
+      const tokenNode = screen.getByText('token');
+      const row = tokenNode.closest('[role="button"]')!;
+      expect(row).toBeInTheDocument();
+      expect(row).toHaveAttribute('tabindex', '0');
+
+      // Press Enter
+      fireEvent.keyDown(row, { key: 'Enter', code: 'Enter' });
+      expect(onInsertToken).toHaveBeenCalledWith(
+        "{{$request['req-auth'].response.body.token}}"
+      );
+
+      // Press Space
+      fireEvent.keyDown(row, { key: ' ', code: 'Space' });
+      expect(onInsertToken).toHaveBeenCalledTimes(2);
+    });
+
+    it('supports keyboard Enter and Space on headers row to insert token', () => {
+      const onInsertToken = vi.fn();
+      render(
+        <DependencyLinkerModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onInsertToken={onInsertToken}
+          availableRequests={mockRequests}
+        />
+      );
+
+      fireEvent.click(screen.getByText('Login Auth'));
+      fireEvent.click(screen.getByRole('tab', { name: /cabeçalhos/i }));
+
+      const headerKey = screen.getByText('x-access-token');
+      const row = headerKey.closest('[role="button"]')!;
+      expect(row).toBeInTheDocument();
+      expect(row).toHaveAttribute('tabindex', '0');
+
+      // Press Enter
+      fireEvent.keyDown(row, { key: 'Enter', code: 'Enter' });
+      expect(onInsertToken).toHaveBeenCalledWith(
+        "{{$request['req-auth'].response.headers['x-access-token']}}"
+      );
+
+      // Press Space
+      fireEvent.keyDown(row, { key: ' ', code: 'Space' });
+      expect(onInsertToken).toHaveBeenCalledTimes(2);
+    });
+
+    it('supports keyboard Enter and Space on status row to insert token', () => {
+      const onInsertToken = vi.fn();
+      render(
+        <DependencyLinkerModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onInsertToken={onInsertToken}
+          availableRequests={mockRequests}
+        />
+      );
+
+      fireEvent.click(screen.getByText('Login Auth'));
+      fireEvent.click(screen.getByRole('tab', { name: /status/i }));
+
+      const panel = screen.getByRole('tabpanel');
+      const statusElement = within(panel).getByText('200');
+      const row = statusElement.closest('[role="button"]')!;
+      expect(row).toBeInTheDocument();
+
+      // Press Enter
+      fireEvent.keyDown(row, { key: 'Enter', code: 'Enter' });
+      expect(onInsertToken).toHaveBeenCalledWith(
+        "{{$request['req-auth'].response.status}}"
+      );
+
+      // Press Space
+      fireEvent.keyDown(row, { key: ' ', code: 'Space' });
+      expect(onInsertToken).toHaveBeenCalledTimes(2);
+    });
+
+    it('traps Tab and Shift+Tab within dialog', () => {
+      render(
+        <DependencyLinkerModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onInsertToken={vi.fn()}
+          availableRequests={mockRequests}
+        />
+      );
+
+      const dialog = screen.getByRole('dialog');
+      const focusable = dialog.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      const focusableElements: HTMLElement[] = Array.from(focusable).filter(
+        (el) => !el.hasAttribute('disabled') && el.getAttribute('tabindex') !== '-1'
+      );
+
+      const firstEl = focusableElements[0];
+      const lastEl = focusableElements[focusableElements.length - 1];
+
+      // Focus last element and press Tab -> should wrap to first element
+      lastEl.focus();
+      expect(document.activeElement).toBe(lastEl);
+      fireEvent.keyDown(window, { key: 'Tab', code: 'Tab' });
+      expect(document.activeElement).toBe(firstEl);
+
+      // Focus first element and press Shift+Tab -> should wrap to last element
+      firstEl.focus();
+      expect(document.activeElement).toBe(firstEl);
+      fireEvent.keyDown(window, { key: 'Tab', code: 'Tab', shiftKey: true });
+      expect(document.activeElement).toBe(lastEl);
+    });
+
+    it('handles clipboard writeText rejection gracefully', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      Object.assign(navigator, {
+        clipboard: {
+          writeText: vi.fn().mockImplementation(() => Promise.reject(new Error('Permission denied'))),
+        },
+      });
+
+      render(
+        <DependencyLinkerModal
+          isOpen={true}
+          onClose={vi.fn()}
+          onInsertToken={vi.fn()}
+          availableRequests={mockRequests}
+        />
+      );
+
+      fireEvent.click(screen.getByText('Login Auth'));
+
+      const copyButtons = screen.getAllByRole('button', { name: /copiar/i });
+      await act(async () => {
+        fireEvent.click(copyButtons[0]);
+      });
+
+      expect(navigator.clipboard.writeText).toHaveBeenCalled();
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Falha ao copiar token'),
+        expect.any(Error)
+      );
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('getChildPath helper', () => {
+    it('generates dot notation for valid identifier property keys', () => {
+      expect(getChildPath('', 'token', false)).toBe('token');
+      expect(getChildPath('user', 'profile', false)).toBe('user.profile');
+      expect(getChildPath('user.profile', 'name', false)).toBe('user.profile.name');
+    });
+
+    it('generates bracket notation for property keys with special characters', () => {
+      expect(getChildPath('', 'user-name', false)).toBe("['user-name']");
+      expect(getChildPath('', 'content.type', false)).toBe("['content.type']");
+      expect(getChildPath('', 'first name', false)).toBe("['first name']");
+      expect(getChildPath('user', 'user-name', false)).toBe("user['user-name']");
+      expect(getChildPath('user', 'data.info', false)).toBe("user['data.info']");
+    });
+
+    it('generates array indexing for array items', () => {
+      expect(getChildPath('', 0, true)).toBe('[0]');
+      expect(getChildPath('items', 2, true)).toBe('items[2]');
+      expect(getChildPath('items[2]', 'id', false)).toBe('items[2].id');
+      expect(getChildPath('items[2]', 'item-id', false)).toBe("items[2]['item-id']");
     });
   });
 });

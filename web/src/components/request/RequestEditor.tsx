@@ -3,7 +3,6 @@ import { Send, Loader2, X, Sparkles, Link2 } from 'lucide-react';
 import { TargetSelector, ExecutionTarget } from './TargetSelector';
 import {
   RequestAutocomplete,
-  AutocompleteRequest,
   AutocompleteVariable,
   HTTP_METHOD_BADGES,
   METHOD_COLORS,
@@ -51,6 +50,26 @@ export const TABS = [
 export type TabType = (typeof TABS)[number]['id'];
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
+
+export function insertTokenAtCursor(
+  element: HTMLInputElement | HTMLTextAreaElement | null,
+  currentValue: string,
+  token: string,
+  onChange: (value: string) => void
+): void {
+  if (element && typeof element.selectionStart === 'number' && typeof element.selectionEnd === 'number') {
+    const start = element.selectionStart;
+    const end = element.selectionEnd;
+    const nextVal = currentValue.slice(0, start) + token + currentValue.slice(end);
+    onChange(nextVal);
+    setTimeout(() => {
+      element.focus();
+      element.setSelectionRange(start + token.length, start + token.length);
+    }, 0);
+  } else {
+    onChange(currentValue ? `${currentValue}${token}` : token);
+  }
+}
 
 export function RequestEditor({
   initialRequest,
@@ -210,47 +229,11 @@ export function RequestEditor({
 
   const handleInsertToken = (token: string) => {
     if (activeArea === 'body') {
-      const textarea = bodyRef.current;
-      if (textarea && typeof textarea.selectionStart === 'number' && typeof textarea.selectionEnd === 'number') {
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const nextVal = body.slice(0, start) + token + body.slice(end);
-        handleBodyChange(nextVal);
-        setTimeout(() => {
-          textarea.focus();
-          textarea.setSelectionRange(start + token.length, start + token.length);
-        }, 0);
-      } else {
-        handleBodyChange(body ? `${body}${token}` : token);
-      }
+      insertTokenAtCursor(bodyRef.current, body, token, handleBodyChange);
     } else if (activeArea === 'headers') {
-      const textarea = headersRef.current;
-      if (textarea && typeof textarea.selectionStart === 'number' && typeof textarea.selectionEnd === 'number') {
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const nextVal = headers.slice(0, start) + token + headers.slice(end);
-        handleHeadersChange(nextVal);
-        setTimeout(() => {
-          textarea.focus();
-          textarea.setSelectionRange(start + token.length, start + token.length);
-        }, 0);
-      } else {
-        handleHeadersChange(headers ? `${headers}${token}` : token);
-      }
+      insertTokenAtCursor(headersRef.current, headers, token, handleHeadersChange);
     } else {
-      const input = urlInputRef.current;
-      if (input && typeof input.selectionStart === 'number' && typeof input.selectionEnd === 'number') {
-        const start = input.selectionStart;
-        const end = input.selectionEnd;
-        const nextVal = url.slice(0, start) + token + url.slice(end);
-        handleUrlChange(nextVal);
-        setTimeout(() => {
-          input.focus();
-          input.setSelectionRange(start + token.length, start + token.length);
-        }, 0);
-      } else {
-        handleUrlChange(url ? `${url}${token}` : token);
-      }
+      insertTokenAtCursor(urlInputRef.current, url, token, handleUrlChange);
     }
     setIsLinkerOpen(false);
   };

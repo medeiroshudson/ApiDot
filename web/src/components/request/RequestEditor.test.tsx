@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { RequestEditor } from './RequestEditor';
+import { RequestEditor, insertTokenAtCursor } from './RequestEditor';
 
 describe('RequestEditor', () => {
   it('renders all key elements: method selector, URL input, target selector, and send button', () => {
@@ -631,5 +631,41 @@ describe('RequestEditor', () => {
         url: "{{$request['req-auth'].response.body.token}}",
       })
     );
+  });
+
+  describe('insertTokenAtCursor helper', () => {
+    it('inserts token at cursor position when element has selectionStart/selectionEnd', () => {
+      const input = document.createElement('input');
+      input.value = 'Hello World';
+      input.selectionStart = 5;
+      input.selectionEnd = 5;
+
+      const onChange = vi.fn();
+      insertTokenAtCursor(input, 'Hello World', ' beautiful', onChange);
+
+      expect(onChange).toHaveBeenCalledWith('Hello beautiful World');
+    });
+
+    it('replaces selected range with token', () => {
+      const textarea = document.createElement('textarea');
+      textarea.value = 'foo REPLACE bar';
+      textarea.selectionStart = 4;
+      textarea.selectionEnd = 11;
+
+      const onChange = vi.fn();
+      insertTokenAtCursor(textarea, 'foo REPLACE bar', 'INSERTED', onChange);
+
+      expect(onChange).toHaveBeenCalledWith('foo INSERTED bar');
+    });
+
+    it('appends token when element is null or selection is not available', () => {
+      const onChange = vi.fn();
+      insertTokenAtCursor(null, 'existing-', 'token', onChange);
+      expect(onChange).toHaveBeenCalledWith('existing-token');
+
+      const onChangeEmpty = vi.fn();
+      insertTokenAtCursor(null, '', 'first-token', onChangeEmpty);
+      expect(onChangeEmpty).toHaveBeenCalledWith('first-token');
+    });
   });
 });

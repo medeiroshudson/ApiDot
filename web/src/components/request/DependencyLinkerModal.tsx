@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   X,
   Search,
@@ -45,18 +45,28 @@ export const DEPENDENCY_TABS = [
 
 export type DependencyTabType = (typeof DEPENDENCY_TABS)[number]['id'];
 
-function getChildPath(
+export function isValidIdentifier(key: string): boolean {
+  return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key);
+}
+
+export function getChildPath(
   parentPath: string,
   keyOrIndex: string | number,
   isArrayParent: boolean
 ): string {
-  if (!parentPath) {
-    return isArrayParent ? `[${keyOrIndex}]` : String(keyOrIndex);
-  }
   if (isArrayParent) {
-    return `${parentPath}[${keyOrIndex}]`;
+    return parentPath ? `${parentPath}[${keyOrIndex}]` : `[${keyOrIndex}]`;
   }
-  return `${parentPath}.${keyOrIndex}`;
+  const keyStr = String(keyOrIndex);
+  const isSpecial = !isValidIdentifier(keyStr);
+  const formattedSegment = isSpecial
+    ? `['${keyStr.replace(/'/g, "\\'")}']`
+    : `.${keyStr}`;
+
+  if (!parentPath) {
+    return isSpecial ? formattedSegment : keyStr;
+  }
+  return `${parentPath}${formattedSegment}`;
 }
 
 interface TreeNodeProps {
@@ -80,7 +90,15 @@ function TreeNode({
   onCopyToken,
   depth = 0,
 }: TreeNodeProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  if (depth > 12) {
+    return (
+      <div className="text-xs text-neutral-500 italic pl-4">
+        [Profundidade máxima atingida]
+      </div>
+    );
+  }
+
+  const [isExpanded, setIsExpanded] = useState(depth < 2);
 
   const token = path.startsWith('[')
     ? `{{$request['${requestId}'].response.body${path}}}`
@@ -98,8 +116,8 @@ function TreeNode({
     return Object.entries(value as Record<string, unknown>);
   }, [value, isObject, isArray]);
 
-  const handleInsert = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleInsert = (e?: React.MouseEvent | React.KeyboardEvent) => {
+    e?.stopPropagation();
     onInsertToken(token);
   };
 
@@ -146,8 +164,16 @@ function TreeNode({
   return (
     <div className="flex flex-col text-xs font-mono select-none">
       <div
+        role="button"
+        tabIndex={0}
         onClick={handleInsert}
-        className={`group flex items-center justify-between py-1 px-2 rounded hover:bg-neutral-800/80 cursor-pointer transition-colors ${
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleInsert(e);
+          }
+        }}
+        className={`group flex items-center justify-between py-1 px-2 rounded hover:bg-neutral-800/80 cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500 ${
           depth > 0 ? 'ml-3 border-l border-neutral-800 pl-2' : ''
         }`}
         title={`Clique para inserir: ${token}`}
@@ -158,6 +184,7 @@ function TreeNode({
               type="button"
               aria-label={isExpanded ? `Recolher ${label}` : `Expandir ${label}`}
               onClick={handleToggle}
+              onKeyDown={(e) => e.stopPropagation()}
               className="p-0.5 text-neutral-400 hover:text-white rounded hover:bg-neutral-700/60"
             >
               {isExpanded ? (
@@ -181,6 +208,7 @@ function TreeNode({
             aria-label="Copiar token"
             title="Copiar token"
             onClick={handleCopy}
+            onKeyDown={(e) => e.stopPropagation()}
             className="p-1 text-neutral-400 hover:text-neutral-100 rounded hover:bg-neutral-700/80 transition-colors"
           >
             {isCopied ? (
@@ -232,7 +260,32 @@ export function DependencyLinkerModal({
   const [activeTab, setActiveTab] = useState<DependencyTabType>('body');
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
-  // Close on Escape key
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const triggerElementRef = useRef<HTMLElement | null>(null);
+
+  // Focus initial element upon open, restore focus on close
+  useEffect(() => {
+    if (isOpen) {
+      triggerElementRef.current = document.activeElement as HTMLElement | null;
+      const timer = setTimeout(() => {
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+        } else if (closeButtonRef.current) {
+          closeButtonRef.current.focus();
+        }
+      }, 0);
+      return () => {
+        clearTimeout(timer);
+        if (triggerElementRef.current && typeof triggerElementRef.current.focus === 'function') {
+          triggerElementRef.current.focus();
+        }
+      };
+    }
+  }, [isOpen]);
+
+  // Close on Escape key & trap Tab / Shift+Tab within dialog
   useEffect(() => {
     if (!isOpen) return;
 
@@ -240,6 +293,36 @@ export function DependencyLinkerModal({
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        if (!dialogRef.current) return;
+        const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        const focusableElements: HTMLElement[] = Array.from(focusable).filter(
+          (el) => !el.hasAttribute('disabled') && el.getAttribute('tabindex') !== '-1'
+        );
+        if (focusableElements.length === 0) {
+          e.preventDefault();
+          return;
+        }
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement || !dialogRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement || !dialogRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
       }
     };
 
@@ -298,21 +381,31 @@ export function DependencyLinkerModal({
 
   // Parsed body
   const parsedBody = useMemo(() => {
-    if (!response?.body) return null;
+    if (response?.body === undefined || response?.body === null) return null;
     if (typeof response.body === 'object') return response.body;
-    try {
-      return JSON.parse(response.body);
-    } catch {
-      return null;
+    if (typeof response.body === 'string') {
+      try {
+        return JSON.parse(response.body);
+      } catch {
+        return null;
+      }
     }
+    return response.body;
   }, [response?.body]);
 
   const handleCopyToken = useCallback((token: string) => {
-    navigator.clipboard?.writeText(token);
-    setCopiedToken(token);
-    setTimeout(() => {
-      setCopiedToken((prev) => (prev === token ? null : prev));
-    }, 2000);
+    if (!navigator.clipboard?.writeText) return;
+    navigator.clipboard
+      .writeText(token)
+      .then(() => {
+        setCopiedToken(token);
+        setTimeout(() => {
+          setCopiedToken((prev) => (prev === token ? null : prev));
+        }, 2000);
+      })
+      .catch((err) => {
+        console.error('Falha ao copiar token para a área de transferência:', err);
+      });
   }, []);
 
   const handleInsert = useCallback(
@@ -328,6 +421,7 @@ export function DependencyLinkerModal({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="dependency-linker-title"
@@ -350,6 +444,7 @@ export function DependencyLinkerModal({
             </div>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             aria-label="Fechar"
             onClick={onClose}
@@ -368,6 +463,7 @@ export function DependencyLinkerModal({
               <div className="relative">
                 <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
                 <input
+                  ref={searchInputRef}
                   type="text"
                   placeholder="Buscar requisições..."
                   aria-label="Buscar requisições"
@@ -496,7 +592,7 @@ export function DependencyLinkerModal({
                         </span>
                       </div>
 
-                      {parsedBody ? (
+                      {parsedBody !== null ? (
                         <div className="bg-neutral-950/80 p-3 rounded-lg border border-neutral-800 overflow-x-auto">
                           {Array.isArray(parsedBody) ? (
                             parsedBody.map((item, idx) => (
@@ -511,13 +607,13 @@ export function DependencyLinkerModal({
                                 onCopyToken={handleCopyToken}
                               />
                             ))
-                          ) : typeof parsedBody === 'object' ? (
+                          ) : typeof parsedBody === 'object' && parsedBody !== null ? (
                             Object.entries(parsedBody).map(([key, val]) => (
                               <TreeNode
                                 key={key}
                                 label={key}
                                 value={val}
-                                path={key}
+                                path={getChildPath('', key, false)}
                                 requestId={selectedRequest.id}
                                 onInsertToken={handleInsert}
                                 copiedToken={copiedToken}
@@ -526,12 +622,22 @@ export function DependencyLinkerModal({
                             ))
                           ) : (
                             <div
+                              role="button"
+                              tabIndex={0}
                               onClick={() =>
                                 handleInsert(
                                   `{{$request['${selectedRequest.id}'].response.body}}`
                                 )
                               }
-                              className="text-xs font-mono text-emerald-400 cursor-pointer p-2 hover:bg-neutral-800 rounded"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  handleInsert(
+                                    `{{$request['${selectedRequest.id}'].response.body}}`
+                                  );
+                                }
+                              }}
+                              className="text-xs font-mono text-emerald-400 cursor-pointer p-2 hover:bg-neutral-800 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                             >
                               {String(parsedBody)}
                             </div>
@@ -539,14 +645,24 @@ export function DependencyLinkerModal({
                         </div>
                       ) : (
                         <div className="text-xs text-neutral-400 p-4 bg-neutral-950 rounded border border-neutral-800">
-                          {selectedRequest.response.body ? (
+                          {selectedRequest.response.body !== undefined && selectedRequest.response.body !== null ? (
                             <div
+                              role="button"
+                              tabIndex={0}
                               onClick={() =>
                                 handleInsert(
                                   `{{$request['${selectedRequest.id}'].response.body}}`
                                 )
                               }
-                              className="font-mono text-neutral-300 cursor-pointer hover:underline"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  handleInsert(
+                                    `{{$request['${selectedRequest.id}'].response.body}}`
+                                  );
+                                }
+                              }}
+                              className="font-mono text-neutral-300 cursor-pointer hover:underline focus:outline-none focus:ring-1 focus:ring-blue-500"
                             >
                               {String(selectedRequest.response.body)}
                             </div>
@@ -586,8 +702,16 @@ export function DependencyLinkerModal({
                             return (
                               <div
                                 key={key}
+                                role="button"
+                                tabIndex={0}
                                 onClick={() => handleInsert(headerToken)}
-                                className="group flex items-center justify-between p-2.5 rounded-lg bg-neutral-950/80 border border-neutral-800 hover:border-neutral-700 hover:bg-neutral-800/80 cursor-pointer transition-all"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    handleInsert(headerToken);
+                                  }
+                                }}
+                                className="group flex items-center justify-between p-2.5 rounded-lg bg-neutral-950/80 border border-neutral-800 hover:border-neutral-700 hover:bg-neutral-800/80 cursor-pointer transition-all focus:outline-none focus:ring-1 focus:ring-blue-500"
                               >
                                 <div className="flex items-center gap-2 min-w-0 flex-1">
                                   <span className="text-xs font-mono font-semibold text-sky-400">
@@ -606,6 +730,7 @@ export function DependencyLinkerModal({
                                       e.stopPropagation();
                                       handleCopyToken(headerToken);
                                     }}
+                                    onKeyDown={(e) => e.stopPropagation()}
                                     className="p-1 text-neutral-400 hover:text-neutral-100 rounded hover:bg-neutral-700/80 transition-colors"
                                   >
                                     {isCopied ? (
@@ -644,12 +769,22 @@ export function DependencyLinkerModal({
 
                       {statusCode !== undefined ? (
                         <div
+                          role="button"
+                          tabIndex={0}
                           onClick={() =>
                             handleInsert(
                               `{{$request['${selectedRequest.id}'].response.status}}`
                             )
                           }
-                          className="group flex items-center justify-between p-4 rounded-lg bg-neutral-950/80 border border-neutral-800 hover:border-neutral-700 hover:bg-neutral-800/80 cursor-pointer transition-all"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleInsert(
+                                `{{$request['${selectedRequest.id}'].response.status}}`
+                              );
+                            }
+                          }}
+                          className="group flex items-center justify-between p-4 rounded-lg bg-neutral-950/80 border border-neutral-800 hover:border-neutral-700 hover:bg-neutral-800/80 cursor-pointer transition-all focus:outline-none focus:ring-1 focus:ring-blue-500"
                         >
                           <div className="flex items-center gap-3">
                             <span
@@ -681,6 +816,7 @@ export function DependencyLinkerModal({
                                   `{{$request['${selectedRequest.id}'].response.status}}`
                                 );
                               }}
+                              onKeyDown={(e) => e.stopPropagation()}
                               className="p-1.5 text-neutral-400 hover:text-neutral-100 rounded hover:bg-neutral-700/80 transition-colors"
                             >
                               {copiedToken ===
