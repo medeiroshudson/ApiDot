@@ -58,6 +58,13 @@ if (string.IsNullOrWhiteSpace(serverUrl))
     return 1;
 }
 
+if (!Uri.TryCreate(serverUrl, UriKind.Absolute, out var uri))
+{
+    Console.Error.WriteLine($"Error: Invalid server URL '{serverUrl}'. A valid absolute URL is required (e.g. http://localhost:5000 or wss://hub.example.com).");
+    PrintUsage();
+    return 1;
+}
+
 if (string.IsNullOrWhiteSpace(token))
 {
     Console.Error.WriteLine("Error: --token is required.");

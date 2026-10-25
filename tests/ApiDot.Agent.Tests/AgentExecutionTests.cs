@@ -112,6 +112,32 @@ public class AgentExecutionTests
         }
     }
 
+    private class FailingWebSocket : WebSocket
+    {
+        private WebSocketState _state = WebSocketState.Open;
+        public int SendAttempts { get; private set; }
+
+        public override WebSocketCloseStatus? CloseStatus => null;
+        public override string? CloseStatusDescription => null;
+        public override WebSocketState State => _state;
+        public override string? SubProtocol => null;
+        public override void Abort() => _state = WebSocketState.Aborted;
+        public override Task CloseAsync(WebSocketCloseStatus closeStatus, string? statusDescription, CancellationToken cancellationToken) => Task.CompletedTask;
+        public override Task CloseOutputAsync(WebSocketCloseStatus closeStatus, string? statusDescription, CancellationToken cancellationToken) => Task.CompletedTask;
+        public override void Dispose() { }
+        public override Task<WebSocketReceiveResult> ReceiveAsync(ArraySegment<byte> buffer, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public override Task SendAsync(ArraySegment<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken)
+        {
+            SendAttempts++;
+            throw new WebSocketException(WebSocketError.ConnectionClosedPrematurely, "Connection lost");
+        }
+        public override ValueTask SendAsync(ReadOnlyMemory<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken)
+        {
+            SendAttempts++;
+            throw new WebSocketException(WebSocketError.ConnectionClosedPrematurely, "Connection lost");
+        }
+    }
+
     [Fact]
     public void CreateHandler_WhenIgnoreSslIsTrue_ShouldConfigureCallbackToReturnTrue()
     {
@@ -133,6 +159,82 @@ public class AgentExecutionTests
         handler.Should().NotBeNull();
         handler.PooledConnectionLifetime.TotalMinutes.Should().BeGreaterThan(0);
         handler.SslOptions.RemoteCertificateValidationCallback.Should().BeNull();
+    }
+
+    [Fact]
+    public void GetHandler_ShouldCacheAndReuseHandlerInstances_ForConsecutiveCalls()
+    {
+        using var client = new AgentClient("https://hub.example.com", "fake-token");
+
+        var defaultHandler1 = client.GetHandler(ignoreSsl: false);
+        var defaultHandler2 = client.GetHandler(ignoreSsl: false);
+        defaultHandler1.Should().BeSameAs(defaultHandler2);
+
+        var insecureHandler1 = client.GetHandler(ignoreSsl: true);
+        var insecureHandler2 = client.GetHandler(ignoreSsl: true);
+        insecureHandler1.Should().BeSameAs(insecureHandler2);
+
+        defaultHandler1.Should().NotBeSameAs(insecureHandler1);
+    }
+
+    [Fact]
+    public void Dispose_ShouldDisposeCachedHandlers_AndThrowOnSubsequentUse()
+    {
+        var client = new AgentClient("https://hub.example.com", "fake-token");
+
+        var defaultHandler = (SocketsHttpHandler)client.GetHandler(ignoreSsl: false);
+        var insecureHandler = (SocketsHttpHandler)client.GetHandler(ignoreSsl: true);
+
+        defaultHandler.Should().NotBeNull();
+        insecureHandler.Should().NotBeNull();
+
+        client.Dispose();
+
+        var actGet = () => client.GetHandler(ignoreSsl: false);
+        actGet.Should().Throw<ObjectDisposedException>();
+
+        using var testClient = new HttpClient(defaultHandler, disposeHandler: false);
+        var actSend = () => testClient.Send(new HttpRequestMessage(HttpMethod.Get, "http://localhost"));
+        actSend.Should().Throw<ObjectDisposedException>();
+    }
+
+    [Theory]
+    [InlineData("https://hub.example.com", "wss://hub.example.com/ws/agent?token=tok&name=agent")]
+    [InlineData("wss://hub.example.com", "wss://hub.example.com/ws/agent?token=tok&name=agent")]
+    [InlineData("http://hub.example.com", "ws://hub.example.com/ws/agent?token=tok&name=agent")]
+    [InlineData("ws://hub.example.com", "ws://hub.example.com/ws/agent?token=tok&name=agent")]
+    [InlineData("HTTPS://hub.example.com:8443", "wss://hub.example.com:8443/ws/agent?token=tok&name=agent")]
+    [InlineData("WSS://hub.example.com:8443", "wss://hub.example.com:8443/ws/agent?token=tok&name=agent")]
+    public void BuildWebSocketUri_ShouldHandleDifferentSchemes_AndPreserveWss(string serverUrl, string expectedUri)
+    {
+        var client = new AgentClient(serverUrl, "tok", "agent");
+        var uri = client.BuildWebSocketUri();
+
+        uri.ToString().Should().Be(expectedUri);
+    }
+
+    [Fact]
+    public void DeserializeDispatch_WhenValidJson_ShouldReturnDeserializedDispatch()
+    {
+        var json = """{"id":"3fa85f64-5717-4562-b3fc-2c963f66afa6","url":"https://api.local/test","method":"POST"}""";
+        var bytes = Encoding.UTF8.GetBytes(json);
+
+        var dispatch = AgentClient.DeserializeDispatch(bytes);
+
+        dispatch.Should().NotBeNull();
+        dispatch!.Id.Should().Be(Guid.Parse("3fa85f64-5717-4562-b3fc-2c963f66afa6"));
+        dispatch.Url.Should().Be("https://api.local/test");
+        dispatch.Method.Should().Be("POST");
+    }
+
+    [Fact]
+    public void DeserializeDispatch_WhenInvalidJson_ShouldReturnNullWithoutThrowing()
+    {
+        var invalidBytes = Encoding.UTF8.GetBytes("not-valid-json{{{");
+
+        var dispatch = AgentClient.DeserializeDispatch(invalidBytes);
+
+        dispatch.Should().BeNull();
     }
 
     [Fact]
@@ -200,6 +302,78 @@ public class AgentExecutionTests
         payload.ErrorMessage.Should().NotBeNullOrEmpty();
         payload.Timing.Should().NotBeNull();
         payload.Timing!.TotalDurationMs.Should().BeGreaterThanOrEqualTo(0);
+    }
+
+    [Fact]
+    public async Task ProcessDispatchAsync_WithCachedHandlers_ShouldReuseHandlerAcrossMultipleDispatches()
+    {
+        var client = new AgentClient("https://hub.example.com", "token");
+        var socket = new TestWebSocket();
+
+        var dispatch1 = new HttpRequestDispatch
+        {
+            Id = Guid.NewGuid(),
+            Url = "http://127.0.0.1:1/dispatch1",
+            Method = "GET",
+            TimeoutSeconds = 1
+        };
+
+        var dispatch2 = new HttpRequestDispatch
+        {
+            Id = Guid.NewGuid(),
+            Url = "http://127.0.0.1:1/dispatch2",
+            Method = "GET",
+            TimeoutSeconds = 1
+        };
+
+        // First dispatch should not dispose the cached handler
+        await client.ProcessDispatchAsync(dispatch1, socket, CancellationToken.None);
+        // Second dispatch should succeed with the same cached handler without ObjectDisposedException
+        var act = () => client.ProcessDispatchAsync(dispatch2, socket, CancellationToken.None);
+        await act.Should().NotThrowAsync();
+
+        socket.SentMessages.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task ProcessDispatchAsync_WhenWebSocketSendFails_ShouldThrowWebSocketExceptionAndNotResend()
+    {
+        var responseMessage = new HttpResponseMessage(HttpStatusCode.OK);
+        var testHandler = new TestHttpMessageHandler(responseMessage);
+        var client = new AgentClient("https://hub.example.com", "token", handlerFactory: _ => testHandler);
+
+        var dispatch = new HttpRequestDispatch
+        {
+            Id = Guid.NewGuid(),
+            Url = "https://api.local/health",
+            Method = "GET"
+        };
+
+        var failingSocket = new FailingWebSocket();
+        var act = () => client.ProcessDispatchAsync(dispatch, failingSocket, CancellationToken.None);
+
+        await act.Should().ThrowAsync<WebSocketException>();
+        failingSocket.SendAttempts.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ProcessDispatchAsync_WhenHttpFailsAndWebSocketSendFails_ShouldThrowAndNotLoopSend()
+    {
+        var testHandler = new TestHttpMessageHandler(new HttpRequestException("DNS lookup failed"));
+        var client = new AgentClient("https://hub.example.com", "token", handlerFactory: _ => testHandler);
+
+        var dispatch = new HttpRequestDispatch
+        {
+            Id = Guid.NewGuid(),
+            Url = "https://invalid.domain/test",
+            Method = "GET"
+        };
+
+        var failingSocket = new FailingWebSocket();
+        var act = () => client.ProcessDispatchAsync(dispatch, failingSocket, CancellationToken.None);
+
+        await act.Should().ThrowAsync<WebSocketException>();
+        failingSocket.SendAttempts.Should().Be(1);
     }
 
     [Fact]
