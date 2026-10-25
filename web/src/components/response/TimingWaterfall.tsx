@@ -22,8 +22,13 @@ export interface TimingWaterfallProps {
   className?: string;
 }
 
+function sanitizeNumber(v: unknown): number {
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0;
+}
+
 function formatMs(value: number): string {
-  return `${value.toFixed(1)} ms`;
+  const safe = sanitizeNumber(value);
+  return `${safe.toFixed(1)} ms`;
 }
 
 interface TimingMetricItem {
@@ -47,15 +52,16 @@ export function TimingWaterfall({
     );
   }
 
-  const dns = timing.dnsLookupMs ?? timing.DnsLookupMs ?? 0;
-  const tls = timing.tlsHandshakeMs ?? timing.TlsHandshakeMs ?? 0;
-  const ttfb = timing.timeToFirstByteMs ?? timing.TimeToFirstByteMs ?? 0;
-  const transfer = timing.contentTransferMs ?? timing.ContentTransferMs ?? 0;
+  const dns = sanitizeNumber(timing.dnsLookupMs ?? timing.DnsLookupMs);
+  const tls = sanitizeNumber(timing.tlsHandshakeMs ?? timing.TlsHandshakeMs);
+  const ttfb = sanitizeNumber(timing.timeToFirstByteMs ?? timing.TimeToFirstByteMs);
+  const transfer = sanitizeNumber(timing.contentTransferMs ?? timing.ContentTransferMs);
+
+  const rawTotal = propTotalMs ?? timing.totalDurationMs ?? timing.TotalDurationMs;
   const total =
-    propTotalMs ??
-    timing.totalDurationMs ??
-    timing.TotalDurationMs ??
-    dns + tls + ttfb + transfer;
+    rawTotal !== undefined && rawTotal !== null
+      ? sanitizeNumber(rawTotal)
+      : dns + tls + ttfb + transfer;
 
   const metrics: TimingMetricItem[] = [
     {
@@ -131,6 +137,7 @@ export function TimingWaterfall({
                 aria-valuenow={Math.round(percent)}
                 aria-valuemin={0}
                 aria-valuemax={100}
+                aria-valuetext={`${formatMs(metric.value)} (${Math.round(percent)}%)`}
                 className="h-2 w-full bg-neutral-800 rounded-full overflow-hidden"
               >
                 <div

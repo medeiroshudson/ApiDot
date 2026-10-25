@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ResponseViewer, ResponseData } from './ResponseViewer';
 
@@ -12,14 +12,57 @@ describe('ResponseViewer', () => {
     });
   });
 
-  it('renders empty/idle state when response is null', () => {
-    render(<ResponseViewer response={null} />);
+  it('renders empty/idle state when response is null and isLoading is false', () => {
+    render(<ResponseViewer response={null} isLoading={false} />);
     expect(
       screen.getByText('Dispare uma requisição para visualizar a resposta')
     ).toBeInTheDocument();
   });
 
+  describe('Loading State', () => {
+    it('renders loading skeleton and spinner when isLoading is true', () => {
+      render(<ResponseViewer response={null} isLoading={true} />);
+
+      expect(screen.getByText('Enviando requisição...')).toBeInTheDocument();
+      expect(screen.getByTestId('response-loading')).toBeInTheDocument();
+      expect(
+        screen.queryByText('Dispare uma requisição para visualizar a resposta')
+      ).not.toBeInTheDocument();
+    });
+
+    it('renders loading state when isLoading is true even if response exists', () => {
+      const response: ResponseData = {
+        statusCode: 200,
+        statusText: 'OK',
+        durationMs: 120,
+        body: '{"foo":"bar"}',
+      };
+
+      render(<ResponseViewer response={response} isLoading={true} />);
+
+      expect(screen.getByText('Enviando requisição...')).toBeInTheDocument();
+      expect(screen.queryByTestId('status-badge')).not.toBeInTheDocument();
+    });
+  });
+
   describe('Status badges styling', () => {
+    it('renders 1xx informational status badge with sky styling', () => {
+      const response: ResponseData = {
+        statusCode: 101,
+        statusText: 'Switching Protocols',
+        durationMs: 30,
+        body: '',
+      };
+
+      render(<ResponseViewer response={response} />);
+      const badge = screen.getByTestId('status-badge');
+      expect(badge).toHaveTextContent('101 Switching Protocols');
+      expect(badge.className).toMatch(/sky/);
+      expect(badge.className).toContain('bg-sky-950');
+      expect(badge.className).toContain('text-sky-400');
+      expect(badge.className).toContain('border-sky-800');
+    });
+
     it('renders 2xx success status badge with emerald styling', () => {
       const response: ResponseData = {
         statusCode: 200,
@@ -123,7 +166,7 @@ describe('ResponseViewer', () => {
 
   describe('JSON Pretty Printing', () => {
     it('pretty prints valid JSON payload in Pretty tab', () => {
-      const rawJson = '{"key":"value","num":42}';
+      const rawJson = '{\"key\":\"value\",\"num\":42}';
       const response: ResponseData = {
         statusCode: 200,
         statusText: 'OK',
@@ -133,7 +176,7 @@ describe('ResponseViewer', () => {
 
       render(<ResponseViewer response={response} />);
       const prettyCode = screen.getByTestId('response-pretty-content');
-      expect(prettyCode.textContent).toContain('{\n  "key": "value",\n  "num": 42\n}');
+      expect(prettyCode.textContent).toContain('{\n  \"key\": \"value\",\n  \"num\": 42\n}');
     });
 
     it('falls back to raw text if body is invalid JSON', () => {
@@ -156,7 +199,7 @@ describe('ResponseViewer', () => {
       statusCode: 200,
       statusText: 'OK',
       durationMs: 150,
-      body: '{"message":"hello"}',
+      body: '{\"message\":\"hello\"}',
       headers: {
         'content-type': 'application/json',
         'x-request-id': 'req-1234',
@@ -170,15 +213,16 @@ describe('ResponseViewer', () => {
       },
     };
 
-    it('switches between Pretty, Raw, Headers, and Timings tabs on click', () => {
+    it('switches between Pretty, Raw, Headers, and Timings tabs on click and lazy-mounts panel content', () => {
       render(<ResponseViewer response={mockResponse} />);
 
-      // Default tab is Pretty
+      // Default tab is Pretty - pretty content is mounted, raw content is not mounted
       expect(screen.getByRole('tab', { name: /Pretty/i })).toHaveAttribute(
         'aria-selected',
         'true'
       );
       expect(screen.getByTestId('response-pretty-content')).toBeInTheDocument();
+      expect(screen.queryByTestId('response-raw-content')).not.toBeInTheDocument();
 
       // Switch to Raw tab
       fireEvent.click(screen.getByRole('tab', { name: /Raw/i }));
@@ -187,8 +231,9 @@ describe('ResponseViewer', () => {
         'true'
       );
       expect(screen.getByTestId('response-raw-content')).toHaveTextContent(
-        '{"message":"hello"}'
+        '{\"message\":\"hello\"}'
       );
+      expect(screen.queryByTestId('response-pretty-content')).not.toBeInTheDocument();
 
       // Switch to Headers tab
       fireEvent.click(screen.getByRole('tab', { name: /Headers/i }));
@@ -244,24 +289,66 @@ describe('ResponseViewer', () => {
     });
   });
 
-  describe('Copy Body Action', () => {
-    it('copies response body to clipboard when copy button is clicked', async () => {
+  describe('Copy Body Action with Dynamic A11y and Feedback', () => {
+    it('copies response body to clipboard with dynamic aria-label and aria-live status update', async () => {
       const response: ResponseData = {
         statusCode: 200,
         statusText: 'OK',
         durationMs: 142,
-        body: '{"foo":"bar"}',
+        body: '{\"foo\":\"bar\"}',
       };
 
       render(<ResponseViewer response={response} />);
 
       const copyButton = screen.getByRole('button', {
-        name: /Copiar corpo da resposta/i,
+        name: 'Copiar corpo da resposta',
+      });
+      expect(copyButton).toHaveAttribute('aria-label', 'Copiar corpo da resposta');
+
+      const liveRegion = screen.getByRole('status');
+      expect(liveRegion).toHaveTextContent('');
+
+      fireEvent.click(copyButton);
+
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('{\"foo\":\"bar\"}');
+      expect(await screen.findByText('Copiado!')).toBeInTheDocument();
+
+      // Dynamic aria-label on the copy button
+      expect(copyButton).toHaveAttribute('aria-label', 'Corpo da resposta copiado');
+
+      // sr-only aria-live polite announcement
+      expect(liveRegion).toHaveTextContent(
+        'Corpo da resposta copiado para a área de transferência'
+      );
+    });
+
+    it('handles clipboard failure gracefully and provides error feedback in UI and aria-live', async () => {
+      Object.assign(navigator, {
+        clipboard: {
+          writeText: vi.fn().mockRejectedValue(new Error('Permission denied')),
+        },
+      });
+
+      const response: ResponseData = {
+        statusCode: 200,
+        statusText: 'OK',
+        durationMs: 142,
+        body: '{\"foo\":\"bar\"}',
+      };
+
+      render(<ResponseViewer response={response} />);
+
+      const copyButton = screen.getByRole('button', {
+        name: 'Copiar corpo da resposta',
       });
       fireEvent.click(copyButton);
 
-      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('{"foo":"bar"}');
-      expect(await screen.findByText(/Copiado!/i)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Falha ao copiar')).toBeInTheDocument();
+      });
+
+      const liveRegion = screen.getByRole('status');
+      expect(liveRegion).toHaveTextContent('Falha ao copiar corpo da resposta');
     });
   });
 });

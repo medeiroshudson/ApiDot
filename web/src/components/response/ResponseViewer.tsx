@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { Copy, Check, Clock, Server, FileCode, Layers } from 'lucide-react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { Copy, Check, Clock, Server, FileCode, Layers, Loader2 } from 'lucide-react';
 import { TimingWaterfall, TimingBreakdown } from './TimingWaterfall';
 
 export interface ResponseData {
@@ -38,7 +38,8 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-function calculateSize(response: ResponseData): number {
+export function getPayloadSize(response: ResponseData | null): number {
+  if (!response) return 0;
   if (typeof response.sizeBytes === 'number') {
     return response.sizeBytes;
   }
@@ -51,6 +52,8 @@ function calculateSize(response: ResponseData): number {
   return 0;
 }
 
+export const calculateSize = getPayloadSize;
+
 export function ResponseViewer({
   response,
   isLoading = false,
@@ -58,17 +61,32 @@ export function ResponseViewer({
 }: ResponseViewerProps) {
   const [activeTab, setActiveTab] = useState<ResponseTabType>('pretty');
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const payloadSize = useMemo(
+    () => getPayloadSize(response),
+    [response?.sizeBytes, response?.body]
+  );
 
   const prettyBody = useMemo(() => {
-    if (!response?.body) return '';
+    if (activeTab !== 'pretty' || !response?.body) return '';
     try {
       const parsed = JSON.parse(response.body);
       return JSON.stringify(parsed, null, 2);
     } catch {
       return response.body;
     }
-  }, [response?.body]);
+  }, [activeTab, response?.body]);
 
   const normalizedHeaders = useMemo((): [string, string][] => {
     if (!response?.headers) return [];
@@ -89,13 +107,27 @@ export function ResponseViewer({
   const handleCopyBody = async () => {
     if (!response?.body) return;
     try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(response.body);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+      if (!navigator?.clipboard?.writeText) {
+        throw new Error('Clipboard API not available');
       }
+      await navigator.clipboard.writeText(response.body);
+      setCopied(true);
+      setCopyFailed(false);
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+      copyTimeoutRef.current = setTimeout(() => {
+        setCopied(false);
+      }, 2000);
     } catch {
-      // Fallback ignore
+      setCopyFailed(true);
+      setCopied(false);
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+      copyTimeoutRef.current = setTimeout(() => {
+        setCopyFailed(false);
+      }, 2000);
     }
   };
 
@@ -119,6 +151,31 @@ export function ResponseViewer({
     }
   };
 
+  if (isLoading) {
+    return (
+      <div
+        data-testid="response-loading"
+        role="status"
+        aria-live="polite"
+        className={`flex flex-col items-center justify-center h-full p-8 text-center text-neutral-500 bg-neutral-950 ${className}`}
+      >
+        <div className="w-10 h-10 rounded-full border border-neutral-800 flex items-center justify-center mb-3 text-blue-500">
+          <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
+        </div>
+        <p className="text-sm font-medium text-neutral-300">
+          Enviando requisição...
+        </p>
+        <p className="text-xs text-neutral-600 mt-1 max-w-xs">
+          Aguardando resposta do servidor
+        </p>
+        <div className="w-48 max-w-full space-y-2 mt-4 animate-pulse" aria-hidden="true">
+          <div className="h-2 bg-neutral-800 rounded w-3/4 mx-auto" />
+          <div className="h-2 bg-neutral-800 rounded w-1/2 mx-auto" />
+        </div>
+      </div>
+    );
+  }
+
   if (!response) {
     return (
       <div
@@ -139,6 +196,7 @@ export function ResponseViewer({
 
   const { statusCode, statusText, durationMs, errorMessage } = response;
   const isNetworkError = statusCode === 0 || !!errorMessage;
+  const is1xx = statusCode >= 100 && statusCode < 200;
   const is2xx = statusCode >= 200 && statusCode < 300;
   const is3xx = statusCode >= 300 && statusCode < 400;
   const is4xx = statusCode >= 400 && statusCode < 500;
@@ -150,6 +208,8 @@ export function ResponseViewer({
   if (isNetworkError) {
     badgeClasses = 'bg-rose-950 text-rose-400 border-rose-800';
     badgeLabel = errorMessage || (statusText ? `Error: ${statusText}` : 'Error');
+  } else if (is1xx) {
+    badgeClasses = 'bg-sky-950 text-sky-400 border-sky-800';
   } else if (is2xx) {
     badgeClasses = 'bg-emerald-950 text-emerald-400 border-emerald-800';
   } else if (is3xx) {
@@ -157,8 +217,6 @@ export function ResponseViewer({
   } else if (is4xx || is5xx) {
     badgeClasses = 'bg-rose-950 text-rose-400 border-rose-800';
   }
-
-  const payloadSize = calculateSize(response);
 
   return (
     <div
@@ -188,7 +246,7 @@ export function ResponseViewer({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            aria-label="Copiar corpo da resposta"
+            aria-label={copied ? 'Corpo da resposta copiado' : 'Copiar corpo da resposta'}
             onClick={handleCopyBody}
             disabled={!response.body}
             className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded text-neutral-400 hover:text-white hover:bg-neutral-800/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -198,6 +256,11 @@ export function ResponseViewer({
                 <Check className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
                 <span className="text-emerald-400">Copiado!</span>
               </>
+            ) : copyFailed ? (
+              <>
+                <Copy className="w-3.5 h-3.5 text-rose-400" aria-hidden="true" />
+                <span className="text-rose-400">Falha ao copiar</span>
+              </>
             ) : (
               <>
                 <Copy className="w-3.5 h-3.5" aria-hidden="true" />
@@ -205,6 +268,13 @@ export function ResponseViewer({
               </>
             )}
           </button>
+          <span className="sr-only" role="status" aria-live="polite">
+            {copied
+              ? 'Corpo da resposta copiado para a área de transferência'
+              : copyFailed
+              ? 'Falha ao copiar corpo da resposta'
+              : ''}
+          </span>
         </div>
       </div>
 
@@ -255,15 +325,17 @@ export function ResponseViewer({
           hidden={activeTab !== 'pretty'}
           className={activeTab === 'pretty' ? 'h-full flex flex-col focus:outline-none' : 'hidden'}
         >
-          {response.body ? (
-            <pre
-              data-testid="response-pretty-content"
-              className="flex-1 font-mono text-xs text-neutral-200 whitespace-pre-wrap break-all select-text"
-            >
-              {prettyBody}
-            </pre>
-          ) : (
-            <div className="text-xs text-neutral-500 italic p-2">Corpo vazio</div>
+          {activeTab === 'pretty' && (
+            response.body ? (
+              <pre
+                data-testid="response-pretty-content"
+                className="flex-1 font-mono text-xs text-neutral-200 whitespace-pre-wrap break-all select-text"
+              >
+                {prettyBody}
+              </pre>
+            ) : (
+              <div className="text-xs text-neutral-500 italic p-2">Corpo vazio</div>
+            )
           )}
         </div>
 
@@ -276,15 +348,17 @@ export function ResponseViewer({
           hidden={activeTab !== 'raw'}
           className={activeTab === 'raw' ? 'h-full flex flex-col focus:outline-none' : 'hidden'}
         >
-          {response.body ? (
-            <pre
-              data-testid="response-raw-content"
-              className="flex-1 font-mono text-xs text-neutral-300 whitespace-pre-wrap break-all select-text"
-            >
-              {response.body}
-            </pre>
-          ) : (
-            <div className="text-xs text-neutral-500 italic p-2">Corpo vazio</div>
+          {activeTab === 'raw' && (
+            response.body ? (
+              <pre
+                data-testid="response-raw-content"
+                className="flex-1 font-mono text-xs text-neutral-300 whitespace-pre-wrap break-all select-text"
+              >
+                {response.body}
+              </pre>
+            ) : (
+              <div className="text-xs text-neutral-500 italic p-2">Corpo vazio</div>
+            )
           )}
         </div>
 
@@ -297,26 +371,28 @@ export function ResponseViewer({
           hidden={activeTab !== 'headers'}
           className={activeTab === 'headers' ? 'h-full flex flex-col focus:outline-none' : 'hidden'}
         >
-          {normalizedHeaders.length > 0 ? (
-            <div className="border border-neutral-800 rounded-md overflow-hidden bg-neutral-900/40 divide-y divide-neutral-800">
-              {normalizedHeaders.map(([key, value], idx) => (
-                <div
-                  key={`${key}-${idx}`}
-                  className="flex flex-col sm:flex-row sm:items-center py-2 px-3 text-xs gap-1 sm:gap-4 hover:bg-neutral-800/40"
-                >
-                  <span className="font-mono font-semibold text-neutral-300 min-w-[140px] select-text">
-                    {key}
-                  </span>
-                  <span className="font-mono text-neutral-400 break-all select-text">
-                    {value}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-xs text-neutral-500 italic p-2">
-              Nenhum cabeçalho retornado
-            </div>
+          {activeTab === 'headers' && (
+            normalizedHeaders.length > 0 ? (
+              <div className="border border-neutral-800 rounded-md overflow-hidden bg-neutral-900/40 divide-y divide-neutral-800">
+                {normalizedHeaders.map(([key, value], idx) => (
+                  <div
+                    key={`${key}-${idx}`}
+                    className="flex flex-col sm:flex-row sm:items-center py-2 px-3 text-xs gap-1 sm:gap-4 hover:bg-neutral-800/40"
+                  >
+                    <span className="font-mono font-semibold text-neutral-300 min-w-[140px] select-text">
+                      {key}
+                    </span>
+                    <span className="font-mono text-neutral-400 break-all select-text">
+                      {value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-neutral-500 italic p-2">
+                Nenhum cabeçalho retornado
+              </div>
+            )
           )}
         </div>
 
@@ -329,10 +405,12 @@ export function ResponseViewer({
           hidden={activeTab !== 'timings'}
           className={activeTab === 'timings' ? 'h-full flex flex-col focus:outline-none' : 'hidden'}
         >
-          <TimingWaterfall
-            timing={response.timing}
-            totalDurationMs={response.durationMs}
-          />
+          {activeTab === 'timings' && (
+            <TimingWaterfall
+              timing={response.timing}
+              totalDurationMs={response.durationMs}
+            />
+          )}
         </div>
       </div>
     </div>
