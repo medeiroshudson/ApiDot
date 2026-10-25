@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using ApiDot.Core.Enums;
 using ApiDot.Core.Models;
 using ApiDot.Server.Execution;
 using FluentAssertions;
@@ -34,6 +35,20 @@ public class ServerHttpExecutorTests
         {
             LastRequest = request;
             return await _handler(request, cancellationToken);
+        }
+    }
+
+    private class DisposableHttpResponseMessage(HttpStatusCode statusCode) : HttpResponseMessage(statusCode)
+    {
+        public bool IsDisposed { get; private set; }
+
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+            if (disposing)
+            {
+                IsDisposed = true;
+            }
         }
     }
 
@@ -99,6 +114,30 @@ public class ServerHttpExecutorTests
             Url = "https://example.com/get",
             Method = "GET",
             BodyContent = "ignored body for GET"
+        };
+
+        var result = await executor.ExecuteAsync(dispatch, CancellationToken.None);
+
+        result.StatusCode.Should().Be(200);
+        handler.LastRequest.Should().NotBeNull();
+        handler.LastRequest!.Content.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("HEAD")]
+    [InlineData("TRACE")]
+    public async Task ExecuteAsync_When_Head_Or_Trace_Request_Should_Not_Send_Body_Content(string method)
+    {
+        var mockResponse = new HttpResponseMessage(HttpStatusCode.OK);
+        var handler = new TestHttpMessageHandler(mockResponse);
+        var httpClient = new HttpClient(handler);
+        var executor = new ServerHttpExecutor(httpClient);
+
+        var dispatch = new HttpRequestDispatch
+        {
+            Url = "https://example.com/disallowed-body",
+            Method = method,
+            BodyContent = "ignored body content"
         };
 
         var result = await executor.ExecuteAsync(dispatch, CancellationToken.None);
@@ -194,5 +233,179 @@ public class ServerHttpExecutorTests
         result.ErrorMessage.Should().Contain("canceled");
         result.Timing.Should().NotBeNull();
         result.Timing!.TotalDurationMs.Should().BeGreaterThanOrEqualTo(0);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_When_Malformed_Url_Should_Return_Status_0_And_ErrorMessage()
+    {
+        var mockResponse = new HttpResponseMessage(HttpStatusCode.OK);
+        var handler = new TestHttpMessageHandler(mockResponse);
+        var httpClient = new HttpClient(handler);
+        var executor = new ServerHttpExecutor(httpClient);
+
+        var dispatch = new HttpRequestDispatch
+        {
+            Id = Guid.NewGuid(),
+            Url = "://invalid-uri",
+            Method = "GET"
+        };
+
+        var result = await executor.ExecuteAsync(dispatch, CancellationToken.None);
+
+        result.DispatchId.Should().Be(dispatch.Id);
+        result.StatusCode.Should().Be(0);
+        result.ErrorMessage.Should().NotBeNullOrWhiteSpace();
+        result.Timing.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_When_Json_BodyType_Without_Explicit_Header_Should_Set_ApplicationJson_ContentType()
+    {
+        var mockResponse = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{\"ok\":true}")
+        };
+        var handler = new TestHttpMessageHandler(mockResponse);
+        var httpClient = new HttpClient(handler);
+        var executor = new ServerHttpExecutor(httpClient);
+
+        var dispatch = new HttpRequestDispatch
+        {
+            Id = Guid.NewGuid(),
+            Url = "https://example.com/api/test",
+            Method = "POST",
+            BodyType = HttpBodyType.Json,
+            BodyContent = "{\"key\":\"value\"}"
+        };
+
+        var result = await executor.ExecuteAsync(dispatch, CancellationToken.None);
+
+        result.StatusCode.Should().Be(200);
+        handler.LastRequest.Should().NotBeNull();
+        handler.LastRequest!.Content.Should().NotBeNull();
+        handler.LastRequest.Content!.Headers.ContentType.Should().NotBeNull();
+        handler.LastRequest.Content.Headers.ContentType!.MediaType.Should().Be("application/json");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_When_Json_BodyType_With_Explicit_Header_Should_Respect_Explicit_Header()
+    {
+        var mockResponse = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{\"ok\":true}")
+        };
+        var handler = new TestHttpMessageHandler(mockResponse);
+        var httpClient = new HttpClient(handler);
+        var executor = new ServerHttpExecutor(httpClient);
+
+        var dispatch = new HttpRequestDispatch
+        {
+            Id = Guid.NewGuid(),
+            Url = "https://example.com/api/test",
+            Method = "POST",
+            BodyType = HttpBodyType.Json,
+            BodyContent = "<xml />",
+            Headers = new Dictionary<string, string>
+            {
+                ["Content-Type"] = "application/xml"
+            }
+        };
+
+        var result = await executor.ExecuteAsync(dispatch, CancellationToken.None);
+
+        result.StatusCode.Should().Be(200);
+        handler.LastRequest.Should().NotBeNull();
+        handler.LastRequest!.Content.Should().NotBeNull();
+        handler.LastRequest.Content!.Headers.ContentType.Should().NotBeNull();
+        handler.LastRequest.Content.Headers.ContentType!.MediaType.Should().Be("application/xml");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_When_No_Body_Content_But_Content_Headers_Present_Should_Attach_Empty_Content_With_Headers()
+    {
+        var mockResponse = new HttpResponseMessage(HttpStatusCode.OK);
+        var handler = new TestHttpMessageHandler(mockResponse);
+        var httpClient = new HttpClient(handler);
+        var executor = new ServerHttpExecutor(httpClient);
+
+        var dispatch = new HttpRequestDispatch
+        {
+            Id = Guid.NewGuid(),
+            Url = "https://example.com/api/content-headers",
+            Method = "POST",
+            Headers = new Dictionary<string, string>
+            {
+                ["Content-Type"] = "application/octet-stream",
+                ["Content-Disposition"] = "attachment; filename=\"data.bin\""
+            }
+        };
+
+        var result = await executor.ExecuteAsync(dispatch, CancellationToken.None);
+
+        result.StatusCode.Should().Be(200);
+        handler.LastRequest.Should().NotBeNull();
+        handler.LastRequest!.Content.Should().NotBeNull();
+        handler.LastRequest.Content!.Headers.ContentType!.MediaType.Should().Be("application/octet-stream");
+        handler.LastRequest.Content.Headers.ContentDisposition!.DispositionType.Should().Be("attachment");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_When_TimeoutSeconds_Exceeded_Should_Cancel_Request_And_Return_Status_0()
+    {
+        var handler = new TestHttpMessageHandler(async (req, ct) =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(5), ct);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+        var httpClient = new HttpClient(handler);
+        var executor = new ServerHttpExecutor(httpClient);
+
+        var dispatch = new HttpRequestDispatch
+        {
+            Id = Guid.NewGuid(),
+            Url = "https://example.com/slow",
+            Method = "GET",
+            TimeoutSeconds = 1
+        };
+
+        var result = await executor.ExecuteAsync(dispatch, CancellationToken.None);
+
+        result.DispatchId.Should().Be(dispatch.Id);
+        result.StatusCode.Should().Be(0);
+        result.ErrorMessage.Should().NotBeNullOrWhiteSpace();
+        result.ErrorMessage.Should().Contain("cancel");
+        result.Timing.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_Should_Dispose_Response_And_Handle_Null_Content_Safely()
+    {
+        var mockResponse = new DisposableHttpResponseMessage(HttpStatusCode.NoContent)
+        {
+            Content = null
+        };
+        mockResponse.Headers.Add("X-Custom-Header", "test-val");
+
+        var handler = new TestHttpMessageHandler(mockResponse);
+        var httpClient = new HttpClient(handler);
+        var executor = new ServerHttpExecutor(httpClient);
+
+        var dispatch = new HttpRequestDispatch
+        {
+            Id = Guid.NewGuid(),
+            Url = "https://example.com/no-content",
+            Method = "DELETE"
+        };
+
+        var result = await executor.ExecuteAsync(dispatch, CancellationToken.None);
+
+        result.DispatchId.Should().Be(dispatch.Id);
+        result.StatusCode.Should().Be(204);
+        result.Body.Should().BeNullOrEmpty();
+        result.ErrorMessage.Should().BeNull();
+        result.Headers.Should().ContainKey("X-Custom-Header");
+        result.Timing.Should().NotBeNull();
+
+        mockResponse.IsDisposed.Should().BeTrue();
     }
 }
