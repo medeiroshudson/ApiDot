@@ -1,13 +1,15 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 
 namespace ApiDot.Core.Variables;
 
 public partial class VariableInterpolator : IVariableInterpolator
 {
-    [GeneratedRegex(@"\{\{([a-zA-Z0-9_\.\$]+)\}\}")]
+    [GeneratedRegex(@"\{\{\s*([a-zA-Z0-9_\.\$-]+)\s*\}\}")]
     private static partial Regex VariableRegex();
 
-    public string Interpolate(string template, IReadOnlyDictionary<string, string> variables)
+    [return: NotNullIfNotNull(nameof(template))]
+    public string? Interpolate(string? template, IReadOnlyDictionary<string, string>? variables)
     {
         if (string.IsNullOrEmpty(template)) return template;
 
@@ -22,9 +24,9 @@ public partial class VariableInterpolator : IVariableInterpolator
                 return DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
 
             if (key.Equals("$randomInt", StringComparison.OrdinalIgnoreCase))
-                return Random.Shared.Next(1000, 9999).ToString();
+                return Random.Shared.Next(1000, 10000).ToString();
 
-            return (variables != null && variables.TryGetValue(key, out var val)) ? val : match.Value;
+            return (variables != null && variables.TryGetValue(key, out var value)) ? value : match.Value;
         });
     }
 }

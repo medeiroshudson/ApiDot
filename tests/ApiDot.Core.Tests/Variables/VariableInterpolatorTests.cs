@@ -72,8 +72,75 @@ public class VariableInterpolatorTests
     public void Interpolate_Should_Handle_Null_Or_Empty_Template(string? template)
     {
         var context = new Dictionary<string, string>();
-        var result = _interpolator.Interpolate(template!, context);
+        var result = _interpolator.Interpolate(template, context);
 
         result.Should().Be(template);
+    }
+
+    [Fact]
+    public void Interpolate_Should_Handle_Null_Variables_Dictionary()
+    {
+        var result = _interpolator.Interpolate("hello {{name}}", null);
+
+        result.Should().Be("hello {{name}}");
+    }
+
+    [Fact]
+    public void Interpolate_Should_Handle_Dynamic_Variables_When_Variables_Dictionary_Is_Null()
+    {
+        var result = _interpolator.Interpolate("ts={{$timestamp}}", null);
+
+        result.Should().StartWith("ts=");
+        var tsPart = result.Replace("ts=", "");
+        long.TryParse(tsPart, out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Interpolate_Should_Handle_Null_Template_And_Null_Variables()
+    {
+        var result = _interpolator.Interpolate(null, null);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Interpolate_Should_Support_Kebab_Case_Variables()
+    {
+        var context = new Dictionary<string, string>
+        {
+            ["api-key"] = "secret-123",
+            ["auth-token-id"] = "tok-456"
+        };
+
+        var template = "key={{api-key}}&token={{auth-token-id}}";
+        var result = _interpolator.Interpolate(template, context);
+
+        result.Should().Be("key=secret-123&token=tok-456");
+    }
+
+    [Fact]
+    public void Interpolate_Should_Support_Interior_Whitespace_In_Braces()
+    {
+        var context = new Dictionary<string, string>
+        {
+            ["baseUrl"] = "https://example.com",
+            ["endpoint"] = "users"
+        };
+
+        var template = "{{  baseUrl  }}/{{ endpoint }}";
+        var result = _interpolator.Interpolate(template, context);
+
+        result.Should().Be("https://example.com/users");
+    }
+
+    [Fact]
+    public void Interpolate_Should_Support_Whitespace_In_Braces_With_Dynamic_Variables()
+    {
+        var context = new Dictionary<string, string>();
+        var result = _interpolator.Interpolate("id={{ $guid }}", context);
+
+        result.Should().StartWith("id=");
+        var guidPart = result.Replace("id=", "");
+        Guid.TryParse(guidPart, out _).Should().BeTrue();
     }
 }
