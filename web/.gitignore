@@ -1,0 +1,17 @@
+# Next.js build
+.next/
+out/
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Environment
+.env*.local
+
+# Misc
+*.log
