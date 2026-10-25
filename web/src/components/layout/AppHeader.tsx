@@ -1,18 +1,28 @@
 import React from 'react';
-import { Menu } from 'lucide-react';
+import { Menu, Settings } from 'lucide-react';
 
 export interface AppHeaderProps {
   title?: string;
   isAgentOnline?: boolean;
   isDrawerOpen?: boolean;
   onToggleDrawer?: () => void;
+  environments?: string[];
+  activeEnvironment?: string | null;
+  onSelectEnvironment?: (env: string | null) => void;
+  onOpenEnvironmentSettings?: () => void;
 }
+
+const DEFAULT_ENVIRONMENTS = ['Development', 'Staging', 'Production'];
 
 export function AppHeader({
   title = 'ApiDot',
   isAgentOnline = false,
   isDrawerOpen = false,
   onToggleDrawer,
+  environments = DEFAULT_ENVIRONMENTS,
+  activeEnvironment = null,
+  onSelectEnvironment,
+  onOpenEnvironmentSettings,
 }: AppHeaderProps) {
   const agentStatusText = isAgentOnline ? 'Agent Online' : 'Agent Offline';
 
@@ -37,7 +47,32 @@ export function AppHeader({
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-1.5">
+          <select
+            value={activeEnvironment ?? ''}
+            onChange={(e) => onSelectEnvironment?.(e.target.value === '' ? null : e.target.value)}
+            aria-label="Selecionar ambiente ativo"
+            className="bg-neutral-900 border border-neutral-800 text-xs text-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-neutral-400 cursor-pointer hover:border-neutral-700 transition-colors"
+          >
+            <option value="">Sem Ambiente</option>
+            {environments.map((env) => (
+              <option key={env} value={env}>
+                {env}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={onOpenEnvironmentSettings}
+            aria-label="Configurar ambientes e variáveis"
+            title="Configurar ambientes e variáveis"
+            className="p-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-400"
+          >
+            <Settings className="w-4 h-4" aria-hidden="true" />
+          </button>
+        </div>
+
         <div
           data-testid="agent-status-badge"
           className="flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-900 border border-neutral-800"

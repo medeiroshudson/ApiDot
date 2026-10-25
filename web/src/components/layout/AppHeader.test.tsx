@@ -42,4 +42,65 @@ describe('AppHeader', () => {
     rerender(<AppHeader isDrawerOpen={true} />);
     expect(toggleButton.getAttribute('aria-expanded')).toBe('true');
   });
+
+  it('renders environment dropdown selector with available environments and "Sem Ambiente"', () => {
+    const { rerender } = render(<AppHeader />);
+    const select = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' }) as HTMLSelectElement;
+    expect(select).toBeDefined();
+
+    const options = Array.from(select.options).map((opt) => ({ text: opt.text, value: opt.value }));
+    expect(options).toEqual([
+      { text: 'Sem Ambiente', value: '' },
+      { text: 'Development', value: 'Development' },
+      { text: 'Staging', value: 'Staging' },
+      { text: 'Production', value: 'Production' },
+    ]);
+    expect(select.value).toBe('');
+
+    rerender(<AppHeader environments={['Local', 'Testing']} activeEnvironment="Testing" />);
+    const updatedSelect = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' }) as HTMLSelectElement;
+    const updatedOptions = Array.from(updatedSelect.options).map((opt) => ({ text: opt.text, value: opt.value }));
+    expect(updatedOptions).toEqual([
+      { text: 'Sem Ambiente', value: '' },
+      { text: 'Local', value: 'Local' },
+      { text: 'Testing', value: 'Testing' },
+    ]);
+    expect(updatedSelect.value).toBe('Testing');
+  });
+
+  it('calls onSelectEnvironment with environment name or null when "Sem Ambiente" is selected', () => {
+    const handleSelect = vi.fn();
+    render(
+      <AppHeader
+        environments={['Development', 'Staging', 'Production']}
+        activeEnvironment="Development"
+        onSelectEnvironment={handleSelect}
+      />
+    );
+    const select = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' });
+
+    fireEvent.change(select, { target: { value: 'Staging' } });
+    expect(handleSelect).toHaveBeenCalledWith('Staging');
+
+    fireEvent.change(select, { target: { value: '' } });
+    expect(handleSelect).toHaveBeenCalledWith(null);
+  });
+
+  it('calls onOpenEnvironmentSettings when clicking the environment settings button', () => {
+    const handleOpenSettings = vi.fn();
+    render(<AppHeader onOpenEnvironmentSettings={handleOpenSettings} />);
+    const settingsButton = screen.getByRole('button', { name: 'Configurar ambientes e variáveis' });
+    fireEvent.click(settingsButton);
+    expect(handleOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes accessible ARIA attributes for environment selector and settings trigger', () => {
+    render(<AppHeader />);
+    const select = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' });
+    expect(select.getAttribute('aria-label')).toBe('Selecionar ambiente ativo');
+
+    const settingsButton = screen.getByRole('button', { name: 'Configurar ambientes e variáveis' });
+    expect(settingsButton.getAttribute('aria-label')).toBe('Configurar ambientes e variáveis');
+    expect(settingsButton.getAttribute('type')).toBe('button');
+  });
 });
