@@ -16,18 +16,21 @@ public class TargetResolver : ITargetResolver
 
         var currentFolder = request.Folder;
         var collection = request.Collection;
+        HashSet<Guid> visited = new();
 
         while (currentFolder is not null)
         {
+            if (!visited.Add(currentFolder.Id))
+            {
+                throw new InvalidOperationException("Circular folder reference detected in folder hierarchy.");
+            }
+
             if (currentFolder.DefaultTarget != ExecutionTarget.Inherit)
             {
                 return currentFolder.DefaultTarget;
             }
 
-            if (currentFolder.Collection is not null)
-            {
-                collection = currentFolder.Collection;
-            }
+            collection ??= currentFolder.Collection;
 
             currentFolder = currentFolder.ParentFolder;
         }

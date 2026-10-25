@@ -162,4 +162,95 @@ public class TargetResolverTests
         // Assert
         act.Should().Throw<ArgumentNullException>();
     }
+
+    [Fact]
+    public void ResolveTarget_WhenDirectCycleInFolderHierarchy_ShouldThrowInvalidOperationException()
+    {
+        // Arrange
+        var folder = new Folder { Name = "Self Referencing Folder", DefaultTarget = ExecutionTarget.Inherit };
+        folder.ParentFolder = folder;
+        var request = new RequestItem
+        {
+            Name = "Direct Cycle Request",
+            Url = "https://example.com/api",
+            Folder = folder,
+            Target = ExecutionTarget.Inherit
+        };
+
+        // Act
+        var act = () => _resolver.ResolveTarget(request);
+
+        // Assert
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("Circular folder reference detected in folder hierarchy.");
+    }
+
+    [Fact]
+    public void ResolveTarget_WhenIndirectCycleInFolderHierarchy_ShouldThrowInvalidOperationException()
+    {
+        // Arrange
+        var folderA = new Folder { Name = "Folder A", DefaultTarget = ExecutionTarget.Inherit };
+        var folderB = new Folder { Name = "Folder B", ParentFolder = folderA, DefaultTarget = ExecutionTarget.Inherit };
+        folderA.ParentFolder = folderB;
+        var request = new RequestItem
+        {
+            Name = "Indirect Cycle Request",
+            Url = "https://example.com/api",
+            Folder = folderA,
+            Target = ExecutionTarget.Inherit
+        };
+
+        // Act
+        var act = () => _resolver.ResolveTarget(request);
+
+        // Assert
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("Circular folder reference detected in folder hierarchy.");
+    }
+
+    [Fact]
+    public void ResolveTarget_WhenChildFolderAndAncestorHaveDifferentCollections_ShouldPreserveClosestCollectionTarget()
+    {
+        // Arrange
+        var ancestorCollection = new Collection { Name = "Ancestor Collection", DefaultTarget = ExecutionTarget.Server };
+        var closestCollection = new Collection { Name = "Closest Collection", DefaultTarget = ExecutionTarget.Agent };
+        var parentFolder = new Folder { Name = "Parent Folder", Collection = ancestorCollection, DefaultTarget = ExecutionTarget.Inherit };
+        var childFolder = new Folder { Name = "Child Folder", ParentFolder = parentFolder, Collection = closestCollection, DefaultTarget = ExecutionTarget.Inherit };
+        var request = new RequestItem
+        {
+            Name = "Closest Collection Request",
+            Url = "https://example.com/api",
+            Folder = childFolder,
+            Target = ExecutionTarget.Inherit
+        };
+
+        // Act
+        var result = _resolver.ResolveTarget(request);
+
+        // Assert
+        result.Should().Be(ExecutionTarget.Agent);
+    }
+
+    [Fact]
+    public void ResolveTarget_WhenRequestAndFolderHaveDifferentCollections_ShouldPreserveRequestCollectionTarget()
+    {
+        // Arrange
+        var folderCollection = new Collection { Name = "Folder Collection", DefaultTarget = ExecutionTarget.Server };
+        var requestCollection = new Collection { Name = "Request Collection", DefaultTarget = ExecutionTarget.Agent };
+        var folder = new Folder { Name = "Folder", Collection = folderCollection, DefaultTarget = ExecutionTarget.Inherit };
+        var request = new RequestItem
+        {
+            Name = "Request Collection Precedence",
+            Url = "https://example.com/api",
+            Folder = folder,
+            Collection = requestCollection,
+            Target = ExecutionTarget.Inherit
+        };
+
+        // Act
+        var result = _resolver.ResolveTarget(request);
+
+        // Assert
+        result.Should().Be(ExecutionTarget.Agent);
+    }
 }
