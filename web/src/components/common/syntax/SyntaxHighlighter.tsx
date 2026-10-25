@@ -29,8 +29,14 @@ export const plainHighlighter: SyntaxHighlighterStrategy = (code: string): Synta
 };
 
 const registry = new Map<string, SyntaxHighlighterStrategy>();
-registry.set('json', jsonHighlighter);
-registry.set('text', plainHighlighter);
+
+export function resetRegistry(): void {
+  registry.clear();
+  registry.set('json', jsonHighlighter);
+  registry.set('text', plainHighlighter);
+}
+
+resetRegistry();
 
 export function registerHighlighter(
   language: string,
@@ -62,8 +68,10 @@ export function SyntaxHighlighter({
   showLineNumbers = false,
   'data-testid': dataTestId,
 }: SyntaxHighlighterProps) {
+  const isLargePayload = code ? code.length > 100_000 : false;
+
   const tokens = useMemo(() => {
-    if (!code) return [];
+    if (!code || isLargePayload) return [];
 
     const activeStrategy =
       strategy ||
@@ -71,18 +79,19 @@ export function SyntaxHighlighter({
       plainHighlighter;
 
     try {
-      return activeStrategy(code);
+      const res = activeStrategy(code);
+      return Array.isArray(res) ? res : plainHighlighter(code);
     } catch {
       return plainHighlighter(code);
     }
-  }, [code, language, strategy]);
+  }, [code, language, strategy, isLargePayload]);
 
   const getTokenClass = (type: string): string => {
     return tokenClasses?.[type] || DEFAULT_TOKEN_CLASSES[type] || DEFAULT_TOKEN_CLASSES.plain;
   };
 
   const lines = useMemo(() => {
-    if (!showLineNumbers) return null;
+    if (!showLineNumbers || isLargePayload) return null;
 
     const grouped: SyntaxToken[][] = [[]];
     for (const token of tokens) {
@@ -104,7 +113,7 @@ export function SyntaxHighlighter({
       }
     }
     return grouped;
-  }, [tokens, showLineNumbers]);
+  }, [tokens, showLineNumbers, isLargePayload]);
 
   if (!code) {
     return (
@@ -112,6 +121,17 @@ export function SyntaxHighlighter({
         data-testid={dataTestId}
         className={`font-mono text-xs whitespace-pre-wrap break-all select-text ${className}`}
       />
+    );
+  }
+
+  if (isLargePayload) {
+    return (
+      <pre
+        data-testid={dataTestId}
+        className={`font-mono text-xs whitespace-pre-wrap break-all select-text ${className}`}
+      >
+        <code>{code}</code>
+      </pre>
     );
   }
 

@@ -1,7 +1,9 @@
 import { SyntaxHighlighterStrategy, SyntaxToken } from './types';
 
 const VAR_REGEX = /\{\{[\s\S]*?\}\}/y;
-const STR_REGEX = /"(?:\\.|{{[\s\S]*?}}|[^"\\{]|(?:\{(?!\{)))*"/y;
+const STR_REGEX = /"(?:\\.|[^"\\])*"/y;
+const INNER_VAR_REGEX = /\{\{[\s\S]*?\}\}/g;
+const COLON_REGEX = /\s*:/y;
 const NUM_REGEX = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?(?![a-zA-Z_])/y;
 const BOOL_REGEX = /(?:true|false)(?![a-zA-Z0-9_])/y;
 const NULL_REGEX = /null(?![a-zA-Z0-9_])/y;
@@ -30,18 +32,19 @@ export const jsonHighlighter: SyntaxHighlighterStrategy = (code: string): Syntax
     if (strMatch) {
       const fullStr = strMatch[0];
       const afterIdx = i + fullStr.length;
-      const isKey = /^\s*:/.test(code.slice(afterIdx));
+      COLON_REGEX.lastIndex = afterIdx;
+      const isKey = COLON_REGEX.test(code);
 
       if (isKey) {
         tokens.push({ type: 'key', value: fullStr });
       } else {
         // String value: check if it contains inner dynamic interpolation tags {{...}}
-        const innerVarRegex = /\{\{[\s\S]*?\}\}/g;
+        INNER_VAR_REGEX.lastIndex = 0;
         let lastIdx = 0;
         let innerMatch: RegExpExecArray | null;
         let hasVariables = false;
 
-        while ((innerMatch = innerVarRegex.exec(fullStr)) !== null) {
+        while ((innerMatch = INNER_VAR_REGEX.exec(fullStr)) !== null) {
           hasVariables = true;
           if (innerMatch.index > lastIdx) {
             tokens.push({
@@ -112,13 +115,23 @@ export const jsonHighlighter: SyntaxHighlighterStrategy = (code: string): Syntax
     WS_REGEX.lastIndex = i;
     const wsMatch = WS_REGEX.exec(code);
     if (wsMatch) {
-      tokens.push({ type: 'plain', value: wsMatch[0] });
+      const lastToken = tokens[tokens.length - 1];
+      if (lastToken && lastToken.type === 'plain') {
+        lastToken.value += wsMatch[0];
+      } else {
+        tokens.push({ type: 'plain', value: wsMatch[0] });
+      }
       i += wsMatch[0].length;
       continue;
     }
 
-    // 8. Fallback plain character
-    tokens.push({ type: 'plain', value: code[i] });
+    // 8. Fallback plain character (coalesce contiguous characters)
+    const lastToken = tokens[tokens.length - 1];
+    if (lastToken && lastToken.type === 'plain') {
+      lastToken.value += code[i];
+    } else {
+      tokens.push({ type: 'plain', value: code[i] });
+    }
     i++;
   }
 

@@ -1,10 +1,12 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { jsonHighlighter } from './jsonHighlighter';
 import {
   SyntaxHighlighter,
   registerHighlighter,
   getHighlighter,
+  resetRegistry,
+  plainHighlighter,
   DEFAULT_TOKEN_CLASSES,
 } from './SyntaxHighlighter';
 import { SyntaxHighlighterStrategy, SyntaxToken } from './types';
@@ -78,6 +80,43 @@ describe('jsonHighlighter tokenizer', () => {
     );
   });
 
+  it('safely parses strings with multiple template variables without ReDoS', () => {
+    const multiVar =
+      '{"url": "https://{{host}}:{{port}}/api/v1/{{resource}}?token={{token}}&env={{env}}"}';
+    const tokens = jsonHighlighter(multiVar);
+    const varTokens = tokens.filter((t: SyntaxToken) => t.type === 'variable');
+    expect(varTokens.map((t: SyntaxToken) => t.value)).toEqual([
+      '{{host}}',
+      '{{port}}',
+      '{{resource}}',
+      '{{token}}',
+      '{{env}}',
+    ]);
+    const reconstructed = tokens.map((t: SyntaxToken) => t.value).join('');
+    expect(reconstructed).toBe(multiVar);
+
+    // Pathological input that causes exponential backtracking (ReDoS) with vulnerable regexes
+    const pathological = '"' + '{{'.repeat(30) + ' unclosed string';
+    const start = performance.now();
+    const result = jsonHighlighter(pathological);
+    const elapsed = performance.now() - start;
+
+    expect(elapsed).toBeLessThan(100);
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('coalesces contiguous plain text characters into a single token instead of shredding', () => {
+    const rawCode = 'raw_plain_text and unrecognized tokens';
+    const tokens = jsonHighlighter(rawCode);
+
+    expect(tokens).toEqual([
+      {
+        type: 'plain',
+        value: 'raw_plain_text and unrecognized tokens',
+      },
+    ]);
+  });
+
   it('preserves full original text fidelity across all tokens', () => {
     const complexJson = JSON.stringify(
       {
@@ -98,6 +137,10 @@ describe('jsonHighlighter tokenizer', () => {
 });
 
 describe('SyntaxHighlighter component', () => {
+  beforeEach(() => {
+    resetRegistry();
+  });
+
   const sampleJson = JSON.stringify(
     {
       id: 101,
@@ -165,6 +208,27 @@ describe('SyntaxHighlighter component', () => {
     expect(block.textContent).toBe(sampleJson);
   });
 
+  it('falls back to rendering plain preformatted text directly for large payloads (>100KB)', () => {
+    const largeBody = '{"data": "' + 'a'.repeat(100_005) + '"}';
+    expect(largeBody.length).toBeGreaterThan(100_000);
+
+    const { container } = render(
+      <SyntaxHighlighter
+        code={largeBody}
+        language="json"
+        data-testid="large-payload-code"
+      />
+    );
+
+    const block = screen.getByTestId('large-payload-code');
+    expect(block).toBeInTheDocument();
+    expect(block.textContent).toBe(largeBody);
+
+    // Verify no individual token span elements were rendered to prevent DOM freeze
+    const spans = container.querySelectorAll('span');
+    expect(spans.length).toBe(0);
+  });
+
   it('allows registering and rendering custom language strategies (e.g. xml)', () => {
     const dummyXmlStrategy: SyntaxHighlighterStrategy = (code: string): SyntaxToken[] => {
       // Basic split for <tag>content</tag>
@@ -198,6 +262,31 @@ describe('SyntaxHighlighter component', () => {
     expect(tagEls.length).toBe(2);
     expect(tagEls[0].textContent).toBe('<response>');
     expect(tagEls[1].textContent).toBe('</response>');
+  });
+
+  it('restores default highlighters when resetRegistry is called', () => {
+    const dummyStrategy: SyntaxHighlighterStrategy = () => [];
+    registerHighlighter('custom-lang', dummyStrategy);
+    expect(getHighlighter('custom-lang')).toBe(dummyStrategy);
+
+    resetRegistry();
+    expect(getHighlighter('custom-lang')).toBeUndefined();
+    expect(getHighlighter('json')).toBe(jsonHighlighter);
+    expect(getHighlighter('text')).toBe(plainHighlighter);
+  });
+
+  it('falls back to plainHighlighter if custom strategy returns non-array or throws', () => {
+    const invalidStrategy = (() => 'not-an-array') as unknown as SyntaxHighlighterStrategy;
+    registerHighlighter('invalid-lang', invalidStrategy);
+
+    const { container } = render(
+      <SyntaxHighlighter code="sample text" language="invalid-lang" />
+    );
+
+    expect(container.textContent).toBe('sample text');
+    const plainEl = container.querySelector(`.${DEFAULT_TOKEN_CLASSES.plain.split(' ')[0]}`);
+    expect(plainEl).toBeInTheDocument();
+    expect(plainEl?.textContent).toBe('sample text');
   });
 
   it('falls back to plain text for unknown language or unformatted text', () => {

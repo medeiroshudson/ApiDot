@@ -20,4 +20,4 @@ export interface SyntaxToken {
 
 export type SyntaxHighlighterStrategy = (code: string) => SyntaxToken[];
 
-export type SupportedLanguage = 'json' | 'text' | 'xml' | 'graphql' | string;
+export type SupportedLanguage = 'json' | 'text' | 'xml' | 'graphql' | (string & {});
