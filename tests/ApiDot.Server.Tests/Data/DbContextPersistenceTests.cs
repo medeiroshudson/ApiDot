@@ -724,4 +724,60 @@ public class DbContextPersistenceTests
         var act = () => context.SaveChangesAsync();
         await act.Should().ThrowAsync<DbUpdateException>();
     }
+
+    [Fact]
+    public async Task Can_Persist_And_Query_Collection_With_OpenApiSpec()
+    {
+        using var context = CreateInMemoryContext();
+
+        var ws = new Workspace { Name = "OpenAPI Workspace" };
+        var collection = new Collection
+        {
+            Name = "Petstore API",
+            Workspace = ws,
+            OpenApiSpecUrl = "https://api.example.com/swagger/v1/swagger.json",
+            OpenApiSpecContent = "{\"openapi\":\"3.0.0\"}"
+        };
+
+        context.Workspaces.Add(ws);
+        context.Collections.Add(collection);
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var savedCollection = await context.Collections
+            .FirstOrDefaultAsync(c => c.Id == collection.Id);
+
+        savedCollection.Should().NotBeNull();
+        savedCollection!.OpenApiSpecUrl.Should().Be("https://api.example.com/swagger/v1/swagger.json");
+        savedCollection.OpenApiSpecContent.Should().Be("{\"openapi\":\"3.0.0\"}");
+    }
+
+    [Fact]
+    public async Task Can_Persist_And_Query_RequestItem_With_SchemaDefinition()
+    {
+        using var context = CreateInMemoryContext();
+
+        var ws = new Workspace { Name = "Schema Workspace" };
+        var requestItem = new RequestItem
+        {
+            Name = "Create User",
+            Method = "POST",
+            Url = "https://api.example.com/users",
+            Workspace = ws,
+            SchemaDefinition = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}}"
+        };
+
+        context.Workspaces.Add(ws);
+        context.RequestItems.Add(requestItem);
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var savedRequest = await context.RequestItems
+            .FirstOrDefaultAsync(r => r.Id == requestItem.Id);
+
+        savedRequest.Should().NotBeNull();
+        savedRequest!.SchemaDefinition.Should().Be("{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}}");
+    }
 }

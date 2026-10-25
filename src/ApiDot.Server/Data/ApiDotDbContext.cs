@@ -52,6 +52,7 @@ public class ApiDotDbContext(DbContextOptions<ApiDotDbContext> options) : DbCont
         modelBuilder.Entity<Collection>(entity =>
         {
             entity.Property(c => c.Name).HasMaxLength(200);
+            entity.Property(c => c.OpenApiSpecUrl).HasMaxLength(2048);
 
             entity.HasMany(c => c.Folders)
                 .WithOne(f => f.Collection)

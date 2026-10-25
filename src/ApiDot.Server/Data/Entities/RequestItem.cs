@@ -19,6 +19,7 @@ public class RequestItem
     public string HeadersJson { get; set; } = "{}";
     public HttpBodyType BodyType { get; set; } = HttpBodyType.None;
     public string? BodyContent { get; set; }
+    public string? SchemaDefinition { get; set; }
     public ExecutionTarget Target { get; set; } = ExecutionTarget.Inherit;
 
     public Guid WorkspaceId { get; set; }

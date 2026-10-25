@@ -263,6 +263,67 @@ app.MapPost("/api/workspaces/{id:guid}/variables/resolve", async (
     });
 });
 
+app.MapGet("/api/collections/{id:guid}/openapi", async (
+    Guid id,
+    ApiDotDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    var collection = await db.Collections
+        .AsNoTracking()
+        .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+
+    if (collection is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Collection Not Found",
+            detail: $"Collection with ID '{id}' was not found.");
+    }
+
+    return Results.Ok(new CollectionOpenApiResponse
+    {
+        OpenApiSpecUrl = collection.OpenApiSpecUrl,
+        OpenApiSpecContent = collection.OpenApiSpecContent
+    });
+});
+
+app.MapPut("/api/collections/{id:guid}/openapi", async (
+    Guid id,
+    UpdateCollectionOpenApiRequest? request,
+    ApiDotDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    var collection = await db.Collections
+        .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+
+    if (collection is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Collection Not Found",
+            detail: $"Collection with ID '{id}' was not found.");
+    }
+
+    if (request?.OpenApiSpecUrl?.Length > 2048)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid OpenAPI Spec URL",
+            detail: "OpenApiSpecUrl cannot exceed 2048 characters.");
+    }
+
+    collection.OpenApiSpecUrl = request?.OpenApiSpecUrl;
+    collection.OpenApiSpecContent = request?.OpenApiSpecContent;
+
+    await db.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new CollectionOpenApiResponse
+    {
+        OpenApiSpecUrl = collection.OpenApiSpecUrl,
+        OpenApiSpecContent = collection.OpenApiSpecContent
+    });
+});
+
 app.MapPost("/api/requests/execute", async (
     ExecuteRequest request,
     ITargetResolver targetResolver,
