@@ -662,9 +662,14 @@ public class DbContextPersistenceTests
         context.EnvironmentVariables.AddRange(globalVar, colVar);
         await context.SaveChangesAsync();
 
-        // Delete the collection
-        context.Collections.Remove(col);
+        // Untrack to test database cascade
+        context.ChangeTracker.Clear();
+
+        var colToDelete = await context.Collections.SingleAsync(c => c.Id == col.Id);
+        context.Collections.Remove(colToDelete);
         await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
 
         var remainingVars = await context.EnvironmentVariables
             .Where(v => v.WorkspaceId == ws.Id)
@@ -672,5 +677,51 @@ public class DbContextPersistenceTests
 
         remainingVars.Should().ContainSingle();
         remainingVars[0].Key.Should().Be("GLOBAL_SETTING");
+    }
+
+    [Fact]
+    public async Task Collection_Scoped_Variable_Without_CollectionId_Violates_Check_Constraint()
+    {
+        using var context = CreateInMemoryContext();
+
+        var ws = new Workspace { Name = "Check Constraint WS" };
+        context.Workspaces.Add(ws);
+        await context.SaveChangesAsync();
+
+        var invalidVar = new EnvironmentVariable
+        {
+            WorkspaceId = ws.Id,
+            Scope = VariableScope.Collection,
+            CollectionId = null,
+            Key = "INVALID_COL_VAR",
+            Value = "val"
+        };
+
+        context.EnvironmentVariables.Add(invalidVar);
+        var act = () => context.SaveChangesAsync();
+        await act.Should().ThrowAsync<DbUpdateException>();
+    }
+
+    [Fact]
+    public async Task Environment_Scoped_Variable_Without_EnvironmentName_Violates_Check_Constraint()
+    {
+        using var context = CreateInMemoryContext();
+
+        var ws = new Workspace { Name = "Check Constraint WS 2" };
+        context.Workspaces.Add(ws);
+        await context.SaveChangesAsync();
+
+        var invalidVar = new EnvironmentVariable
+        {
+            WorkspaceId = ws.Id,
+            Scope = VariableScope.Environment,
+            EnvironmentName = null,
+            Key = "INVALID_ENV_VAR",
+            Value = "val"
+        };
+
+        context.EnvironmentVariables.Add(invalidVar);
+        var act = () => context.SaveChangesAsync();
+        await act.Should().ThrowAsync<DbUpdateException>();
     }
 }

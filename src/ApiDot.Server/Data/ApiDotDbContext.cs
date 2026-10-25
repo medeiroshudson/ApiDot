@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ApiDot.Server.Data.Entities;
+using ApiDot.Core.Variables;
 
 namespace ApiDot.Server.Data;
 
@@ -97,27 +98,26 @@ public class ApiDotDbContext(DbContextOptions<ApiDotDbContext> options) : DbCont
 
         modelBuilder.Entity<EnvironmentVariable>(entity =>
         {
+            entity.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_EnvironmentVariable_Scope_Collection", $"\"{nameof(EnvironmentVariable.Scope)}\" != {(int)VariableScope.Collection} OR \"{nameof(EnvironmentVariable.CollectionId)}\" IS NOT NULL");
+                t.HasCheckConstraint("CK_EnvironmentVariable_Scope_Environment", $"\"{nameof(EnvironmentVariable.Scope)}\" != {(int)VariableScope.Environment} OR \"{nameof(EnvironmentVariable.EnvironmentName)}\" IS NOT NULL");
+            });
+
             entity.Property(e => e.EnvironmentName).HasMaxLength(64);
             entity.Property(e => e.Key).HasMaxLength(128);
 
-            entity.HasOne(e => e.Collection)
-                .WithMany(c => c.Variables)
-                .HasForeignKey(e => e.CollectionId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasIndex(e => new { e.WorkspaceId, e.Scope, e.EnvironmentName, e.CollectionId, e.Key }).IsUnique();
-
             entity.HasIndex(e => new { e.WorkspaceId, e.Key })
                 .IsUnique()
-                .HasFilter("\"Scope\" = 1");
+                .HasFilter($"\"{nameof(EnvironmentVariable.Scope)}\" = {(int)VariableScope.Global}");
 
             entity.HasIndex(e => new { e.WorkspaceId, e.CollectionId, e.Key })
                 .IsUnique()
-                .HasFilter("\"Scope\" = 2");
+                .HasFilter($"\"{nameof(EnvironmentVariable.Scope)}\" = {(int)VariableScope.Collection}");
 
             entity.HasIndex(e => new { e.WorkspaceId, e.EnvironmentName, e.Key })
                 .IsUnique()
-                .HasFilter("\"Scope\" = 3");
+                .HasFilter($"\"{nameof(EnvironmentVariable.Scope)}\" = {(int)VariableScope.Environment}");
         });
 
         modelBuilder.Entity<ExecutionHistory>(entity =>
