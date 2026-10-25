@@ -1,5 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
-
 namespace ApiDot.Core.Variables;
 
 public record ResolvedVariable
@@ -10,23 +8,4 @@ public record ResolvedVariable
     public string? SourceEnvironmentName { get; init; }
     public bool OverrodeExisting { get; init; }
     public bool IsSecret { get; init; }
-
-    public ResolvedVariable() { }
-
-    [SetsRequiredMembers]
-    public ResolvedVariable(
-        string key,
-        string value,
-        VariableScope scope,
-        string? sourceEnvironmentName = null,
-        bool overrodeExisting = false,
-        bool isSecret = false)
-    {
-        Key = key;
-        Value = value;
-        Scope = scope;
-        SourceEnvironmentName = sourceEnvironmentName;
-        OverrodeExisting = overrodeExisting;
-        IsSecret = isSecret;
-    }
 }
