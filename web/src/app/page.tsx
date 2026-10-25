@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { MobileDrawer } from '@/components/layout/MobileDrawer';
 import { CollectionsNav } from '@/components/layout/CollectionsNav';
@@ -8,12 +8,30 @@ import { RequestEditor, RequestData } from '@/components/request/RequestEditor';
 import { ResponseViewer, ResponseData } from '@/components/response/ResponseViewer';
 import { EnvironmentModal, EnvironmentGroup } from '@/components/environment/EnvironmentModal';
 import { VariableItem } from '@/components/environment/VariableGrid';
-import { resolveVariables, interpolateVariables } from '@/lib/variables';
+import { DependencyRequest, resolveVariables, interpolateVariables } from '@/lib/variables';
+import { AutocompleteVariable } from '@/components/request/RequestAutocomplete';
 
 const DEFAULT_ENVIRONMENTS: EnvironmentGroup[] = [
   { name: 'Development', variables: [] },
   { name: 'Staging', variables: [] },
   { name: 'Production', variables: [] },
+];
+
+const DEFAULT_REQUESTS: DependencyRequest[] = [
+  {
+    id: 'req-auth',
+    name: 'Autenticação Login',
+    method: 'POST',
+    url: 'https://api.example.com/auth/login',
+    response: {
+      statusCode: 200,
+      headers: { 'content-type': 'application/json' },
+      body: {
+        token: 'mock-jwt-token-xyz',
+        user: { id: 42, role: 'admin' },
+      },
+    },
+  },
 ];
 
 export default function Home() {
@@ -30,6 +48,34 @@ export default function Home() {
   const [activeEnvironment, setActiveEnvironment] = useState<string | null>(null);
   const [globals, setGlobals] = useState<VariableItem[]>([]);
   const [collectionVariables, setCollectionVariables] = useState<VariableItem[]>([]);
+  const [requestHistory, setRequestHistory] = useState<DependencyRequest[]>(DEFAULT_REQUESTS);
+
+  const availableVariables = useMemo<AutocompleteVariable[]>(() => {
+    const list: AutocompleteVariable[] = [];
+    globals
+      .filter((g) => g.isActive !== false && g.key.trim())
+      .forEach((g) => {
+        list.push({ key: g.key.trim(), value: g.value, scope: 'global' });
+      });
+    collectionVariables
+      .filter((c) => c.isActive !== false && c.key.trim())
+      .forEach((c) => {
+        list.push({ key: c.key.trim(), value: c.value, scope: 'collection' });
+      });
+    if (activeEnvironment) {
+      const activeEnv = environments.find(
+        (e) => e.name.toLowerCase() === activeEnvironment.toLowerCase()
+      );
+      if (activeEnv) {
+        activeEnv.variables
+          .filter((v) => v.isActive !== false && v.key.trim())
+          .forEach((v) => {
+            list.push({ key: v.key.trim(), value: v.value, scope: activeEnvironment });
+          });
+      }
+    }
+    return list;
+  }, [globals, collectionVariables, environments, activeEnvironment]);
 
   useEffect(() => {
     setMounted(true);
@@ -55,7 +101,7 @@ export default function Home() {
         activeEnvironment
       );
 
-      const resolvedUrl = interpolateVariables(request.url, activeVariables);
+      const resolvedUrl = interpolateVariables(request.url, activeVariables, requestHistory);
 
       let parsedHeaders: Record<string, string> = {};
       if (request.headers.trim()) {
@@ -75,11 +121,11 @@ export default function Home() {
 
       const interpolatedHeaders: Record<string, string> = {};
       Object.entries(parsedHeaders).forEach(([k, v]) => {
-        interpolatedHeaders[k] = interpolateVariables(v, activeVariables);
+        interpolatedHeaders[k] = interpolateVariables(v, activeVariables, requestHistory);
       });
 
       const interpolatedBody = request.body
-        ? interpolateVariables(request.body, activeVariables)
+        ? interpolateVariables(request.body, activeVariables, requestHistory)
         : null;
 
       const res = await fetch('/api/requests/execute', {
@@ -129,6 +175,30 @@ export default function Home() {
         body: bodyText,
         timing,
       });
+
+      let parsedBodyForHistory: unknown = bodyText;
+      try {
+        parsedBodyForHistory = JSON.parse(bodyText);
+      } catch {
+        parsedBodyForHistory = bodyText;
+      }
+
+      const executedItem: DependencyRequest = {
+        id: 'req-last',
+        name: request.url || 'Última Requisição',
+        method: request.method,
+        url: request.url,
+        response: {
+          statusCode: res.status,
+          headers: resHeaders,
+          body: parsedBodyForHistory as any,
+        },
+      };
+
+      setRequestHistory((prev) => [
+        executedItem,
+        ...prev.filter((r) => r.id !== 'req-last'),
+      ]);
     } catch (err: any) {
       const durationMs = Date.now() - startTime;
       setResponse({
@@ -235,6 +305,8 @@ export default function Home() {
               isAgentOnline={isAgentOnline}
               isLoading={isLoading}
               onSend={handleSend}
+              availableRequests={requestHistory}
+              availableVariables={availableVariables}
             />
           </section>
 

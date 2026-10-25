@@ -236,4 +236,148 @@ test.describe('Request Editor and Execution Flow E2E', () => {
     await expect(statusBadge).toHaveText(/200 OK/);
     await expect(page.getByText('User data fetched with variable')).toBeVisible();
   });
+
+  test('should display colored syntax highlighting tokens in response viewer', async ({ page }) => {
+    await page.route('**/api/requests/execute', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          statusCode: 200,
+          statusText: 'OK',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            status: 'operational',
+            service: 'ApiDot Core',
+            version: '0.3.0',
+            active: true,
+            count: 42,
+          }),
+        }),
+      });
+    });
+
+    const urlInput = page.getByLabel('URL da requisição');
+    await urlInput.fill('https://api.example.com/v1/health');
+    await page.getByRole('button', { name: /enviar/i }).click();
+
+    const statusBadge = page.getByTestId('status-badge');
+    await expect(statusBadge).toBeVisible();
+    await expect(statusBadge).toHaveText(/200 OK/);
+
+    // Verify colored syntax highlighting tokens
+    const prettyContent = page.getByTestId('response-pretty-content');
+    await expect(prettyContent).toBeVisible();
+
+    // Key tokens should have text-sky-400
+    const keyTokens = prettyContent.locator('.text-sky-400');
+    await expect(keyTokens.filter({ hasText: '"status"' })).toBeVisible();
+    await expect(keyTokens.filter({ hasText: '"service"' })).toBeVisible();
+
+    // String tokens should have text-emerald-400
+    const stringTokens = prettyContent.locator('.text-emerald-400');
+    await expect(stringTokens.filter({ hasText: '"operational"' })).toBeVisible();
+    await expect(stringTokens.filter({ hasText: '"ApiDot Core"' })).toBeVisible();
+  });
+
+  test('should open autocomplete popover with variable suggestions when typing {{ in request editor', async ({ page }) => {
+    const urlInput = page.getByLabel('URL da requisição');
+    await urlInput.focus();
+    await urlInput.fill('{{');
+
+    // Autocomplete popover appears
+    const popover = page.getByRole('listbox', { name: 'Sugestões de autocompletar' });
+    await expect(popover).toBeVisible();
+
+    // Contains dynamic tokens and suggestions
+    await expect(popover.getByRole('option', { name: /\$guid/i })).toBeVisible();
+    await expect(popover.getByRole('option', { name: /\$timestamp/i })).toBeVisible();
+    await expect(popover.getByRole('option', { name: /\$request\[\.\.\.\]/i })).toBeVisible();
+  });
+
+  test('should open DependencyLinkerModal when clicking Vincular, allow inspecting response and inserting token', async ({ page }) => {
+    const urlInput = page.getByLabel('URL da requisição');
+    await urlInput.focus();
+
+    // Click "Vincular" button in the Request Editor toolbar
+    const vincularBtn = page.getByRole('button', { name: 'Vincular' });
+    await expect(vincularBtn).toBeVisible();
+    await vincularBtn.click();
+
+    // DependencyLinkerModal opens
+    const modal = page.getByRole('dialog', { name: 'Vincular Resposta de Dependência' });
+    await expect(modal).toBeVisible();
+    await expect(page.getByText('Vincular Resposta de Dependência')).toBeVisible();
+
+    // Verify available request is listed and inspect response inside modal
+    const requestItem = modal.getByRole('button', { name: /Autenticação Login/i });
+    await expect(requestItem).toBeVisible();
+
+    // Verify response body tree inspector renders tokens
+    const tokenField = modal.getByTitle(/Clique para inserir.*token/i).first();
+    await expect(tokenField).toBeVisible();
+
+    // Click the field to insert token into editor
+    await tokenField.click();
+
+    // Modal should close
+    await expect(modal).not.toBeVisible();
+
+    // Check that URL input has the inserted {{$request[...]}} token
+    const urlVal = await urlInput.inputValue();
+    expect(urlVal).toContain('{{$request[');
+    expect(urlVal).toContain('.response.body.');
+  });
+
+  test('should chain responses using {{$request["id"].response.body.token}} across requests and display syntax highlighted response', async ({ page }) => {
+    let interceptedToken = '';
+
+    await page.route('**/api/requests/execute', async (route) => {
+      const data = JSON.parse(route.request().postData() || '{}');
+      if (data.url.includes('/api/auth')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            statusCode: 200,
+            statusText: 'OK',
+            body: JSON.stringify({ token: 'jwt-chain-secret-999', userId: 'user-777' }),
+          }),
+        });
+      } else {
+        interceptedToken = data.headers?.['Authorization'] || data.url;
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            statusCode: 200,
+            statusText: 'OK',
+            body: JSON.stringify({ success: true, authorizedUser: 'user-777' }),
+          }),
+        });
+      }
+    });
+
+    // Step 1: Execute first request (Auth)
+    const urlInput = page.getByLabel('URL da requisição');
+    await urlInput.fill('https://api.example.com/api/auth');
+    await page.getByRole('button', { name: /enviar/i }).click();
+
+    const statusBadge = page.getByTestId('status-badge');
+    await expect(statusBadge).toBeVisible();
+    await expect(statusBadge).toHaveText(/200 OK/);
+
+    // Step 2: Use response chaining in second request
+    await urlInput.fill('https://api.example.com/api/data?token={{$request["req-last"].response.body.token}}');
+    await page.getByRole('button', { name: /enviar/i }).click();
+
+    await expect.poll(() => interceptedToken).toContain('jwt-chain-secret-999');
+
+    // Step 3: Verify syntax highlighted payload for keys
+    const prettyContent = page.getByTestId('response-pretty-content');
+    await expect(prettyContent).toBeVisible();
+    const keyTokens = prettyContent.locator('.text-sky-400');
+    await expect(keyTokens.filter({ hasText: '"success"' })).toBeVisible();
+    await expect(keyTokens.filter({ hasText: '"authorizedUser"' })).toBeVisible();
+  });
 });

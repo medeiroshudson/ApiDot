@@ -97,5 +97,59 @@ describe('page variable resolution and interpolation helpers', () => {
     it('should return empty/null template as-is', () => {
       expect(interpolateVariables('', {})).toBe('');
     });
+
+    it('should interpolate response chaining tokens {{$request["id"].response...}}', () => {
+      const mockRequests = [
+        {
+          id: 'auth-req',
+          name: 'Login Auth',
+          method: 'POST',
+          response: {
+            statusCode: 200,
+            headers: {
+              'x-access-token': 'jwt-access-abc-123',
+            },
+            body: {
+              token: 'secret-token-xyz',
+              user: {
+                id: 42,
+                roles: ['admin', 'editor'],
+              },
+            },
+          },
+        },
+      ];
+
+      // Body property
+      expect(
+        interpolateVariables('Bearer {{$request["auth-req"].response.body.token}}', {}, mockRequests)
+      ).toBe('Bearer secret-token-xyz');
+
+      // Nested property and array index
+      expect(
+        interpolateVariables('User ID: {{$request["auth-req"].response.body.user.id}}', {}, mockRequests)
+      ).toBe('User ID: 42');
+      expect(
+        interpolateVariables('Role: {{$request["auth-req"].response.body.user.roles[0]}}', {}, mockRequests)
+      ).toBe('Role: admin');
+
+      // Status code
+      expect(
+        interpolateVariables('Status: {{$request["auth-req"].response.status}}', {}, mockRequests)
+      ).toBe('Status: 200');
+
+      // Header lookup
+      expect(
+        interpolateVariables('Token: {{$request["auth-req"].response.headers["x-access-token"]}}', {}, mockRequests)
+      ).toBe('Token: jwt-access-abc-123');
+
+      // Safe fallback for non-existent request or field
+      expect(
+        interpolateVariables('{{$request["missing"].response.body.token}}', {}, mockRequests)
+      ).toBe('{{$request["missing"].response.body.token}}');
+      expect(
+        interpolateVariables('{{$request["auth-req"].response.body.nonExistent}}', {}, mockRequests)
+      ).toBe('{{$request["auth-req"].response.body.nonExistent}}');
+    });
   });
 });

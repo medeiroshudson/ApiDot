@@ -28,7 +28,9 @@ builder.Services.AddDbContext<ApiDotDbContext>(options =>
 });
 
 builder.Services.AddSingleton<ITargetResolver, TargetResolver>();
-builder.Services.AddSingleton<IVariableInterpolator, VariableInterpolator>();
+builder.Services.AddSingleton<InMemoryResponseHistoryProvider>();
+builder.Services.AddSingleton<IResponseHistoryProvider>(sp => sp.GetRequiredService<InMemoryResponseHistoryProvider>());
+builder.Services.AddSingleton<IVariableInterpolator>(sp => new VariableInterpolator(sp.GetRequiredService<IResponseHistoryProvider>()));
 builder.Services.AddSingleton<IVariableResolver, VariableResolver>();
 builder.Services.AddSingleton<IAgentHub, AgentHub>();
 builder.Services.AddHttpClient<IServerHttpExecutor, ServerHttpExecutor>();
@@ -342,6 +344,7 @@ app.MapPost("/api/requests/execute", async (
     IVariableInterpolator interpolator,
     IVariableResolver variableResolver,
     ApiDotDbContext dbContext,
+    IResponseHistoryProvider historyProvider,
     CancellationToken cancellationToken) =>
 {
     if (string.IsNullOrWhiteSpace(request.Url))
@@ -446,6 +449,14 @@ app.MapPost("/api/requests/execute", async (
         try
         {
             var result = await agentHub.DispatchToAgentAsync(userId, interpolatedDispatch, cancellationToken);
+            if (historyProvider is InMemoryResponseHistoryProvider inMemoryHistory)
+            {
+                inMemoryHistory.Record(request.Id.ToString(), result);
+                if (request.Headers != null && request.Headers.TryGetValue("x-request-id", out var reqHeaderId) && !string.IsNullOrWhiteSpace(reqHeaderId))
+                {
+                    inMemoryHistory.Record(reqHeaderId, result);
+                }
+            }
             return Results.Ok(result);
         }
         catch (OperationCanceledException)
@@ -465,6 +476,14 @@ app.MapPost("/api/requests/execute", async (
     }
 
     var responsePayload = await serverHttpExecutor.ExecuteAsync(interpolatedDispatch, cancellationToken);
+    if (historyProvider is InMemoryResponseHistoryProvider inMemoryHistoryProvider)
+    {
+        inMemoryHistoryProvider.Record(request.Id.ToString(), responsePayload);
+        if (request.Headers != null && request.Headers.TryGetValue("x-request-id", out var reqHeaderId) && !string.IsNullOrWhiteSpace(reqHeaderId))
+        {
+            inMemoryHistoryProvider.Record(reqHeaderId, responsePayload);
+        }
+    }
     return Results.Ok(responsePayload);
 });
 

@@ -40,7 +40,7 @@ export function AppHeader({
         <div className="flex items-center gap-2">
           <span className="font-bold text-base tracking-tight text-white">{title}</span>
           <span className="hidden sm:inline-block text-xs px-2 py-0.5 rounded bg-neutral-800 text-neutral-400">
-            v0.2.0
+            v0.3.0
           </span>
         </div>
       </div>

@@ -11,6 +11,11 @@ describe('AppHeader', () => {
     expect(screen.getByText('ApiDot')).toBeDefined();
   });
 
+  it('renders version badge with v0.3.0', () => {
+    render(<AppHeader />);
+    expect(screen.getByText('v0.3.0')).toBeDefined();
+  });
+
   it('renders agent status badge reflecting connection status with consistent labels', () => {
     const { rerender } = render(<AppHeader isAgentOnline={true} />);
     const onlineText = screen.getByText('Agent Online');
