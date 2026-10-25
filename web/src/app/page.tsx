@@ -6,6 +6,69 @@ import { MobileDrawer } from '@/components/layout/MobileDrawer';
 import { CollectionsNav } from '@/components/layout/CollectionsNav';
 import { RequestEditor, RequestData } from '@/components/request/RequestEditor';
 import { ResponseViewer, ResponseData } from '@/components/response/ResponseViewer';
+import { EnvironmentModal, EnvironmentGroup } from '@/components/environment/EnvironmentModal';
+import { VariableItem } from '@/components/environment/VariableGrid';
+
+const DEFAULT_ENVIRONMENTS: EnvironmentGroup[] = [
+  { name: 'Development', variables: [] },
+  { name: 'Staging', variables: [] },
+  { name: 'Production', variables: [] },
+];
+
+export function resolveVariables(
+  globals: VariableItem[],
+  collectionVariables: VariableItem[],
+  environments: EnvironmentGroup[],
+  activeEnvironment: string | null
+): Record<string, string> {
+  const merged: Record<string, string> = {};
+
+  // 1. Globals (active only)
+  globals.forEach((v) => {
+    if (v.isActive !== false && v.key.trim()) {
+      merged[v.key.trim()] = v.value;
+    }
+  });
+
+  // 2. Collection (active only, overrides globals)
+  collectionVariables.forEach((v) => {
+    if (v.isActive !== false && v.key.trim()) {
+      merged[v.key.trim()] = v.value;
+    }
+  });
+
+  // 3. Active environment (active only, overrides collection & globals)
+  if (activeEnvironment) {
+    const envObj = environments.find((e) => e.name === activeEnvironment);
+    if (envObj) {
+      envObj.variables.forEach((v) => {
+        if (v.isActive !== false && v.key.trim()) {
+          merged[v.key.trim()] = v.value;
+        }
+      });
+    }
+  }
+
+  return merged;
+}
+
+export function interpolateVariables(template: string, variables: Record<string, string>): string {
+  if (!template) return template;
+  return template.replace(/\{\{\s*([a-zA-Z0-9_.\$-]+)\s*\}\}/g, (match, key) => {
+    if (key.toLowerCase() === '$guid') {
+      return typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : '00000000-0000-0000-0000-000000000000';
+    }
+    if (key.toLowerCase() === '$timestamp') {
+      return Math.floor(Date.now() / 1000).toString();
+    }
+    if (key.toLowerCase() === '$randomint') {
+      return Math.floor(1000 + Math.random() * 9000).toString();
+    }
+    return Object.prototype.hasOwnProperty.call(variables, key) ? variables[key] : match;
+  });
+}
 
 export default function Home() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -15,9 +78,23 @@ export default function Home() {
   const [activeMobilePane, setActiveMobilePane] = useState<'request' | 'response'>('request');
   const [mounted, setMounted] = useState(false);
 
+  // Environments and Variables State
+  const [isEnvModalOpen, setIsEnvModalOpen] = useState(false);
+  const [environments, setEnvironments] = useState<EnvironmentGroup[]>(DEFAULT_ENVIRONMENTS);
+  const [activeEnvironment, setActiveEnvironment] = useState<string | null>(null);
+  const [globals, setGlobals] = useState<VariableItem[]>([]);
+  const [collectionVariables, setCollectionVariables] = useState<VariableItem[]>([]);
+
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const handleEnvironmentsChange = (updated: EnvironmentGroup[]) => {
+    setEnvironments(updated);
+    if (activeEnvironment && !updated.some((e) => e.name === activeEnvironment)) {
+      setActiveEnvironment(null);
+    }
+  };
 
   const handleSend = async (request: RequestData) => {
     setIsLoading(true);
@@ -25,6 +102,15 @@ export default function Home() {
     setActiveMobilePane('response');
     const startTime = Date.now();
     try {
+      const activeVariables = resolveVariables(
+        globals,
+        collectionVariables,
+        environments,
+        activeEnvironment
+      );
+
+      const resolvedUrl = interpolateVariables(request.url, activeVariables);
+
       let parsedHeaders: Record<string, string> = {};
       if (request.headers.trim()) {
         try {
@@ -41,15 +127,27 @@ export default function Home() {
         }
       }
 
+      const interpolatedHeaders: Record<string, string> = {};
+      Object.entries(parsedHeaders).forEach(([k, v]) => {
+        interpolatedHeaders[k] = interpolateVariables(v, activeVariables);
+      });
+
+      const interpolatedBody = request.body
+        ? interpolateVariables(request.body, activeVariables)
+        : null;
+
       const res = await fetch('/api/requests/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           method: request.method,
-          url: request.url,
+          url: resolvedUrl,
           target: request.target,
-          headers: parsedHeaders,
-          bodyContent: request.body || null,
+          headers: interpolatedHeaders,
+          bodyContent: interpolatedBody,
+          environmentName: activeEnvironment || undefined,
+          environmentVariables: activeVariables,
+          variables: activeVariables,
         }),
       });
 
@@ -108,6 +206,23 @@ export default function Home() {
         isAgentOnline={isAgentOnline}
         isDrawerOpen={isDrawerOpen}
         onToggleDrawer={() => setIsDrawerOpen((prev) => !prev)}
+        environments={environments.map((e) => e.name)}
+        activeEnvironment={activeEnvironment}
+        onSelectEnvironment={setActiveEnvironment}
+        onOpenEnvironmentSettings={() => setIsEnvModalOpen(true)}
+      />
+
+      <EnvironmentModal
+        isOpen={isEnvModalOpen}
+        onClose={() => setIsEnvModalOpen(false)}
+        globals={globals}
+        collectionVariables={collectionVariables}
+        environments={environments}
+        activeEnvironment={activeEnvironment}
+        onGlobalsChange={setGlobals}
+        onCollectionChange={setCollectionVariables}
+        onEnvironmentsChange={handleEnvironmentsChange}
+        onSelectActiveEnvironment={setActiveEnvironment}
       />
 
       {/* Mobile Drawer */}

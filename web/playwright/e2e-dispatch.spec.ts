@@ -165,4 +165,75 @@ test.describe('Request Editor and Execution Flow E2E', () => {
     // Problem details title / detail visible in viewer
     await expect(page.getByText('Agent Execution Timed Out')).toBeVisible();
   });
+
+  test('should configure environment variable in modal and interpolate in request execution', async ({ page }) => {
+    let interceptedRequestBody: any = null;
+
+    await page.route('**/api/requests/execute', async (route) => {
+      interceptedRequestBody = JSON.parse(route.request().postData() || '{}');
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          statusCode: 200,
+          statusText: 'OK',
+          headers: {
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ message: 'User data fetched with variable' }),
+        }),
+      });
+    });
+
+    // 1. Click "Configurar ambientes e variáveis" button in AppHeader to open EnvironmentModal
+    const openEnvBtn = page.getByRole('button', { name: 'Configurar ambientes e variáveis' });
+    await expect(openEnvBtn).toBeVisible();
+    await openEnvBtn.click();
+
+    // 2. Verify modal opens with tabs ("Globais", "Coleção", "Ambientes", "Calculadas")
+    const modal = page.getByTestId('environment-modal-content');
+    await expect(modal).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Globais' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Coleção' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Ambientes' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Calculadas' })).toBeVisible();
+
+    // 3. Select "Ambientes" tab -> "Development"
+    await page.getByRole('tab', { name: 'Ambientes' }).click();
+    await page.getByRole('tab', { name: /Development/i }).click();
+
+    // 4. Enter key "baseUrl" and value "https://api.mocked.com"
+    await page.getByRole('button', { name: 'Adicionar Variável' }).click();
+    await page.getByPlaceholder('Chave').fill('baseUrl');
+    await page.getByPlaceholder('Valor').fill('https://api.mocked.com');
+
+    // 5. Close modal (via close button or backdrop/Escape)
+    await page.getByRole('button', { name: 'Fechar modal' }).click();
+    await expect(modal).not.toBeVisible();
+
+    // 6. Select "Development" in the AppHeader environment dropdown
+    const envSelect = page.getByLabel('Selecionar ambiente ativo');
+    await expect(envSelect).toBeVisible();
+    await envSelect.selectOption('Development');
+
+    // 7. In RequestEditor, enter URL "{{baseUrl}}/v1/users"
+    const urlInput = page.getByLabel('URL da requisição');
+    await urlInput.fill('{{baseUrl}}/v1/users');
+
+    // 8. Click "Enviar" button
+    await page.getByRole('button', { name: /enviar/i }).click();
+
+    // 9. Verify the intercepted request to /api/requests/execute receives interpolated URL or variables context with baseUrl="https://api.mocked.com" and response viewer displays result
+    await expect.poll(() => interceptedRequestBody).not.toBeNull();
+    expect(
+      interceptedRequestBody.url === 'https://api.mocked.com/v1/users' ||
+      interceptedRequestBody.environmentVariables?.baseUrl === 'https://api.mocked.com' ||
+      interceptedRequestBody.variables?.baseUrl === 'https://api.mocked.com'
+    ).toBe(true);
+
+    const statusBadge = page.getByTestId('status-badge');
+    await expect(statusBadge).toBeVisible();
+    await expect(statusBadge).toHaveText(/200 OK/);
+    await expect(page.getByText('User data fetched with variable')).toBeVisible();
+  });
 });
