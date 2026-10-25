@@ -17,17 +17,14 @@ public partial class VariableInterpolator : IVariableInterpolator
         _defaultHistoryProvider = responseHistoryProvider;
     }
 
-    [GeneratedRegex(@"\{\{\s*([^{}]+?)\s*\}\}")]
+    [GeneratedRegex(@"\{\{\s*([a-zA-Z0-9_\.\$:-]+|\$request\s*\[\s*['""][^'""]+['""]\s*\]\s*\.\s*[a-zA-Z0-9_\.\$\[\]'"" -]+)\s*\}\}", RegexOptions.NonBacktracking)]
     private static partial Regex VariableRegex();
 
-    [GeneratedRegex(@"^\$request\s*\[\s*['""](?<id>[^'""]+)['""]\s*\]\s*\.\s*response(?:\s*\.\s*(?<path>.+))?$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\$request\s*\[\s*(?:'(?<id>[^']+)'|""(?<id>[^""]+)"")\s*\]\s*\.\s*(?<path>response(?:\..+)?)$", RegexOptions.IgnoreCase | RegexOptions.NonBacktracking)]
     private static partial Regex RequestChainingRegex();
 
-    [GeneratedRegex(@"^headers(?:\s*\[\s*['""]?(?<headerName>[^'""\]]+)['""]?\s*\]|\s*\.\s*(?<headerName>[a-zA-Z0-9_-]+))$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^headers(?:\s*\[\s*(?:'(?<headerName>[^']*)'|""(?<headerName>[^""]*)""|(?<headerName>[^'""\s\]]+))\s*\]|\s*\.\s*(?<headerName>[a-zA-Z0-9_-]+))$", RegexOptions.IgnoreCase | RegexOptions.NonBacktracking)]
     private static partial Regex HeaderPathRegex();
-
-    [GeneratedRegex(@"(?:\s*\.?\s*(?<prop>[a-zA-Z0-9_@\$-]+)|\[\s*(?:(?<idx>\d+)|['""](?<bracketProp>[^'""]+)['""])\s*\])")]
-    private static partial Regex JsonSegmentRegex();
 
     [return: NotNullIfNotNull(nameof(template))]
     public string? Interpolate(string? template, IReadOnlyDictionary<string, string>? variables)
@@ -83,7 +80,7 @@ public partial class VariableInterpolator : IVariableInterpolator
         {
             payload = historyProvider.GetLatestResponse(requestId);
         }
-        catch
+        catch (Exception)
         {
             return null;
         }
@@ -91,6 +88,15 @@ public partial class VariableInterpolator : IVariableInterpolator
         if (payload == null)
         {
             return null;
+        }
+
+        if (path.StartsWith("response.", StringComparison.OrdinalIgnoreCase))
+        {
+            path = path["response.".Length..].Trim();
+        }
+        else if (path.Equals("response", StringComparison.OrdinalIgnoreCase))
+        {
+            path = string.Empty;
         }
 
         if (path.Equals("status", StringComparison.OrdinalIgnoreCase) ||
@@ -105,11 +111,18 @@ public partial class VariableInterpolator : IVariableInterpolator
             var headerName = headerMatch.Groups["headerName"].Value;
             if (payload.Headers != null)
             {
-                var matchingHeader = payload.Headers
-                    .FirstOrDefault(kv => string.Equals(kv.Key, headerName, StringComparison.OrdinalIgnoreCase));
-                if (matchingHeader.Value != null && matchingHeader.Value.Length > 0)
+                if (payload.Headers.TryGetValue(headerName, out var exactValues) && exactValues != null && exactValues.Length > 0)
                 {
-                    return string.Join(", ", matchingHeader.Value);
+                    return string.Join(", ", exactValues);
+                }
+
+                foreach (var kv in payload.Headers)
+                {
+                    if (string.Equals(kv.Key, headerName, StringComparison.OrdinalIgnoreCase) &&
+                        kv.Value != null && kv.Value.Length > 0)
+                    {
+                        return string.Join(", ", kv.Value);
+                    }
                 }
             }
             return null;
@@ -145,8 +158,7 @@ public partial class VariableInterpolator : IVariableInterpolator
 
         try
         {
-            var jsonStr = Encoding.UTF8.GetString(payload.Body);
-            var rootNode = JsonNode.Parse(jsonStr);
+            var rootNode = JsonNode.Parse(payload.Body.AsSpan());
             if (rootNode == null)
             {
                 return null;
@@ -154,7 +166,11 @@ public partial class VariableInterpolator : IVariableInterpolator
 
             return ResolveJsonPath(rootNode, subPath);
         }
-        catch
+        catch (JsonException)
+        {
+            return null;
+        }
+        catch (Exception)
         {
             return null;
         }
@@ -162,82 +178,43 @@ public partial class VariableInterpolator : IVariableInterpolator
 
     private static string? ResolveJsonPath(JsonNode root, string path)
     {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
         var current = root;
         var index = 0;
+        var isFirst = true;
 
         while (index < path.Length)
         {
-            var match = JsonSegmentRegex().Match(path, index);
-            if (!match.Success || match.Index != index)
+            if (!TryGetNextSegment(path, ref index, isFirst, out var segment))
             {
                 return null;
             }
 
-            index += match.Length;
+            isFirst = false;
 
-            if (match.Groups["prop"].Success)
+            if (segment.IsIndex)
             {
-                var propName = match.Groups["prop"].Value;
-                if (current is JsonObject obj)
+                if (current is JsonArray arr && segment.ArrayIndex >= 0 && segment.ArrayIndex < arr.Count)
                 {
-                    if (obj.TryGetPropertyValue(propName, out var next))
-                    {
-                        current = next;
-                    }
-                    else
-                    {
-                        var matchingKey = obj.Select(kv => kv.Key)
-                            .FirstOrDefault(k => string.Equals(k, propName, StringComparison.OrdinalIgnoreCase));
-                        if (matchingKey != null && obj.TryGetPropertyValue(matchingKey, out var fallbackNext))
-                        {
-                            current = fallbackNext;
-                        }
-                        else
-                        {
-                            return null;
-                        }
-                    }
+                    current = arr[segment.ArrayIndex];
                 }
                 else
                 {
                     return null;
                 }
             }
-            else if (match.Groups["bracketProp"].Success)
+            else
             {
-                var propName = match.Groups["bracketProp"].Value;
-                if (current is JsonObject obj)
+                var propName = segment.Name;
+                if (propName != null && current is JsonObject obj)
                 {
-                    if (obj.TryGetPropertyValue(propName, out var next))
+                    if (TryLookupProperty(obj, propName, out var next))
                     {
                         current = next;
-                    }
-                    else
-                    {
-                        var matchingKey = obj.Select(kv => kv.Key)
-                            .FirstOrDefault(k => string.Equals(k, propName, StringComparison.OrdinalIgnoreCase));
-                        if (matchingKey != null && obj.TryGetPropertyValue(matchingKey, out var fallbackNext))
-                        {
-                            current = fallbackNext;
-                        }
-                        else
-                        {
-                            return null;
-                        }
-                    }
-                }
-                else
-                {
-                    return null;
-                }
-            }
-            else if (match.Groups["idx"].Success)
-            {
-                if (int.TryParse(match.Groups["idx"].Value, out var arrIndex) && current is JsonArray arr)
-                {
-                    if (arrIndex >= 0 && arrIndex < arr.Count)
-                    {
-                        current = arr[arrIndex];
                     }
                     else
                     {
@@ -260,58 +237,209 @@ public partial class VariableInterpolator : IVariableInterpolator
         {
             if (val.TryGetValue<JsonElement>(out var element))
             {
-                if (element.ValueKind == JsonValueKind.String)
+                return element.ValueKind switch
                 {
-                    return element.GetString();
-                }
-                if (element.ValueKind == JsonValueKind.Number)
-                {
-                    return element.GetRawText();
-                }
-                if (element.ValueKind == JsonValueKind.True)
-                {
-                    return "true";
-                }
-                if (element.ValueKind == JsonValueKind.False)
-                {
-                    return "false";
-                }
-                if (element.ValueKind == JsonValueKind.Null || element.ValueKind == JsonValueKind.Undefined)
-                {
-                    return null;
-                }
-                return element.GetRawText();
+                    JsonValueKind.String => element.GetString(),
+                    JsonValueKind.Number => element.GetRawText(),
+                    JsonValueKind.True => "true",
+                    JsonValueKind.False => "false",
+                    JsonValueKind.Null or JsonValueKind.Undefined => null,
+                    _ => element.GetRawText()
+                };
             }
 
-            if (val.TryGetValue<string>(out var strVal))
-            {
-                return strVal;
-            }
-
-            if (val.TryGetValue<bool>(out var boolVal))
-            {
-                return boolVal ? "true" : "false";
-            }
-
-            if (val.TryGetValue<long>(out var longVal))
-            {
-                return longVal.ToString(CultureInfo.InvariantCulture);
-            }
-
-            if (val.TryGetValue<double>(out var doubleVal))
-            {
-                return doubleVal.ToString(CultureInfo.InvariantCulture);
-            }
-
-            if (val.TryGetValue<decimal>(out var decVal))
-            {
-                return decVal.ToString(CultureInfo.InvariantCulture);
-            }
-
-            var objVal = val.GetValue<object?>();
-            return objVal?.ToString();
+            return val.ToString();
         }
 
         return current.ToJsonString();
+    }
+
+    private static bool TryLookupProperty(JsonObject obj, string propName, out JsonNode? node)
+    {
+        if (obj.TryGetPropertyValue(propName, out node))
+        {
+            return true;
+        }
+
+        foreach (var kv in obj)
+        {
+            if (string.Equals(kv.Key, propName, StringComparison.OrdinalIgnoreCase))
+            {
+                node = kv.Value;
+                return true;
+            }
+        }
+
+        node = null;
+        return false;
+    }
+
+    private static bool TryGetNextSegment(string path, ref int index, bool isFirst, out PathSegment segment)
+    {
+        segment = default;
+        var length = path.Length;
+
+        while (index < length && char.IsWhiteSpace(path[index]))
+        {
+            index++;
+        }
+
+        if (index >= length)
+        {
+            return false;
+        }
+
+        if (!isFirst && path[index] != '.' && path[index] != '[')
+        {
+            return false;
+        }
+
+        if (path[index] == '.')
+        {
+            index++;
+            while (index < length && char.IsWhiteSpace(path[index]))
+            {
+                index++;
+            }
+
+            if (index >= length)
+            {
+                return false;
+            }
+        }
+
+        if (path[index] == '[')
+        {
+            index++;
+            while (index < length && char.IsWhiteSpace(path[index]))
+            {
+                index++;
+            }
+
+            if (index >= length)
+            {
+                return false;
+            }
+
+            if (path[index] == '\'' || path[index] == '"')
+            {
+                var quote = path[index];
+                index++;
+                var start = index;
+                while (index < length && path[index] != quote)
+                {
+                    index++;
+                }
+
+                if (index >= length)
+                {
+                    return false;
+                }
+
+                var propName = path.Substring(start, index - start);
+                index++; // consume closing quote
+
+                while (index < length && char.IsWhiteSpace(path[index]))
+                {
+                    index++;
+                }
+
+                if (index >= length || path[index] != ']')
+                {
+                    return false;
+                }
+
+                index++; // consume ']'
+
+                while (index < length && char.IsWhiteSpace(path[index]))
+                {
+                    index++;
+                }
+
+                segment = PathSegment.Property(propName);
+                return true;
+            }
+
+            if (char.IsDigit(path[index]))
+            {
+                var start = index;
+                while (index < length && char.IsDigit(path[index]))
+                {
+                    index++;
+                }
+
+                var indexSpan = path.AsSpan(start, index - start);
+                while (index < length && char.IsWhiteSpace(path[index]))
+                {
+                    index++;
+                }
+
+                if (index >= length || path[index] != ']')
+                {
+                    return false;
+                }
+
+                index++; // consume ']'
+
+                while (index < length && char.IsWhiteSpace(path[index]))
+                {
+                    index++;
+                }
+
+                if (!int.TryParse(indexSpan, NumberStyles.None, CultureInfo.InvariantCulture, out var arrIndex))
+                {
+                    return false;
+                }
+
+                segment = PathSegment.Index(arrIndex);
+                return true;
+            }
+
+            return false;
+        }
+
+        var propStart = index;
+        while (index < length && IsPropChar(path[index]))
+        {
+            index++;
+        }
+
+        if (index == propStart)
+        {
+            return false;
+        }
+
+        var prop = path.Substring(propStart, index - propStart);
+
+        while (index < length && char.IsWhiteSpace(path[index]))
+        {
+            index++;
+        }
+
+        segment = PathSegment.Property(prop);
+        return true;
+    }
+
+    private static bool IsPropChar(char c) =>
+        (c >= 'a' && c <= 'z') ||
+        (c >= 'A' && c <= 'Z') ||
+        (c >= '0' && c <= '9') ||
+        c == '_' || c == '@' || c == '$' || c == '-';
+
+    private readonly ref struct PathSegment
+    {
+        public string? Name { get; }
+        public int ArrayIndex { get; }
+        public bool IsIndex { get; }
+
+        public static PathSegment Property(string name) => new(name, -1, false);
+        public static PathSegment Index(int index) => new(null, index, true);
+
+        private PathSegment(string? name, int index, bool isIndex)
+        {
+            Name = name;
+            ArrayIndex = index;
+            IsIndex = isIndex;
+        }
     }
 }
