@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveVariables, interpolateVariables } from './page';
+import { resolveVariables, interpolateVariables } from '@/lib/variables';
 import { VariableItem } from '@/components/environment/VariableGrid';
 import { EnvironmentGroup } from '@/components/environment/EnvironmentModal';
 
