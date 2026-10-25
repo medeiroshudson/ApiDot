@@ -10,6 +10,8 @@ using ApiDot.Server.WebSockets;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddProblemDetails();
+
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -22,7 +24,7 @@ builder.Services.AddHttpClient<IServerHttpExecutor, ServerHttpExecutor>();
 
 var app = builder.Build();
 
-app.MapGet("/", () => "Hello World!");
+app.UseExceptionHandler();
 
 app.MapGet("/health", () => Results.Ok(new
 {
@@ -38,6 +40,14 @@ app.MapPost("/api/requests/execute", async (
     IVariableInterpolator interpolator,
     CancellationToken cancellationToken) =>
 {
+    if (string.IsNullOrWhiteSpace(request.Url))
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Request",
+            detail: "A valid URL is required.");
+    }
+
     var dispatch = request.ToDispatch();
 
     var mergedVariables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -57,6 +67,16 @@ app.MapPost("/api/requests/execute", async (
     }
 
     var interpolatedUrl = interpolator.Interpolate(dispatch.Url, mergedVariables);
+
+    if (!Uri.TryCreate(interpolatedUrl, UriKind.Absolute, out var parsedUri) ||
+        (parsedUri.Scheme != Uri.UriSchemeHttp && parsedUri.Scheme != Uri.UriSchemeHttps))
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Request",
+            detail: "A valid URL is required.");
+    }
+
     var interpolatedBody = dispatch.BodyContent != null
         ? interpolator.Interpolate(dispatch.BodyContent, mergedVariables)
         : null;
@@ -97,12 +117,19 @@ app.MapPost("/api/requests/execute", async (
             var result = await agentHub.DispatchToAgentAsync(userId, interpolatedDispatch, cancellationToken);
             return Results.Ok(result);
         }
+        catch (OperationCanceledException)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status504GatewayTimeout,
+                title: "Agent Execution Timed Out",
+                detail: "The dispatch to the local agent timed out or was canceled.");
+        }
         catch (InvalidOperationException ex)
         {
             return Results.Problem(
-                detail: ex.Message,
                 statusCode: StatusCodes.Status400BadRequest,
-                title: "Agent Execution Failed");
+                title: "Agent Offline",
+                detail: ex.Message);
         }
     }
 

@@ -18,15 +18,9 @@ public class ExecuteRequest
     public Guid? UserId { get; init; }
     public Dictionary<string, string>? EnvironmentVariables { get; init; }
     public Dictionary<string, string>? Variables { get; init; }
-    public HttpRequestDispatch? Dispatch { get; init; }
 
     public HttpRequestDispatch ToDispatch()
     {
-        if (Dispatch != null)
-        {
-            return Dispatch;
-        }
-
         return new HttpRequestDispatch
         {
             Id = Id != Guid.Empty ? Id : Guid.NewGuid(),

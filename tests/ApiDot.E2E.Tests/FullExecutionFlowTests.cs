@@ -1,11 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Net.WebSockets;
 using System.Text;
 using ApiDot.Core.Enums;
 using ApiDot.Core.Models;
 using ApiDot.Server;
 using ApiDot.Server.Execution;
 using ApiDot.Server.Models;
+using ApiDot.Server.WebSockets;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -74,6 +76,44 @@ public class FullExecutionFlowTests : IClassFixture<WebApplicationFactory<Progra
     }
 
     [Fact]
+    public async Task Execute_EmptyUrl_Returns_400_BadRequest_WithProblemDetails()
+    {
+        var client = _factory.CreateClient();
+        var request = new ExecuteRequest
+        {
+            Id = Guid.NewGuid(),
+            Url = "",
+            Method = "GET"
+        };
+
+        var response = await client.PostAsJsonAsync("/api/requests/execute", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().Contain("A valid URL is required.");
+    }
+
+    [Fact]
+    public async Task Execute_InvalidUrl_Returns_400_BadRequest_WithProblemDetails()
+    {
+        var client = _factory.CreateClient();
+        var request = new ExecuteRequest
+        {
+            Id = Guid.NewGuid(),
+            Url = "not-a-valid-url",
+            Method = "GET"
+        };
+
+        var response = await client.PostAsJsonAsync("/api/requests/execute", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().Contain("A valid URL is required.");
+    }
+
+    [Fact]
     public async Task Execute_AgentTarget_WithNoAgentOnline_Returns_400_BadRequest_WithProblemDetails()
     {
         var client = _factory.CreateClient();
@@ -88,8 +128,37 @@ public class FullExecutionFlowTests : IClassFixture<WebApplicationFactory<Progra
         var response = await client.PostAsJsonAsync("/api/requests/execute", dispatch);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
         var content = await response.Content.ReadAsStringAsync();
         content.Should().Contain("No online agent found for user");
+    }
+
+    [Fact]
+    public async Task Execute_AgentTarget_WhenAgentTimesOut_Returns_504_GatewayTimeout_WithProblemDetails()
+    {
+        var client = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
+            {
+                services.AddSingleton<IAgentHub, TimeoutAgentHub>();
+            });
+        }).CreateClient();
+
+        var request = new ExecuteRequest
+        {
+            Id = Guid.NewGuid(),
+            Url = "https://internal.lan/service",
+            Method = "GET",
+            Target = ExecutionTarget.Agent
+        };
+
+        var response = await client.PostAsJsonAsync("/api/requests/execute", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.GatewayTimeout);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().Contain("Agent Execution Timed Out");
+        content.Should().Contain("The dispatch to the local agent timed out or was canceled.");
     }
 
     [Fact]
@@ -141,6 +210,20 @@ public class FullExecutionFlowTests : IClassFixture<WebApplicationFactory<Progra
         handler.LastRequestBody.Should().NotContain("{{$timestamp}}");
         handler.LastRequestBody.Should().NotContain("{{envName}}");
         handler.LastRequestBody.Should().Contain("\"env\": \"production\"");
+    }
+
+    private class TimeoutAgentHub : IAgentHub
+    {
+        public bool IsAgentOnline(Guid userId) => true;
+        public void RegisterAgent(Guid userId, string agentName, WebSocket socket) { }
+        public void UnregisterAgent(Guid userId) { }
+        public AgentConnection? GetAgent(Guid userId) => null;
+        public Task<HttpResponsePayload> DispatchToAgentAsync(Guid userId, HttpRequestDispatch dispatch, CancellationToken cancellationToken = default)
+        {
+            throw new OperationCanceledException("Agent execution timed out.");
+        }
+        public void ReceiveResponse(HttpResponsePayload response) { }
+        public int PendingDispatchCount => 0;
     }
 
     private class TestHttpMessageHandler : HttpMessageHandler

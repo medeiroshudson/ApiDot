@@ -1,17 +1,106 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { MobileDrawer } from '@/components/layout/MobileDrawer';
 import { CollectionsNav } from '@/components/layout/CollectionsNav';
-import { Send } from 'lucide-react';
+import { RequestEditor, RequestData } from '@/components/request/RequestEditor';
+import { ResponseViewer, ResponseData } from '@/components/response/ResponseViewer';
 
 export default function Home() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isAgentOnline, setIsAgentOnline] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [response, setResponse] = useState<ResponseData | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const handleSend = async (request: RequestData) => {
+    setIsLoading(true);
+    setResponse(null);
+    const startTime = Date.now();
+    try {
+      let parsedHeaders: Record<string, string> = {};
+      if (request.headers.trim()) {
+        try {
+          parsedHeaders = JSON.parse(request.headers);
+        } catch {
+          request.headers.split('\n').forEach((line) => {
+            const idx = line.indexOf(':');
+            if (idx > 0) {
+              const k = line.slice(0, idx).trim();
+              const v = line.slice(idx + 1).trim();
+              if (k) parsedHeaders[k] = v;
+            }
+          });
+        }
+      }
+
+      const res = await fetch('/api/requests/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          method: request.method,
+          url: request.url,
+          target: request.target,
+          headers: parsedHeaders,
+          bodyContent: request.body || null,
+        }),
+      });
+
+      const durationMs = Date.now() - startTime;
+      const contentType = res.headers.get('content-type') || '';
+      let bodyText = '';
+      let timing = null;
+
+      if (contentType.includes('application/json') || contentType.includes('application/problem+json')) {
+        const json = await res.json();
+        if (json.timing) {
+          timing = json.timing;
+        }
+        if (json.body) {
+          bodyText = typeof json.body === 'string' ? json.body : JSON.stringify(json.body);
+        } else {
+          bodyText = JSON.stringify(json, null, 2);
+        }
+      } else {
+        bodyText = await res.text();
+      }
+
+      const resHeaders: Record<string, string> = {};
+      res.headers.forEach((val, key) => {
+        resHeaders[key] = val;
+      });
+
+      setResponse({
+        statusCode: res.status,
+        statusText: res.statusText || (res.ok ? 'OK' : 'Error'),
+        durationMs,
+        headers: resHeaders,
+        body: bodyText,
+        timing,
+      });
+    } catch (err: any) {
+      const durationMs = Date.now() - startTime;
+      setResponse({
+        statusCode: 0,
+        statusText: 'Network Error',
+        errorMessage: err.message || 'Failed to dispatch request',
+        durationMs,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-neutral-950 text-neutral-100">
+    <div
+      data-hydrated={mounted}
+      className="flex flex-col h-screen overflow-hidden bg-neutral-950 text-neutral-100"
+    >
       <AppHeader
         title="ApiDot"
         isAgentOnline={isAgentOnline}
@@ -37,24 +126,16 @@ export default function Home() {
 
         {/* Main Workspace Area (Request & Response panels) */}
         <main className="flex-1 flex flex-col md:flex-row overflow-hidden bg-neutral-950">
-          <section
-            data-testid="request-pane-placeholder"
-            className="flex-1 border-b md:border-b-0 md:border-r border-neutral-800 p-4 flex flex-col justify-center items-center text-center text-neutral-500"
-          >
-            <Send className="w-8 h-8 mb-2 opacity-50" />
-            <p className="text-sm">Painel de Requisição</p>
-            <p className="text-xs text-neutral-600 mt-1">Configure o método, URL, headers e body</p>
+          <section className="flex-1 border-b md:border-b-0 md:border-r border-neutral-800 overflow-hidden flex flex-col">
+            <RequestEditor
+              isAgentOnline={isAgentOnline}
+              isLoading={isLoading}
+              onSend={handleSend}
+            />
           </section>
 
-          <section
-            data-testid="response-pane-placeholder"
-            className="flex-1 p-4 flex flex-col justify-center items-center text-center text-neutral-500"
-          >
-            <div className="w-8 h-8 rounded-full border border-neutral-700 flex items-center justify-center mb-2 opacity-50">
-              <span className="text-xs font-mono">200</span>
-            </div>
-            <p className="text-sm">Painel de Resposta</p>
-            <p className="text-xs text-neutral-600 mt-1">Status HTTP, métricas de tempo e payload</p>
+          <section className="flex-1 overflow-hidden flex flex-col">
+            <ResponseViewer response={response} isLoading={isLoading} />
           </section>
         </main>
       </div>
