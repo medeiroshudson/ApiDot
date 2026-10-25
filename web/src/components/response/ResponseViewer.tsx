@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Copy, Check, Clock, Server, FileCode, Layers, Loader2 } from 'lucide-react';
 import { TimingWaterfall, TimingBreakdown } from './TimingWaterfall';
+import { SyntaxHighlighter } from '../common/syntax/SyntaxHighlighter';
 
 export interface ResponseData {
   statusCode: number;
@@ -327,12 +328,12 @@ export function ResponseViewer({
         >
           {activeTab === 'pretty' && (
             response.body ? (
-              <pre
+              <SyntaxHighlighter
+                code={prettyBody}
+                language="json"
                 data-testid="response-pretty-content"
-                className="flex-1 font-mono text-xs text-neutral-200 whitespace-pre-wrap break-all select-text"
-              >
-                {prettyBody}
-              </pre>
+                className="flex-1"
+              />
             ) : (
               <div className="text-xs text-neutral-500 italic p-2">Corpo vazio</div>
             )

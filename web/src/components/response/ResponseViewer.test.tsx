@@ -165,8 +165,8 @@ describe('ResponseViewer', () => {
   });
 
   describe('JSON Pretty Printing', () => {
-    it('pretty prints valid JSON payload in Pretty tab', () => {
-      const rawJson = '{\"key\":\"value\",\"num\":42}';
+    it('pretty prints valid JSON payload in Pretty tab with semantic syntax highlighting', () => {
+      const rawJson = '{"key":"value","num":42,"active":true}';
       const response: ResponseData = {
         statusCode: 200,
         statusText: 'OK',
@@ -174,9 +174,15 @@ describe('ResponseViewer', () => {
         body: rawJson,
       };
 
-      render(<ResponseViewer response={response} />);
+      const { container } = render(<ResponseViewer response={response} />);
       const prettyCode = screen.getByTestId('response-pretty-content');
-      expect(prettyCode.textContent).toContain('{\n  \"key\": \"value\",\n  \"num\": 42\n}');
+      expect(prettyCode.textContent).toContain('{\n  "key": "value",\n  "num": 42,\n  "active": true\n}');
+
+      // Verify SyntaxHighlighter tokens are present
+      expect(prettyCode.querySelector('.text-sky-400')).toHaveTextContent('"key"');
+      expect(prettyCode.querySelector('.text-emerald-400')).toHaveTextContent('"value"');
+      expect(prettyCode.querySelector('.text-amber-400')).toHaveTextContent('42');
+      expect(prettyCode.querySelector('.text-purple-400')).toHaveTextContent('true');
     });
 
     it('falls back to raw text if body is invalid JSON', () => {
