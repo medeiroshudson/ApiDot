@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Plus, Layers, Globe, FolderGit2, Calculator, Trash2 } from 'lucide-react';
 import { VariableGrid, VariableItem } from './VariableGrid';
 
@@ -87,6 +87,9 @@ export function EnvironmentModal({
   const [newEnvInput, setNewEnvInput] = useState('');
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const envTabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const modalContentRef = useRef<HTMLDivElement>(null);
+  const previousActiveElementRef = useRef<HTMLElement | null>(null);
 
   // Sync state with props
   useEffect(() => {
@@ -117,13 +120,46 @@ export function EnvironmentModal({
     }
   }, [initialTab]);
 
-  // Handle ESC key to close modal
+  // Trap focus & Handle ESC key to close modal
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        const dialog = modalContentRef.current;
+        if (!dialog) return;
+
+        const focusable = dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]'
+        );
+        const focusableElements = Array.from(focusable).filter(
+          (el) => el.getAttribute('tabindex') !== '-1'
+        );
+
+        if (focusableElements.length === 0) {
+          e.preventDefault();
+          return;
+        }
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement || !dialog.contains(document.activeElement)) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement || !dialog.contains(document.activeElement)) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
       }
     };
 
@@ -131,14 +167,24 @@ export function EnvironmentModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Auto focus on open
+  // Focus management: auto-focus on open and restore previous focus on close
   useEffect(() => {
     if (isOpen) {
+      previousActiveElementRef.current = document.activeElement as HTMLElement | null;
       closeButtonRef.current?.focus();
+    } else if (previousActiveElementRef.current) {
+      previousActiveElementRef.current.focus();
+      previousActiveElementRef.current = null;
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    return () => {
+      if (previousActiveElementRef.current) {
+        previousActiveElementRef.current.focus();
+      }
+    };
+  }, []);
 
   // Handlers for Globals
   const handleGlobalsChange = (updated: VariableItem[]) => {
@@ -165,8 +211,9 @@ export function EnvironmentModal({
     const trimmed = newEnvInput.trim();
     if (!trimmed) return;
 
-    if (envList.some((e) => e.name.toLowerCase() === trimmed.toLowerCase())) {
-      setSelectedEnvName(trimmed);
+    const existing = envList.find((e) => e.name.toLowerCase() === trimmed.toLowerCase());
+    if (existing) {
+      setSelectedEnvName(existing.name);
       setNewEnvInput('');
       return;
     }
@@ -187,7 +234,7 @@ export function EnvironmentModal({
     onEnvironmentsChange?.(updated);
   };
 
-  // Arrow key navigation between tabs
+  // Arrow key navigation between main tabs
   const handleTabKeyDown = (e: React.KeyboardEvent, index: number) => {
     let nextIndex = index;
     if (e.key === 'ArrowRight') {
@@ -207,8 +254,28 @@ export function EnvironmentModal({
     tabRefs.current[nextIndex]?.focus();
   };
 
-  // Dynamic calculation for Calculadas tab if not supplied
-  const resolvedVariables: ResolvedVariableItem[] = (() => {
+  // Arrow key navigation between environment sub-tabs (roving tabIndex)
+  const handleEnvTabKeyDown = (e: React.KeyboardEvent, index: number) => {
+    let nextIndex = index;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+      nextIndex = (index + 1) % envList.length;
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+      nextIndex = (index - 1 + envList.length) % envList.length;
+    } else if (e.key === 'Home') {
+      nextIndex = 0;
+    } else if (e.key === 'End') {
+      nextIndex = envList.length - 1;
+    } else {
+      return;
+    }
+
+    e.preventDefault();
+    setSelectedEnvName(envList[nextIndex].name);
+    envTabRefs.current[nextIndex]?.focus();
+  };
+
+  // Dynamic calculation for Calculadas tab (memoized)
+  const resolvedVariables: ResolvedVariableItem[] = useMemo(() => {
     if (computedVariables) return computedVariables;
 
     const map = new Map<string, ResolvedVariableItem>();
@@ -259,10 +326,12 @@ export function EnvironmentModal({
     }
 
     return Array.from(map.values());
-  })();
+  }, [computedVariables, globalsList, collectionList, envList, selectedEnvName]);
 
   const currentEnvironment =
     envList.find((e) => e.name === selectedEnvName) || envList[0] || null;
+
+  if (!isOpen) return null;
 
   return (
     <div
@@ -271,6 +340,7 @@ export function EnvironmentModal({
       onClick={onClose}
     >
       <div
+        ref={modalContentRef}
         data-testid="environment-modal-content"
         role="dialog"
         aria-modal="true"
@@ -420,6 +490,7 @@ export function EnvironmentModal({
                 {/* Environments sub-tab list */}
                 <div
                   role="tablist"
+                  aria-orientation="vertical"
                   aria-label="Lista de ambientes"
                   className="flex-1 flex flex-col gap-1 overflow-y-auto"
                 >
@@ -428,7 +499,7 @@ export function EnvironmentModal({
                       Nenhum ambiente criado.
                     </span>
                   ) : (
-                    envList.map((env) => {
+                    envList.map((env, envIdx) => {
                       const isSelected = selectedEnvName === env.name;
                       return (
                         <div
@@ -440,11 +511,18 @@ export function EnvironmentModal({
                           }`}
                         >
                           <button
+                            ref={(el) => {
+                              envTabRefs.current[envIdx] = el;
+                            }}
                             type="button"
                             role="tab"
+                            id={`env-tab-${env.name}`}
                             aria-selected={isSelected}
+                            aria-controls="panel-env-variables"
+                            tabIndex={isSelected ? 0 : -1}
                             onClick={() => setSelectedEnvName(env.name)}
-                            className="flex-1 text-left truncate flex items-center justify-between"
+                            onKeyDown={(e) => handleEnvTabKeyDown(e, envIdx)}
+                            className="flex-1 text-left truncate flex items-center justify-between focus:outline-none"
                           >
                             <span className="truncate">{env.name}</span>
                             <span className="text-[10px] px-1.5 py-0.2 rounded bg-neutral-900/60 text-neutral-400 border border-neutral-800 ml-1">
@@ -469,7 +547,12 @@ export function EnvironmentModal({
               </div>
 
               {/* Right panel: Overrides grid for selected environment */}
-              <div className="flex-1 flex flex-col h-full overflow-hidden">
+              <div
+                id="panel-env-variables"
+                role="tabpanel"
+                aria-labelledby={currentEnvironment ? `env-tab-${currentEnvironment.name}` : undefined}
+                className="flex-1 flex flex-col h-full overflow-hidden"
+              >
                 {currentEnvironment ? (
                   <VariableGrid
                     title={`Variáveis: ${currentEnvironment.name}`}
@@ -510,8 +593,12 @@ export function EnvironmentModal({
 
                 {envList.length > 0 && (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-neutral-400">Ambiente ativo:</span>
+                    <label htmlFor="active-env-select" className="text-xs text-neutral-400">
+                      Ambiente ativo:
+                    </label>
                     <select
+                      id="active-env-select"
+                      aria-label="Ambiente ativo"
                       value={selectedEnvName}
                       onChange={(e) => {
                         setSelectedEnvName(e.target.value);
@@ -533,10 +620,10 @@ export function EnvironmentModal({
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-neutral-800 text-neutral-400 font-medium select-none">
-                      <th className="py-2 px-3 w-1/4">Chave</th>
-                      <th className="py-2 px-3 w-1/3">Valor Resolvido</th>
-                      <th className="py-2 px-3 w-1/4">Origem / Escopo</th>
-                      <th className="py-2 px-3 text-center">Sobrescrita</th>
+                      <th scope="col" className="py-2 px-3 w-1/4">Chave</th>
+                      <th scope="col" className="py-2 px-3 w-1/3">Valor Resolvido</th>
+                      <th scope="col" className="py-2 px-3 w-1/4">Origem / Escopo</th>
+                      <th scope="col" className="py-2 px-3 text-center">Sobrescrita</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-900 font-mono">

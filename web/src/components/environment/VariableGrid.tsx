@@ -19,6 +19,41 @@ export interface VariableGridProps {
   className?: string;
 }
 
+export function parseJsonToVariableItems(parsed: unknown): VariableItem[] | null {
+  if (parsed === null || typeof parsed !== 'object') {
+    return null;
+  }
+
+  if (Array.isArray(parsed)) {
+    return parsed.map((item, idx) => {
+      if (item && typeof item === 'object') {
+        const itemObj = item as Record<string, unknown>;
+        return {
+          id: itemObj.id ? String(itemObj.id) : undefined,
+          key: itemObj.key !== undefined && itemObj.key !== null ? String(itemObj.key) : '',
+          value: itemObj.value !== undefined && itemObj.value !== null ? String(itemObj.value) : '',
+          isActive: itemObj.isActive !== false,
+          isSecret: !!itemObj.isSecret,
+        };
+      }
+      return {
+        key: String(idx),
+        value: String(item ?? ''),
+        isActive: true,
+        isSecret: false,
+      };
+    });
+  }
+
+  // parsed is an object (record of key-values)
+  return Object.entries(parsed as Record<string, unknown>).map(([k, v]) => ({
+    key: k,
+    value: typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? ''),
+    isActive: true,
+    isSecret: false,
+  }));
+}
+
 export function VariableGrid({
   variables,
   onChange,
@@ -31,13 +66,14 @@ export function VariableGrid({
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [rawJson, setRawJson] = useState('');
   const [jsonError, setJsonError] = useState<string | null>(null);
-  const [revealedSecrets, setRevealedSecrets] = useState<Record<number, boolean>>({});
+  const [revealedSecrets, setRevealedSecrets] = useState<Record<string, boolean>>({});
 
   const handleToggleBulkMode = () => {
     if (!isBulkMode) {
       // Switching to bulk JSON mode
       const serialized = JSON.stringify(
         variables.map((v) => ({
+          ...(v.id ? { id: v.id } : {}),
           key: v.key,
           value: v.value,
           isActive: v.isActive !== false,
@@ -54,21 +90,10 @@ export function VariableGrid({
       if (rawJson.trim()) {
         try {
           const parsed = JSON.parse(rawJson);
-          let newVars: VariableItem[] = [];
-          if (Array.isArray(parsed)) {
-            newVars = parsed.map((item) => ({
-              key: item.key ? String(item.key) : '',
-              value: item.value !== undefined ? String(item.value) : '',
-              isActive: item.isActive !== false,
-              isSecret: !!item.isSecret,
-            }));
-          } else if (typeof parsed === 'object' && parsed !== null) {
-            newVars = Object.entries(parsed).map(([k, v]) => ({
-              key: k,
-              value: typeof v === 'object' ? JSON.stringify(v) : String(v ?? ''),
-              isActive: true,
-              isSecret: false,
-            }));
+          const newVars = parseJsonToVariableItems(parsed);
+          if (newVars === null) {
+            setJsonError('O JSON deve ser um array de objetos ou um objeto chave-valor.');
+            return;
           }
           onChange(newVars);
           setJsonError(null);
@@ -89,28 +114,13 @@ export function VariableGrid({
     if (!rawJson.trim()) return;
     try {
       const parsed = JSON.parse(rawJson);
+      if (parsed === null || typeof parsed !== 'object') {
+        setJsonError('O JSON deve ser um array de objetos ou um objeto chave-valor.');
+        return;
+      }
       const formatted = JSON.stringify(parsed, null, 2);
       setRawJson(formatted);
       setJsonError(null);
-
-      // Also sync back to variables if valid
-      let newVars: VariableItem[] = [];
-      if (Array.isArray(parsed)) {
-        newVars = parsed.map((item) => ({
-          key: item.key ? String(item.key) : '',
-          value: item.value !== undefined ? String(item.value) : '',
-          isActive: item.isActive !== false,
-          isSecret: !!item.isSecret,
-        }));
-      } else if (typeof parsed === 'object' && parsed !== null) {
-        newVars = Object.entries(parsed).map(([k, v]) => ({
-          key: k,
-          value: typeof v === 'object' ? JSON.stringify(v) : String(v ?? ''),
-          isActive: true,
-          isSecret: false,
-        }));
-      }
-      onChange(newVars);
     } catch (err: any) {
       setJsonError(`JSON inválido: ${err.message || 'Sintaxe inválida'}`);
     }
@@ -131,10 +141,10 @@ export function VariableGrid({
     onChange(next);
   };
 
-  const toggleRevealSecret = (index: number) => {
+  const toggleRevealSecret = (secretKey: string) => {
     setRevealedSecrets((prev) => ({
       ...prev,
-      [index]: !prev[index],
+      [secretKey]: !prev[secretKey],
     }));
   };
 
@@ -196,7 +206,7 @@ export function VariableGrid({
               setRawJson(e.target.value);
               if (jsonError) setJsonError(null);
             }}
-            placeholder='[\n  { "key": "API_URL", "value": "https://api.com", "isActive": true, "isSecret": false }\n]'
+            placeholder={'[\n  { "key": "API_URL", "value": "https://api.com", "isActive": true, "isSecret": false }\n]'}
             className="flex-1 w-full bg-neutral-950 border border-neutral-800 rounded-md p-3 font-mono text-xs text-neutral-200 resize-none focus:outline-none focus:ring-2 focus:ring-neutral-400 leading-relaxed min-h-[200px]"
           />
 
@@ -215,11 +225,11 @@ export function VariableGrid({
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-neutral-800 text-neutral-400 font-medium select-none">
-                  <th className="py-2 px-2 w-10 text-center">Ativo</th>
-                  <th className="py-2 px-2 w-1/3">Chave</th>
-                  <th className="py-2 px-2">Valor</th>
-                  <th className="py-2 px-2 w-24 text-center">Segredo</th>
-                  {!isReadOnly && <th className="py-2 px-2 w-12 text-center">Ações</th>}
+                  <th scope="col" className="py-2 px-2 w-10 text-center">Ativo</th>
+                  <th scope="col" className="py-2 px-2 w-1/3">Chave</th>
+                  <th scope="col" className="py-2 px-2">Valor</th>
+                  <th scope="col" className="py-2 px-2 w-24 text-center">Segredo</th>
+                  {!isReadOnly && <th scope="col" className="py-2 px-2 w-12 text-center">Ações</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-900">
@@ -234,7 +244,8 @@ export function VariableGrid({
                   </tr>
                 ) : (
                   variables.map((item, idx) => {
-                    const isSecretRevealed = revealedSecrets[idx] || false;
+                    const secretKey = item.id || item.key || String(idx);
+                    const isSecretRevealed = !!revealedSecrets[secretKey];
                     return (
                       <tr
                         key={item.id || `var-${idx}`}
@@ -284,7 +295,7 @@ export function VariableGrid({
                             {item.isSecret && (
                               <button
                                 type="button"
-                                onClick={() => toggleRevealSecret(idx)}
+                                onClick={() => toggleRevealSecret(secretKey)}
                                 aria-label={
                                   isSecretRevealed ? 'Ocultar segredo' : 'Revelar segredo'
                                 }

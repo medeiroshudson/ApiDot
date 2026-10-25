@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { EnvironmentModal } from './EnvironmentModal';
+import { parseJsonToVariableItems } from './VariableGrid';
 
 describe('EnvironmentModal', () => {
   const defaultGlobals = [
@@ -92,6 +93,85 @@ describe('EnvironmentModal', () => {
 
       fireEvent.keyDown(window, { key: 'Enter' });
       expect(handleClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('traps focus inside the modal when pressing Tab on last focusable element', () => {
+      render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={() => {}}
+          globals={defaultGlobals}
+        />
+      );
+
+      const dialog = screen.getByRole('dialog');
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]'
+        )
+      ).filter((el) => el.getAttribute('tabindex') !== '-1');
+
+      const firstElement = focusable[0];
+      const lastElement = focusable[focusable.length - 1];
+
+      lastElement.focus();
+      expect(document.activeElement).toBe(lastElement);
+
+      fireEvent.keyDown(window, { key: 'Tab', shiftKey: false });
+      expect(document.activeElement).toBe(firstElement);
+    });
+
+    it('traps focus inside the modal when pressing Shift+Tab on first focusable element', () => {
+      render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={() => {}}
+          globals={defaultGlobals}
+        />
+      );
+
+      const dialog = screen.getByRole('dialog');
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]'
+        )
+      ).filter((el) => el.getAttribute('tabindex') !== '-1');
+
+      const firstElement = focusable[0];
+      const lastElement = focusable[focusable.length - 1];
+
+      firstElement.focus();
+      expect(document.activeElement).toBe(firstElement);
+
+      fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+      expect(document.activeElement).toBe(lastElement);
+    });
+
+    it('restores focus to previously active element upon closing', () => {
+      const triggerBtn = document.createElement('button');
+      triggerBtn.textContent = 'Open Modal';
+      document.body.appendChild(triggerBtn);
+      triggerBtn.focus();
+      expect(document.activeElement).toBe(triggerBtn);
+
+      const { rerender } = render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={() => {}}
+          globals={defaultGlobals}
+        />
+      );
+
+      rerender(
+        <EnvironmentModal
+          isOpen={false}
+          onClose={() => {}}
+          globals={defaultGlobals}
+        />
+      );
+
+      expect(document.activeElement).toBe(triggerBtn);
+      document.body.removeChild(triggerBtn);
     });
   });
 
@@ -279,6 +359,47 @@ describe('EnvironmentModal', () => {
       expect(keyInputs.length).toBe(2);
       expect(keyInputs[1]).toHaveValue('');
     });
+
+    it('has scope="col" on table headers', () => {
+      render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={() => {}}
+          globals={defaultGlobals}
+        />
+      );
+
+      const headers = screen.getAllByRole('columnheader');
+      expect(headers.length).toBeGreaterThan(0);
+      headers.forEach((th) => {
+        expect(th).toHaveAttribute('scope', 'col');
+      });
+    });
+
+    it('keys revealedSecrets by stable item id or key', () => {
+      render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={() => {}}
+          globals={[
+            { id: 'custom-id-1', key: 'TOKEN_A', value: 'token-val-a', isActive: true, isSecret: true },
+            { key: 'TOKEN_B', value: 'token-val-b', isActive: true, isSecret: true },
+          ]}
+        />
+      );
+
+      const inputA = screen.getByDisplayValue('token-val-a');
+      const inputB = screen.getByDisplayValue('token-val-b');
+
+      expect(inputA).toHaveAttribute('type', 'password');
+      expect(inputB).toHaveAttribute('type', 'password');
+
+      const revealBtns = screen.getAllByRole('button', { name: /revelar segredo/i });
+      fireEvent.click(revealBtns[0]);
+
+      expect(inputA).toHaveAttribute('type', 'text');
+      expect(inputB).toHaveAttribute('type', 'password');
+    });
   });
 
   describe('Ambientes Tab', () => {
@@ -330,6 +451,62 @@ describe('EnvironmentModal', () => {
           expect.objectContaining({ name: 'Staging' }),
         ])
       );
+    });
+
+    it('handles case-insensitive duplicate environment name by selecting existing without duplicating', () => {
+      const handleEnvironmentsChange = vi.fn();
+      render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={() => {}}
+          initialTab="Ambientes"
+          environments={defaultEnvironments}
+          onEnvironmentsChange={handleEnvironmentsChange}
+        />
+      );
+
+      const input = screen.getByPlaceholderText(/novo ambiente/i);
+      const addBtn = screen.getByRole('button', { name: /adicionar ambiente|criar ambiente/i });
+
+      // "Development" already exists; try adding lowercase "development"
+      fireEvent.change(input, { target: { value: 'development' } });
+      fireEvent.click(addBtn);
+
+      // Should NOT call onEnvironmentsChange (no new item added)
+      expect(handleEnvironmentsChange).not.toHaveBeenCalled();
+      // Input should be cleared
+      expect(input).toHaveValue('');
+      // Existing Development tab should be selected
+      const devTab = screen.getByRole('tab', { name: /development/i });
+      expect(devTab).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('supports roving tabIndex and arrow key navigation in environment sub-tabs', () => {
+      render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={() => {}}
+          initialTab="Ambientes"
+          environments={defaultEnvironments}
+        />
+      );
+
+      const devTab = screen.getByRole('tab', { name: /development/i });
+      const prodTab = screen.getByRole('tab', { name: /production/i });
+
+      expect(devTab).toHaveAttribute('tabindex', '0');
+      expect(prodTab).toHaveAttribute('tabindex', '-1');
+
+      devTab.focus();
+      fireEvent.keyDown(devTab, { key: 'ArrowDown' });
+
+      expect(prodTab).toHaveAttribute('aria-selected', 'true');
+      expect(prodTab).toHaveAttribute('tabindex', '0');
+      expect(devTab).toHaveAttribute('tabindex', '-1');
+
+      fireEvent.keyDown(prodTab, { key: 'ArrowUp' });
+      expect(devTab).toHaveAttribute('aria-selected', 'true');
+      expect(devTab).toHaveAttribute('tabindex', '0');
     });
   });
 
@@ -400,6 +577,23 @@ describe('EnvironmentModal', () => {
 
       // Inactive DEBUG variable should not be resolved
       expect(screen.queryByText('DEBUG')).toBeNull();
+    });
+
+    it('provides accessible label and id for active environment select in Calculadas tab', () => {
+      render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={() => {}}
+          initialTab="Calculadas"
+          globals={defaultGlobals}
+          environments={defaultEnvironments}
+        />
+      );
+
+      const select = screen.getByLabelText(/ambiente ativo/i);
+      expect(select).toBeInTheDocument();
+      expect(select).toHaveAttribute('id', 'active-env-select');
+      expect(select).toHaveAttribute('aria-label', 'Ambiente ativo');
     });
   });
 
@@ -491,6 +685,84 @@ describe('EnvironmentModal', () => {
 
       expect(screen.getByDisplayValue('NEW_VAR')).toBeInTheDocument();
       expect(screen.getByDisplayValue('hello_world')).toBeInTheDocument();
+    });
+
+    it('does not wipe data or emit onChange when bulk JSON contains a primitive', () => {
+      const handleGlobalsChange = vi.fn();
+      render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={() => {}}
+          globals={defaultGlobals}
+          onGlobalsChange={handleGlobalsChange}
+        />
+      );
+
+      const bulkToggle = screen.getByRole('button', { name: /modo json|bulk json|json em massa/i });
+      fireEvent.click(bulkToggle);
+
+      const textarea = screen.getByRole('textbox', { name: /editor json|json em massa/i });
+      fireEvent.change(textarea, { target: { value: '123' } });
+
+      fireEvent.click(bulkToggle);
+
+      expect(screen.getByText(/o json deve ser um array de objetos ou um objeto chave-valor/i)).toBeInTheDocument();
+      expect(handleGlobalsChange).not.toHaveBeenCalled();
+    });
+
+    it('formats JSON in textarea without eagerly emitting onChange to parent', () => {
+      const handleGlobalsChange = vi.fn();
+      render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={() => {}}
+          globals={defaultGlobals}
+          onGlobalsChange={handleGlobalsChange}
+        />
+      );
+
+      const bulkToggle = screen.getByRole('button', { name: /modo json|bulk json|json em massa/i });
+      fireEvent.click(bulkToggle);
+
+      const textarea = screen.getByRole('textbox', { name: /editor json|json em massa/i });
+      fireEvent.change(textarea, { target: { value: '{"A":"1","B":"2"}' } });
+
+      const formatBtn = screen.getByRole('button', { name: /formatar/i });
+      fireEvent.click(formatBtn);
+
+      expect((textarea as HTMLTextAreaElement).value).toContain('{\n  "A": "1",\n  "B": "2"\n}');
+      expect(handleGlobalsChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('parseJsonToVariableItems', () => {
+    it('returns null for primitives and null', () => {
+      expect(parseJsonToVariableItems(123)).toBeNull();
+      expect(parseJsonToVariableItems('hello')).toBeNull();
+      expect(parseJsonToVariableItems(true)).toBeNull();
+      expect(parseJsonToVariableItems(null)).toBeNull();
+      expect(parseJsonToVariableItems(undefined)).toBeNull();
+    });
+
+    it('parses array of objects correctly', () => {
+      const input = [
+        { key: 'VAR_1', value: 'VAL_1', isActive: true, isSecret: false },
+        { key: 'VAR_2', value: 'VAL_2', isActive: false, isSecret: true },
+      ];
+      const result = parseJsonToVariableItems(input);
+      expect(result).toEqual([
+        { id: undefined, key: 'VAR_1', value: 'VAL_1', isActive: true, isSecret: false },
+        { id: undefined, key: 'VAR_2', value: 'VAL_2', isActive: false, isSecret: true },
+      ]);
+    });
+
+    it('parses key-value object correctly', () => {
+      const input = { HOST: 'localhost', PORT: 8080 };
+      const result = parseJsonToVariableItems(input);
+      expect(result).toEqual([
+        { key: 'HOST', value: 'localhost', isActive: true, isSecret: false },
+        { key: 'PORT', value: '8080', isActive: true, isSecret: false },
+      ]);
     });
   });
 });
