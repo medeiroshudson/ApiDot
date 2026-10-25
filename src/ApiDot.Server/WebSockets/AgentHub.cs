@@ -5,29 +5,49 @@ using ApiDot.Core.Models;
 
 namespace ApiDot.Server.WebSockets;
 
+public sealed record PendingDispatch(Guid UserId, TaskCompletionSource<HttpResponsePayload> Tcs);
+
 public class AgentHub : IAgentHub
 {
-    private readonly ConcurrentDictionary<Guid, AgentConnection> _sessions = new();
-    private readonly ConcurrentDictionary<Guid, TaskCompletionSource<HttpResponsePayload>> _pendingDispatches = new();
+    private readonly ConcurrentDictionary<Guid, AgentConnection> _agents = new();
+    private readonly ConcurrentDictionary<Guid, PendingDispatch> _pendingDispatches = new();
 
     public int PendingDispatchCount => _pendingDispatches.Count;
 
-    public bool IsAgentOnline(Guid userId) =>
-        _sessions.TryGetValue(userId, out var session) && session.Socket.State == WebSocketState.Open;
+    public bool IsAgentOnline(Guid userId)
+    {
+        ValidateUserId(userId);
+        return _agents.TryGetValue(userId, out var agent) && agent.Socket.State == WebSocketState.Open;
+    }
 
     public void RegisterAgent(Guid userId, string agentName, WebSocket socket)
     {
+        ValidateUserId(userId);
         ArgumentException.ThrowIfNullOrWhiteSpace(agentName);
         ArgumentNullException.ThrowIfNull(socket);
 
-        _sessions[userId] = new AgentConnection(userId, agentName, socket);
+        _agents[userId] = new AgentConnection(userId, agentName, socket);
     }
 
-    public void UnregisterAgent(Guid userId) =>
-        _sessions.TryRemove(userId, out _);
+    public void UnregisterAgent(Guid userId)
+    {
+        ValidateUserId(userId);
+        _agents.TryRemove(userId, out _);
 
-    public AgentConnection? GetAgent(Guid userId) =>
-        _sessions.TryGetValue(userId, out var session) ? session : null;
+        foreach (var kvp in _pendingDispatches)
+        {
+            if (kvp.Value.UserId == userId && _pendingDispatches.TryRemove(kvp.Key, out var pending))
+            {
+                pending.Tcs.TrySetCanceled();
+            }
+        }
+    }
+
+    public AgentConnection? GetAgent(Guid userId)
+    {
+        ValidateUserId(userId);
+        return _agents.TryGetValue(userId, out var agent) ? agent : null;
+    }
 
     public async Task<HttpResponsePayload> DispatchToAgentAsync(
         Guid userId,
@@ -35,26 +55,48 @@ public class AgentHub : IAgentHub
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(dispatch);
+        ValidateUserId(userId);
 
-        if (!IsAgentOnline(userId))
+        if (!_agents.TryGetValue(userId, out var agent) || agent.Socket.State != WebSocketState.Open)
         {
             throw new InvalidOperationException($"No online agent found for user {userId}.");
         }
 
-        var session = _sessions[userId];
+        using var linkedCts = dispatch.TimeoutSeconds > 0
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+            : null;
+
+        if (linkedCts != null)
+        {
+            linkedCts.CancelAfter(TimeSpan.FromSeconds(dispatch.TimeoutSeconds));
+        }
+
+        var effectiveToken = linkedCts?.Token ?? cancellationToken;
+
         var tcs = new TaskCompletionSource<HttpResponsePayload>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _pendingDispatches[dispatch.Id] = tcs;
+        if (!_pendingDispatches.TryAdd(dispatch.Id, new PendingDispatch(userId, tcs)))
+        {
+            throw new InvalidOperationException($"A dispatch with ID {dispatch.Id} is already in flight.");
+        }
 
         try
         {
             var json = JsonSerializer.SerializeToUtf8Bytes(dispatch);
-            await session.Socket.SendAsync(json, WebSocketMessageType.Text, true, cancellationToken);
-
-            using var registration = cancellationToken.Register(() =>
+            await agent.SendLock.WaitAsync(effectiveToken);
+            try
             {
-                if (_pendingDispatches.TryRemove(dispatch.Id, out var pendingTcs))
+                await agent.Socket.SendAsync(json, WebSocketMessageType.Text, true, effectiveToken);
+            }
+            finally
+            {
+                agent.SendLock.Release();
+            }
+
+            using var registration = effectiveToken.Register(() =>
+            {
+                if (_pendingDispatches.TryRemove(dispatch.Id, out var pending))
                 {
-                    pendingTcs.TrySetCanceled(cancellationToken);
+                    pending.Tcs.TrySetCanceled(effectiveToken);
                 }
             });
 
@@ -71,9 +113,17 @@ public class AgentHub : IAgentHub
     {
         ArgumentNullException.ThrowIfNull(response);
 
-        if (_pendingDispatches.TryRemove(response.DispatchId, out var tcs))
+        if (_pendingDispatches.TryRemove(response.DispatchId, out var pending))
         {
-            tcs.TrySetResult(response);
+            pending.Tcs.TrySetResult(response);
+        }
+    }
+
+    private static void ValidateUserId(Guid userId)
+    {
+        if (userId == Guid.Empty)
+        {
+            throw new ArgumentException("User ID cannot be empty.", nameof(userId));
         }
     }
 }

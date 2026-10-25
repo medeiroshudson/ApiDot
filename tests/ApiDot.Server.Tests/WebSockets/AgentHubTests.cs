@@ -64,7 +64,7 @@ public class AgentHubTests
     }
 
     [Fact]
-    public void Hub_Should_Validate_Arguments()
+    public async Task Hub_Should_Validate_Arguments()
     {
         var hub = new AgentHub();
         var userId = Guid.NewGuid();
@@ -76,11 +76,26 @@ public class AgentHubTests
         var actNullSocket = () => hub.RegisterAgent(userId, "Agent", null!);
         actNullSocket.Should().Throw<ArgumentNullException>();
 
+        var actEmptyUserIdRegister = () => hub.RegisterAgent(Guid.Empty, "Agent", socket);
+        actEmptyUserIdRegister.Should().Throw<ArgumentException>();
+
         var actNullDispatch = () => hub.DispatchToAgentAsync(userId, null!, CancellationToken.None);
-        actNullDispatch.Should().ThrowAsync<ArgumentNullException>();
+        await actNullDispatch.Should().ThrowAsync<ArgumentNullException>();
+
+        var actEmptyUserIdDispatch = () => hub.DispatchToAgentAsync(Guid.Empty, new HttpRequestDispatch { Url = "http://localhost" }, CancellationToken.None);
+        await actEmptyUserIdDispatch.Should().ThrowAsync<ArgumentException>();
 
         var actNullResponse = () => hub.ReceiveResponse(null!);
         actNullResponse.Should().Throw<ArgumentNullException>();
+
+        var actEmptyUserIdUnregister = () => hub.UnregisterAgent(Guid.Empty);
+        actEmptyUserIdUnregister.Should().Throw<ArgumentException>();
+
+        var actEmptyUserIdGetAgent = () => hub.GetAgent(Guid.Empty);
+        actEmptyUserIdGetAgent.Should().Throw<ArgumentException>();
+
+        var actEmptyUserIdIsOnline = () => hub.IsAgentOnline(Guid.Empty);
+        actEmptyUserIdIsOnline.Should().Throw<ArgumentException>();
     }
 
     [Fact]
@@ -192,6 +207,138 @@ public class AgentHubTests
         var lateAct = () => hub.ReceiveResponse(lateResponse);
         lateAct.Should().NotThrow();
     }
+
+    [Fact]
+    public async Task Hub_Should_Handle_Concurrent_Dispatches_Without_Crashing()
+    {
+        var hub = new AgentHub();
+        var userId = Guid.NewGuid();
+        var socket = new ConcurrentGuardedWebSocket();
+        hub.RegisterAgent(userId, "Concurrent-Agent", socket);
+
+        const int count = 20;
+        var dispatches = Enumerable.Range(0, count).Select(i => new HttpRequestDispatch
+        {
+            Id = Guid.NewGuid(),
+            Url = $"http://localhost:5000/api/items/{i}"
+        }).ToList();
+
+        // Start all dispatches concurrently
+        var dispatchTasks = dispatches.Select(d => hub.DispatchToAgentAsync(userId, d)).ToList();
+
+        // Wait a small moment to ensure tasks start and hit the lock
+        await Task.Delay(50);
+
+        // Complete each pending dispatch
+        for (var i = 0; i < count; i++)
+        {
+            hub.ReceiveResponse(new HttpResponsePayload
+            {
+                DispatchId = dispatches[i].Id,
+                StatusCode = 200,
+                StatusText = "OK"
+            });
+        }
+
+        var responses = await Task.WhenAll(dispatchTasks);
+        responses.Should().HaveCount(count);
+        responses.Should().OnlyContain(r => r.StatusCode == 200);
+        hub.PendingDispatchCount.Should().Be(0);
+        socket.SentMessages.Should().HaveCount(count);
+    }
+
+    [Fact]
+    public async Task Hub_Should_Cancel_Pending_Dispatches_When_Agent_Unregisters()
+    {
+        var hub = new AgentHub();
+        var userId = Guid.NewGuid();
+        var socket = new TestWebSocket(WebSocketState.Open);
+        hub.RegisterAgent(userId, "Agent-Worker", socket);
+
+        var otherUserId = Guid.NewGuid();
+        var otherSocket = new TestWebSocket(WebSocketState.Open);
+        hub.RegisterAgent(otherUserId, "Other-Agent", otherSocket);
+
+        var dispatch1 = new HttpRequestDispatch
+        {
+            Id = Guid.NewGuid(),
+            Url = "http://localhost:5000/pending1"
+        };
+        var dispatch2 = new HttpRequestDispatch
+        {
+            Id = Guid.NewGuid(),
+            Url = "http://localhost:5000/pending2"
+        };
+        var otherDispatch = new HttpRequestDispatch
+        {
+            Id = Guid.NewGuid(),
+            Url = "http://localhost:5000/other"
+        };
+
+        var task1 = hub.DispatchToAgentAsync(userId, dispatch1);
+        var task2 = hub.DispatchToAgentAsync(userId, dispatch2);
+        var otherTask = hub.DispatchToAgentAsync(otherUserId, otherDispatch);
+
+        hub.PendingDispatchCount.Should().Be(3);
+
+        hub.UnregisterAgent(userId);
+
+        var act1 = async () => await task1;
+        var act2 = async () => await task2;
+
+        await act1.Should().ThrowAsync<OperationCanceledException>();
+        await act2.Should().ThrowAsync<OperationCanceledException>();
+
+        // Other agent's dispatch should remain pending
+        otherTask.IsCompleted.Should().BeFalse();
+        hub.PendingDispatchCount.Should().Be(1);
+
+        // Completing the other agent's dispatch should succeed
+        hub.ReceiveResponse(new HttpResponsePayload
+        {
+            DispatchId = otherDispatch.Id,
+            StatusCode = 200,
+            StatusText = "OK"
+        });
+
+        var otherResponse = await otherTask;
+        otherResponse.StatusCode.Should().Be(200);
+        hub.PendingDispatchCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Hub_Should_Cancel_Pending_Dispatch_On_Timeout()
+    {
+        var hub = new AgentHub();
+        var userId = Guid.NewGuid();
+        var socket = new TestWebSocket(WebSocketState.Open);
+        hub.RegisterAgent(userId, "Agent-Worker", socket);
+
+        var dispatch = new HttpRequestDispatch
+        {
+            Id = Guid.NewGuid(),
+            Url = "http://localhost:5000/slow",
+            TimeoutSeconds = 1
+        };
+
+        var dispatchTask = hub.DispatchToAgentAsync(userId, dispatch);
+        hub.PendingDispatchCount.Should().Be(1);
+
+        var act = async () => await dispatchTask;
+        await act.Should().ThrowAsync<OperationCanceledException>();
+
+        hub.PendingDispatchCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void AgentConnection_Should_Dispose_SendLock_When_Disposed()
+    {
+        var connection = new AgentConnection(Guid.NewGuid(), "Agent", new TestWebSocket());
+        connection.Dispose();
+
+        var act = () => connection.SendLock.Wait(0);
+        act.Should().Throw<ObjectDisposedException>();
+    }
 }
 
 public class TestWebSocket : WebSocket
@@ -247,5 +394,53 @@ public class TestWebSocket : WebSocket
     {
         SentMessages.Add(buffer.ToArray());
         return ValueTask.CompletedTask;
+    }
+}
+
+public class ConcurrentGuardedWebSocket : TestWebSocket
+{
+    private int _activeSends;
+
+    public override async Task SendAsync(ArraySegment<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken)
+    {
+        var current = Interlocked.Increment(ref _activeSends);
+        if (current > 1)
+        {
+            throw new InvalidOperationException($"Concurrent SendAsync detected! Active sends: {current}");
+        }
+
+        try
+        {
+            await Task.Delay(10, cancellationToken);
+            if (buffer.Array != null)
+            {
+                var data = new byte[buffer.Count];
+                Array.Copy(buffer.Array, buffer.Offset, data, 0, buffer.Count);
+                SentMessages.Add(data);
+            }
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _activeSends);
+        }
+    }
+
+    public override async ValueTask SendAsync(ReadOnlyMemory<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken)
+    {
+        var current = Interlocked.Increment(ref _activeSends);
+        if (current > 1)
+        {
+            throw new InvalidOperationException($"Concurrent SendAsync detected! Active sends: {current}");
+        }
+
+        try
+        {
+            await Task.Delay(10, cancellationToken);
+            SentMessages.Add(buffer.ToArray());
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _activeSends);
+        }
     }
 }
