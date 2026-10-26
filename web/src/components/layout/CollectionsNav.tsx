@@ -21,7 +21,7 @@ export interface CollectionsNavProps {
 }
 
 const DEFAULT_ITEMS: NavItem[] = [
-  { id: 'default-collection', name: 'Coleção Padrão', icon: 'collection' },
+  { id: '00000000-0000-0000-0000-000000000001', name: 'Coleção Padrão', icon: 'collection' },
   { id: 'auth-folder', name: 'Autenticação', icon: 'folder', isNested: true },
 ];
 
@@ -65,11 +65,11 @@ export function CollectionsNav({
             </button>
 
             {isCollection && (
-              <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity ml-1 shrink-0">
+              <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity ml-1 shrink-0">
                 <button
                   type="button"
-                  title="Sincronizar Coleção"
-                  aria-label="Sincronizar Coleção"
+                  title={`Sincronizar coleção ${item.name}`}
+                  aria-label={`Sincronizar coleção ${item.name}`}
                   disabled={isSyncing}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -85,8 +85,8 @@ export function CollectionsNav({
 
                 <button
                   type="button"
-                  title="Configurações da Coleção"
-                  aria-label="Configurações da Coleção"
+                  title={`Configurações da coleção ${item.name}`}
+                  aria-label={`Configurações da coleção ${item.name}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     onOpenSettings?.(item);

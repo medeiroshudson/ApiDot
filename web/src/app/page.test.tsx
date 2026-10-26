@@ -197,6 +197,8 @@ describe('Home Page Collection Sync and Settings Integration', () => {
     fireEvent.click(settingsBtns[0]);
 
     const dialog = screen.getByRole('dialog');
+    const urlInput = within(dialog).getByLabelText(/url da especificação/i);
+    fireEvent.change(urlInput, { target: { value: 'https://api.example.com/openapi.json' } });
     const syncBtn = within(dialog).getByRole('button', { name: /sincronizar coleção/i });
     fireEvent.click(syncBtn);
 
@@ -263,5 +265,86 @@ describe('Home Page Collection Sync and Settings Integration', () => {
     });
 
     expect(screen.getByText(/2 requisições adicionadas/i)).toBeInTheDocument();
+  });
+
+  it('displays sync error banner when quick sync fails with non-ok response', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ detail: 'Falha ao conectar ao servidor remoto de OpenAPI' }),
+    } as any);
+
+    render(<Home />);
+
+    const syncBtns = screen.getAllByRole('button', {
+      name: /sincronizar coleção|sincronizar/i,
+    });
+    fireEvent.click(syncBtns[0]);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sync-error-banner')).toBeInTheDocument();
+      expect(
+        screen.getByText('Falha ao conectar ao servidor remoto de OpenAPI')
+      ).toBeInTheDocument();
+    });
+
+    const closeBtn = screen.getByRole('button', { name: /fechar notificação de erro/i });
+    fireEvent.click(closeBtn);
+    expect(screen.queryByTestId('sync-error-banner')).toBeNull();
+  });
+
+  it('displays sync error banner when quick sync network fetch throws', async () => {
+    vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Network error on quick sync'));
+
+    render(<Home />);
+
+    const syncBtns = screen.getAllByRole('button', {
+      name: /sincronizar coleção|sincronizar/i,
+    });
+    fireEvent.click(syncBtns[0]);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sync-error-banner')).toBeInTheDocument();
+      expect(screen.getByText('Network error on quick sync')).toBeInTheDocument();
+    });
+  });
+
+  it('propagates error when saving collection spec fails with HTTP error', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ detail: 'Especificação OpenAPI inválida fornecida' }),
+    } as any);
+
+    render(<Home />);
+
+    const settingsBtns = screen.getAllByRole('button', {
+      name: /configurações da coleção|configurações/i,
+    });
+    fireEvent.click(settingsBtns[0]);
+
+    const dialog = screen.getByRole('dialog');
+    const urlInput = within(dialog).getByLabelText(/url da especificação/i);
+    fireEvent.change(urlInput, { target: { value: 'https://bad.spec.url/spec.json' } });
+
+    const saveBtn = within(dialog).getByRole('button', { name: /salvar especificação/i });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(within(dialog).getByRole('alert')).toBeInTheDocument();
+      expect(
+        within(dialog).getByText('Especificação OpenAPI inválida fornecida')
+      ).toBeInTheDocument();
+    });
+
+    // Modal should remain open
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('initializes default collection with a valid GUID identifier', () => {
+    render(<Home />);
+    const defaultButton = screen.getByRole('button', { name: /^coleção padrão$/i });
+    expect(defaultButton).toBeInTheDocument();
+    expect(defaultButton.getAttribute('aria-current')).toBe('page');
   });
 });

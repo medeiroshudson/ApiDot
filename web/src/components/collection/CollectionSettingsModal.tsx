@@ -37,6 +37,54 @@ export interface CollectionSettingsModalProps {
   onSyncSuccess?: (report: SyncReport) => void;
 }
 
+interface StatCardConfig {
+  key: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  className?: string;
+  getValue: (report: SyncReport) => number;
+}
+
+const STAT_CONFIGS: StatCardConfig[] = [
+  {
+    key: 'addedRequests',
+    label: 'Requisições Adicionadas',
+    icon: PlusCircle,
+    color: 'text-emerald-400',
+    getValue: (r) => r.addedRequests,
+  },
+  {
+    key: 'updatedRequests',
+    label: 'Requisições Atualizadas',
+    icon: Edit3,
+    color: 'text-blue-400',
+    getValue: (r) => r.updatedRequests,
+  },
+  {
+    key: 'fieldsAdded',
+    label: 'Campos Adicionados',
+    icon: PlusCircle,
+    color: 'text-teal-400',
+    getValue: (r) => r.fieldsAdded,
+  },
+  {
+    key: 'fieldsRemoved',
+    label: 'Campos Removidos',
+    icon: Trash2,
+    color: 'text-rose-400',
+    getValue: (r) => r.fieldsRemoved,
+  },
+  {
+    key: 'fieldsPreserved',
+    label: 'Campos Preservados',
+    icon: ShieldCheck,
+    color: 'text-amber-400',
+    className: 'col-span-2 sm:col-span-1',
+    getValue: (r) => r.fieldsPreserved,
+  },
+];
+
 export function CollectionSettingsModal({
   isOpen,
   onClose,
@@ -54,6 +102,11 @@ export function CollectionSettingsModal({
 
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const modalContentRef = useRef<HTMLDivElement>(null);
+  const urlInputRef = useRef<HTMLInputElement>(null);
+  const previousActiveElementRef = useRef<HTMLElement | null>(null);
+  const wasOpenRef = useRef(false);
+
+  const isBusy = isLoading || isSaving;
 
   useEffect(() => {
     if (isOpen && collection) {
@@ -65,21 +118,81 @@ export function CollectionSettingsModal({
   }, [isOpen, collection]);
 
   useEffect(() => {
+    if (isOpen) {
+      wasOpenRef.current = true;
+      previousActiveElementRef.current = (document.activeElement as HTMLElement) || null;
+      const focusTarget = urlInputRef.current || closeButtonRef.current;
+      if (focusTarget) {
+        focusTarget.focus();
+      }
+    } else if (wasOpenRef.current) {
+      wasOpenRef.current = false;
+      if (previousActiveElementRef.current && typeof previousActiveElementRef.current.focus === 'function') {
+        previousActiveElementRef.current.focus();
+      }
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (wasOpenRef.current && previousActiveElementRef.current && typeof previousActiveElementRef.current.focus === 'function') {
+        previousActiveElementRef.current.focus();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isLoading) {
+      if (e.key === 'Escape' && !isBusy) {
+        e.preventDefault();
         onClose();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        if (!modalContentRef.current) return;
+        const focusableElements = Array.from(
+          modalContentRef.current.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter((el) => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true');
+
+        if (focusableElements.length === 0) return;
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement || !modalContentRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement || !modalContentRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, isLoading]);
+  }, [isOpen, onClose, isBusy]);
 
   if (!isOpen) return null;
 
   const handleSync = async () => {
+    const trimmedUrl = specUrl.trim();
+    const trimmedContent = specContent.trim();
+
+    if (!trimmedUrl && !trimmedContent) {
+      setError('Informe uma URL ou o conteúdo da especificação OpenAPI.');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     setReport(null);
@@ -87,8 +200,8 @@ export function CollectionSettingsModal({
     try {
       let syncResult: SyncReport;
       const payload = {
-        specUrl: specUrl.trim() || undefined,
-        specContent: specContent.trim() || undefined,
+        specUrl: trimmedUrl || undefined,
+        specContent: trimmedContent || undefined,
       };
 
       if (onSync) {
@@ -129,12 +242,20 @@ export function CollectionSettingsModal({
 
   const handleSaveOnly = async () => {
     if (!onSave) return;
+    const trimmedUrl = specUrl.trim();
+    const trimmedContent = specContent.trim();
+
+    if (!trimmedUrl && !trimmedContent) {
+      setError('Informe uma URL ou o conteúdo da especificação OpenAPI.');
+      return;
+    }
+
     setIsSaving(true);
     setError(null);
     try {
       await onSave({
-        specUrl: specUrl.trim() || undefined,
-        specContent: specContent.trim() || undefined,
+        specUrl: trimmedUrl || undefined,
+        specContent: trimmedContent || undefined,
       });
       onClose();
     } catch (err: unknown) {
@@ -144,8 +265,6 @@ export function CollectionSettingsModal({
       setIsSaving(false);
     }
   };
-
-  const isBusy = isLoading || isSaving;
 
   return (
     <div
@@ -220,41 +339,21 @@ export function CollectionSettingsModal({
                 <span>Sincronização concluída com sucesso!</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
-                <div className="bg-neutral-900/80 border border-neutral-800 rounded p-2.5">
-                  <div className="flex items-center gap-1.5 text-neutral-400 mb-1">
-                    <PlusCircle className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Requisições Adicionadas</span>
-                  </div>
-                  <span className="text-lg font-bold text-white">{report.addedRequests}</span>
-                </div>
-                <div className="bg-neutral-900/80 border border-neutral-800 rounded p-2.5">
-                  <div className="flex items-center gap-1.5 text-neutral-400 mb-1">
-                    <Edit3 className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Requisições Atualizadas</span>
-                  </div>
-                  <span className="text-lg font-bold text-white">{report.updatedRequests}</span>
-                </div>
-                <div className="bg-neutral-900/80 border border-neutral-800 rounded p-2.5">
-                  <div className="flex items-center gap-1.5 text-neutral-400 mb-1">
-                    <PlusCircle className="w-3.5 h-3.5 text-teal-400" />
-                    <span>Campos Adicionados</span>
-                  </div>
-                  <span className="text-lg font-bold text-white">{report.fieldsAdded}</span>
-                </div>
-                <div className="bg-neutral-900/80 border border-neutral-800 rounded p-2.5">
-                  <div className="flex items-center gap-1.5 text-neutral-400 mb-1">
-                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                    <span>Campos Removidos</span>
-                  </div>
-                  <span className="text-lg font-bold text-white">{report.fieldsRemoved}</span>
-                </div>
-                <div className="col-span-2 sm:col-span-1 bg-neutral-900/80 border border-neutral-800 rounded p-2.5">
-                  <div className="flex items-center gap-1.5 text-neutral-400 mb-1">
-                    <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Campos Preservados</span>
-                  </div>
-                  <span className="text-lg font-bold text-white">{report.fieldsPreserved}</span>
-                </div>
+                {STAT_CONFIGS.map((stat) => {
+                  const Icon = stat.icon;
+                  return (
+                    <div
+                      key={stat.key}
+                      className={`bg-neutral-900/80 border border-neutral-800 rounded p-2.5 ${stat.className || ''}`}
+                    >
+                      <div className="flex items-center gap-1.5 text-neutral-400 mb-1">
+                        <Icon className={`w-3.5 h-3.5 ${stat.color}`} />
+                        <span>{stat.label}</span>
+                      </div>
+                      <span className="text-lg font-bold text-white">{stat.getValue(report)}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -270,6 +369,7 @@ export function CollectionSettingsModal({
                 <span>URL da Especificação OpenAPI (v3.x JSON/YAML)</span>
               </label>
               <input
+                ref={urlInputRef}
                 id="openapi-spec-url"
                 type="url"
                 value={specUrl}

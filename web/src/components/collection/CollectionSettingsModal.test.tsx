@@ -276,6 +276,56 @@ describe('CollectionSettingsModal', () => {
       expect(handleClose).toHaveBeenCalledTimes(1);
     });
 
+    it('does not dismiss on Escape key while saving', async () => {
+      let resolveSave!: () => void;
+      const savePromise = new Promise<void>((resolve) => {
+        resolveSave = resolve;
+      });
+      const handleSave = vi.fn().mockReturnValue(savePromise);
+      const handleClose = vi.fn();
+
+      render(
+        <CollectionSettingsModal
+          isOpen={true}
+          onClose={handleClose}
+          collection={mockCollection}
+          onSave={handleSave}
+        />
+      );
+
+      const saveBtn = screen.getByRole('button', { name: /salvar especificação/i });
+      fireEvent.click(saveBtn);
+
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(handleClose).not.toHaveBeenCalled();
+
+      resolveSave();
+      await waitFor(() => {
+        expect(handleClose).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('does not dismiss on Escape key while syncing', () => {
+      const syncPromise = new Promise<SyncReport>(() => {});
+      const handleSync = vi.fn().mockReturnValue(syncPromise);
+      const handleClose = vi.fn();
+
+      render(
+        <CollectionSettingsModal
+          isOpen={true}
+          onClose={handleClose}
+          collection={mockCollection}
+          onSync={handleSync}
+        />
+      );
+
+      const syncBtn = screen.getByRole('button', { name: /sincronizar coleção/i });
+      fireEvent.click(syncBtn);
+
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(handleClose).not.toHaveBeenCalled();
+    });
+
     it('closes when backdrop is clicked', () => {
       const handleClose = vi.fn();
       render(
@@ -289,6 +339,155 @@ describe('CollectionSettingsModal', () => {
       const backdrop = screen.getByTestId('collection-settings-backdrop');
       fireEvent.click(backdrop);
       expect(handleClose).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Focus Management & Trap', () => {
+    it('auto-focuses URL input when modal opens', () => {
+      render(
+        <CollectionSettingsModal
+          isOpen={true}
+          onClose={() => {}}
+          collection={mockCollection}
+        />
+      );
+      const urlInput = screen.getByLabelText(/url da especificação/i);
+      expect(document.activeElement).toBe(urlInput);
+    });
+
+    it('restores focus to previously active element when closed', () => {
+      const triggerBtn = document.createElement('button');
+      document.body.appendChild(triggerBtn);
+      triggerBtn.focus();
+      expect(document.activeElement).toBe(triggerBtn);
+
+      const { rerender } = render(
+        <CollectionSettingsModal
+          isOpen={true}
+          onClose={() => {}}
+          collection={mockCollection}
+        />
+      );
+
+      rerender(
+        <CollectionSettingsModal
+          isOpen={false}
+          onClose={() => {}}
+          collection={mockCollection}
+        />
+      );
+
+      expect(document.activeElement).toBe(triggerBtn);
+      document.body.removeChild(triggerBtn);
+    });
+
+    it('wraps focus around focusable elements inside the modal on Tab and Shift+Tab', () => {
+      render(
+        <CollectionSettingsModal
+          isOpen={true}
+          onClose={() => {}}
+          collection={mockCollection}
+          onSave={vi.fn()}
+        />
+      );
+
+      const closeBtn = screen.getByRole('button', { name: /fechar modal/i });
+      const syncBtn = screen.getByRole('button', { name: /sincronizar coleção/i });
+
+      // Focus on first element (close button) and press Shift+Tab -> wraps to last element (sync button)
+      closeBtn.focus();
+      expect(document.activeElement).toBe(closeBtn);
+
+      fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+      expect(document.activeElement).toBe(syncBtn);
+
+      // Focus on last element and press Tab -> wraps to first element (close button)
+      syncBtn.focus();
+      expect(document.activeElement).toBe(syncBtn);
+
+      fireEvent.keyDown(window, { key: 'Tab', shiftKey: false });
+      expect(document.activeElement).toBe(closeBtn);
+    });
+  });
+
+  describe('Client-side Validation & Save Error Handling', () => {
+    it('shows error if both specUrl and specContent are empty on sync without firing request', async () => {
+      const handleSync = vi.fn();
+      const emptyCollection: CollectionItem = {
+        id: 'coll-empty',
+        name: 'Empty Coll',
+        openApiSpecUrl: '   ',
+        openApiSpecContent: '',
+      };
+
+      render(
+        <CollectionSettingsModal
+          isOpen={true}
+          onClose={() => {}}
+          collection={emptyCollection}
+          onSync={handleSync}
+        />
+      );
+
+      const syncBtn = screen.getByRole('button', { name: /sincronizar coleção/i });
+      fireEvent.click(syncBtn);
+
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(
+        screen.getByText('Informe uma URL ou o conteúdo da especificação OpenAPI.')
+      ).toBeInTheDocument();
+      expect(handleSync).not.toHaveBeenCalled();
+    });
+
+    it('shows error if both specUrl and specContent are empty on save without firing request', async () => {
+      const handleSave = vi.fn();
+      const emptyCollection: CollectionItem = {
+        id: 'coll-empty',
+        name: 'Empty Coll',
+        openApiSpecUrl: '',
+        openApiSpecContent: '   ',
+      };
+
+      render(
+        <CollectionSettingsModal
+          isOpen={true}
+          onClose={() => {}}
+          collection={emptyCollection}
+          onSave={handleSave}
+        />
+      );
+
+      const saveBtn = screen.getByRole('button', { name: /salvar especificação/i });
+      fireEvent.click(saveBtn);
+
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(
+        screen.getByText('Informe uma URL ou o conteúdo da especificação OpenAPI.')
+      ).toBeInTheDocument();
+      expect(handleSave).not.toHaveBeenCalled();
+    });
+
+    it('propagates error from failed onSave and does not close modal', async () => {
+      const handleSave = vi.fn().mockRejectedValue(new Error('Falha ao gravar arquivo OpenAPI no servidor'));
+      const handleClose = vi.fn();
+
+      render(
+        <CollectionSettingsModal
+          isOpen={true}
+          onClose={handleClose}
+          collection={mockCollection}
+          onSave={handleSave}
+        />
+      );
+
+      const saveBtn = screen.getByRole('button', { name: /salvar especificação/i });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toBeInTheDocument();
+        expect(screen.getByText('Falha ao gravar arquivo OpenAPI no servidor')).toBeInTheDocument();
+      });
+      expect(handleClose).not.toHaveBeenCalled();
     });
   });
 });

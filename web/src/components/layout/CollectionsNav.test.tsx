@@ -10,15 +10,15 @@ describe('CollectionsNav', () => {
 
   it('renders default collection navigation items as buttons', () => {
     render(<CollectionsNav />);
-    expect(screen.getByRole('button', { name: /coleção padrão/i })).toBeDefined();
-    expect(screen.getByRole('button', { name: /autenticação/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^coleção padrão$/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^autenticação$/i })).toBeDefined();
   });
 
   it('triggers onSelect when an item is clicked', () => {
     const handleSelect = vi.fn();
     render(<CollectionsNav items={customItems} onSelect={handleSelect} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /autenticação/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^autenticação$/i }));
     expect(handleSelect).toHaveBeenCalledTimes(1);
     expect(handleSelect).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Autenticação' })
@@ -27,21 +27,29 @@ describe('CollectionsNav', () => {
 
   it('indicates active/current item with aria-current', () => {
     render(<CollectionsNav items={customItems} selectedId="coll-1" />);
-    const defaultButton = screen.getByRole('button', { name: /minha api/i });
+    const defaultButton = screen.getByRole('button', { name: /^minha api$/i });
     expect(defaultButton.getAttribute('aria-current')).toBe('page');
 
-    const authButton = screen.getByRole('button', { name: /autenticação/i });
+    const authButton = screen.getByRole('button', { name: /^autenticação$/i });
     expect(authButton.getAttribute('aria-current')).toBeNull();
   });
 
-  it('renders sync and settings action buttons for collection items', () => {
+  it('renders sync and settings action buttons for collection items with dynamic labels', () => {
     render(<CollectionsNav items={customItems} />);
 
-    const syncButton = screen.getByRole('button', { name: /sincronizar coleção|sincronizar/i });
+    const syncButton = screen.getByRole('button', { name: 'Sincronizar coleção Minha API' });
     expect(syncButton).toBeInTheDocument();
+    expect(syncButton).toHaveAttribute('aria-label', 'Sincronizar coleção Minha API');
 
-    const settingsButton = screen.getByRole('button', { name: /configurações da coleção|configurações/i });
+    const settingsButton = screen.getByRole('button', { name: 'Configurações da coleção Minha API' });
     expect(settingsButton).toBeInTheDocument();
+    expect(settingsButton).toHaveAttribute('aria-label', 'Configurações da coleção Minha API');
+  });
+
+  it('includes group-focus-within:opacity-100 class for keyboard visibility on action buttons container', () => {
+    const { container } = render(<CollectionsNav items={customItems} />);
+    const actionContainer = container.querySelector('.group-focus-within\\:opacity-100');
+    expect(actionContainer).toBeInTheDocument();
   });
 
   it('invokes onSync and stops propagation when sync button is clicked', () => {

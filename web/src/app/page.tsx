@@ -14,7 +14,7 @@ import {
   CollectionSettingsModal,
   SyncReport,
 } from '@/components/collection/CollectionSettingsModal';
-import { CheckCircle2, X } from 'lucide-react';
+import { CheckCircle2, X, AlertCircle } from 'lucide-react';
 
 const DEFAULT_ENVIRONMENTS: EnvironmentGroup[] = [
   { name: 'Development', variables: [] },
@@ -41,7 +41,7 @@ const DEFAULT_REQUESTS: DependencyRequest[] = [
 
 const DEFAULT_COLLECTIONS: NavItem[] = [
   {
-    id: 'default-collection',
+    id: '00000000-0000-0000-0000-000000000001',
     name: 'Coleção Padrão',
     icon: 'collection',
     openApiSpecUrl: '',
@@ -68,7 +68,9 @@ export default function Home() {
 
   // Collections & Sync State
   const [collections, setCollections] = useState<NavItem[]>(DEFAULT_COLLECTIONS);
-  const [selectedCollectionId, setSelectedCollectionId] = useState<string>('default-collection');
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string>(
+    '00000000-0000-0000-0000-000000000001'
+  );
   const [syncingCollectionId, setSyncingCollectionId] = useState<string | null>(null);
   const [isCollectionSettingsOpen, setIsCollectionSettingsOpen] = useState(false);
   const [editingCollection, setEditingCollection] = useState<NavItem | null>(null);
@@ -76,6 +78,7 @@ export default function Home() {
     collectionName: string;
     report: SyncReport;
   } | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const availableVariables = useMemo<AutocompleteVariable[]>(() => {
     const list: AutocompleteVariable[] = [];
@@ -138,14 +141,24 @@ export default function Home() {
           collectionName: item.name,
           report,
         });
+        setSyncError(null);
       } else {
-        // If not yet configured or failed, open settings modal so user can configure
-        setEditingCollection(item);
-        setIsCollectionSettingsOpen(true);
+        let errDetail = `Falha ao sincronizar a coleção "${item.name}".`;
+        try {
+          const json = await res.json();
+          errDetail = json.detail || json.title || json.message || errDetail;
+        } catch {
+          const text = await res.text();
+          if (text) errDetail = text;
+        }
+        setSyncError(errDetail);
+        setAuditBanner(null);
       }
-    } catch {
-      setEditingCollection(item);
-      setIsCollectionSettingsOpen(true);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : `Falha ao sincronizar a coleção "${item.name}".`;
+      setSyncError(msg);
+      setAuditBanner(null);
     } finally {
       setSyncingCollectionId(null);
     }
@@ -156,21 +169,30 @@ export default function Home() {
       collectionName: editingCollection?.name || 'Coleção',
       report,
     });
+    setSyncError(null);
   };
 
   const handleSaveCollectionSpec = async (data: { specUrl?: string; specContent?: string }) => {
     if (!editingCollection) return;
-    try {
-      await fetch(`/api/collections/${editingCollection.id}/openapi`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          openApiSpecUrl: data.specUrl,
-          openApiSpecContent: data.specContent,
-        }),
-      });
-    } catch {
-      // Ignore if local preview
+    const res = await fetch(`/api/collections/${editingCollection.id}/openapi`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        openApiSpecUrl: data.specUrl,
+        openApiSpecContent: data.specContent,
+      }),
+    });
+
+    if (!res.ok) {
+      let errDetail = 'Falha ao salvar configurações da coleção.';
+      try {
+        const json = await res.json();
+        errDetail = json.detail || json.title || json.message || errDetail;
+      } catch {
+        const text = await res.text();
+        if (text) errDetail = text;
+      }
+      throw new Error(errDetail);
     }
 
     setCollections((prev) =>
@@ -345,6 +367,28 @@ export default function Home() {
             aria-label="Fechar notificação de auditoria"
             onClick={() => setAuditBanner(null)}
             className="p-1 rounded text-emerald-400 hover:text-white hover:bg-emerald-900/60 transition-colors cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Sync Error Banner / Notice */}
+      {syncError && (
+        <div
+          role="alert"
+          data-testid="sync-error-banner"
+          className="bg-rose-950/90 border-b border-rose-800 px-4 py-2 flex items-center justify-between text-xs text-rose-200 shrink-0"
+        >
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{syncError}</span>
+          </div>
+          <button
+            type="button"
+            aria-label="Fechar notificação de erro"
+            onClick={() => setSyncError(null)}
+            className="p-1 rounded text-rose-400 hover:text-white hover:bg-rose-900/60 transition-colors cursor-pointer"
           >
             <X className="w-3.5 h-3.5" />
           </button>
