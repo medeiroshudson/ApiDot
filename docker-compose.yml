@@ -4,9 +4,10 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "5000:5000"
+      - "5001:5000"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Data Source=/app/data/apidot.db;Foreign Keys=True
     volumes:
       - ./backend/data:/app/data
 
@@ -18,5 +19,6 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
+      - API_BASE_URL=http://server:5000
     depends_on:
       - server
