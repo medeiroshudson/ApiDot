@@ -1,6 +1,8 @@
 import React from 'react';
 import { Folder, Layers, RefreshCw, Settings } from 'lucide-react';
 
+export * from './CollectionTree';
+
 export interface NavItem {
   id: string;
   name: string;
