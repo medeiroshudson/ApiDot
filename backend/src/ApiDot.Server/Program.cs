@@ -100,99 +100,10 @@ app.MapGet("/api/workspaces/{id:guid}/tree", async (
         .Where(r => r.WorkspaceId == id)
         .ToListAsync(cancellationToken);
 
-    var foldersByParent = allFolders
-        .Where(f => f.ParentFolderId.HasValue)
-        .ToLookup(f => f.ParentFolderId!.Value);
-
-    var rootFoldersByCollection = allFolders
-        .Where(f => f.ParentFolderId == null && f.CollectionId.HasValue)
-        .ToLookup(f => f.CollectionId!.Value);
-
-    var requestsByFolder = allRequests
-        .Where(r => r.FolderId.HasValue)
-        .ToLookup(r => r.FolderId!.Value);
-
-    var requestsByCollectionDirect = allRequests
-        .Where(r => r.CollectionId.HasValue && r.FolderId == null)
-        .ToLookup(r => r.CollectionId!.Value);
-
-    FolderNodeDto BuildFolderNode(Folder folder, HashSet<Guid> visited)
-    {
-        if (!visited.Add(folder.Id))
-        {
-            return new FolderNodeDto(
-                folder.Id,
-                folder.Name,
-                folder.CollectionId.GetValueOrDefault(),
-                folder.ParentFolderId,
-                folder.DefaultTarget,
-                [],
-                []);
-        }
-
-        var subFolders = foldersByParent[folder.Id]
-            .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(f => BuildFolderNode(f, visited))
-            .ToList();
-
-        var requests = requestsByFolder[folder.Id]
-            .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(r => new RequestItemNodeDto(
-                r.Id,
-                r.Name,
-                r.Method,
-                r.Url,
-                r.Target,
-                r.BodyType,
-                r.HeadersJson,
-                r.BodyContent,
-                r.CollectionId,
-                r.FolderId))
-            .ToList();
-
-        return new FolderNodeDto(
-            folder.Id,
-            folder.Name,
-            folder.CollectionId.GetValueOrDefault(),
-            folder.ParentFolderId,
-            folder.DefaultTarget,
-            subFolders,
-            requests);
-    }
-
     var collectionNodes = collections
         .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
-        .Select(col =>
-        {
-            var visited = new HashSet<Guid>();
-            var rootFolders = rootFoldersByCollection[col.Id]
-                .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(f => BuildFolderNode(f, visited))
-                .ToList();
-
-            var directRequests = requestsByCollectionDirect[col.Id]
-                .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(r => new RequestItemNodeDto(
-                    r.Id,
-                    r.Name,
-                    r.Method,
-                    r.Url,
-                    r.Target,
-                    r.BodyType,
-                    r.HeadersJson,
-                    r.BodyContent,
-                    r.CollectionId,
-                    r.FolderId))
-                .ToList();
-
-            return new CollectionNodeDto(
-                col.Id,
-                col.Name,
-                col.DefaultTarget,
-                col.OpenApiSpecUrl,
-                rootFolders,
-                directRequests);
-        }).ToList();
+        .Select(col => Program.BuildCollectionNodeDto(col, allFolders, allRequests))
+        .ToList();
 
     return Results.Ok(new WorkspaceTreeDto(workspace.Id, workspace.Name, collectionNodes));
 });
@@ -409,6 +320,150 @@ app.MapPost("/api/workspaces/{id:guid}/variables/resolve", async (
         Variables = dict,
         Computed = computed.ToList()
     });
+});
+
+app.MapPost("/api/collections", async (
+    CreateCollectionRequest? request,
+    ApiDotDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    if (request is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Request",
+            detail: "A request body is required.");
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Name))
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Collection Name",
+            detail: "Collection Name cannot be empty or whitespace.");
+    }
+
+    var trimmedName = request.Name.Trim();
+    if (trimmedName.Length > 200)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Collection Name",
+            detail: "Collection Name cannot exceed 200 characters.");
+    }
+
+    var workspaceExists = await db.Workspaces.AnyAsync(w => w.Id == request.WorkspaceId, cancellationToken);
+    if (!workspaceExists)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Workspace Not Found",
+            detail: $"Workspace with ID '{request.WorkspaceId}' was not found.");
+    }
+
+    var collection = new Collection
+    {
+        Name = trimmedName,
+        WorkspaceId = request.WorkspaceId,
+        DefaultTarget = request.DefaultTarget
+    };
+
+    db.Collections.Add(collection);
+    await db.SaveChangesAsync(cancellationToken);
+
+    var dto = new CollectionNodeDto(
+        collection.Id,
+        collection.Name,
+        collection.DefaultTarget,
+        collection.OpenApiSpecUrl,
+        [],
+        []);
+
+    return Results.Created($"/api/collections/{collection.Id}", dto);
+});
+
+app.MapPut("/api/collections/{id:guid}", async (
+    Guid id,
+    UpdateCollectionRequest? request,
+    ApiDotDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    if (request is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Request",
+            detail: "A request body is required.");
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Name))
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Collection Name",
+            detail: "Collection Name cannot be empty or whitespace.");
+    }
+
+    var trimmedName = request.Name.Trim();
+    if (trimmedName.Length > 200)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Collection Name",
+            detail: "Collection Name cannot exceed 200 characters.");
+    }
+
+    var collection = await db.Collections
+        .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+
+    if (collection is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Collection Not Found",
+            detail: $"Collection with ID '{id}' was not found.");
+    }
+
+    collection.Name = trimmedName;
+    collection.DefaultTarget = request.DefaultTarget;
+
+    await db.SaveChangesAsync(cancellationToken);
+
+    var allFolders = await db.Folders
+        .AsNoTracking()
+        .Where(f => f.CollectionId == id)
+        .ToListAsync(cancellationToken);
+
+    var allRequests = await db.RequestItems
+        .AsNoTracking()
+        .Where(r => r.CollectionId == id)
+        .ToListAsync(cancellationToken);
+
+    var dto = Program.BuildCollectionNodeDto(collection, allFolders, allRequests);
+
+    return Results.Ok(dto);
+});
+
+app.MapDelete("/api/collections/{id:guid}", async (
+    Guid id,
+    ApiDotDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    var collection = await db.Collections
+        .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+
+    if (collection is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Collection Not Found",
+            detail: $"Collection with ID '{id}' was not found.");
+    }
+
+    db.Collections.Remove(collection);
+    await db.SaveChangesAsync(cancellationToken);
+
+    return Results.NoContent();
 });
 
 app.MapGet("/api/collections/{id:guid}/openapi", async (
@@ -905,5 +960,94 @@ public partial class Program
         {
             return (false, null, "Falha ao obter a especificação da URL fornecida.");
         }
+    }
+
+    public static CollectionNodeDto BuildCollectionNodeDto(
+        Collection col,
+        IReadOnlyList<Folder> allFolders,
+        IReadOnlyList<RequestItem> allRequests)
+    {
+        var foldersByParent = allFolders
+            .Where(f => f.ParentFolderId.HasValue)
+            .ToLookup(f => f.ParentFolderId!.Value);
+
+        var requestsByFolder = allRequests
+            .Where(r => r.FolderId.HasValue)
+            .ToLookup(r => r.FolderId!.Value);
+
+        FolderNodeDto BuildFolderNode(Folder folder, HashSet<Guid> visited)
+        {
+            if (!visited.Add(folder.Id))
+            {
+                return new FolderNodeDto(
+                    folder.Id,
+                    folder.Name,
+                    folder.CollectionId.GetValueOrDefault(),
+                    folder.ParentFolderId,
+                    folder.DefaultTarget,
+                    [],
+                    []);
+            }
+
+            var subFolders = foldersByParent[folder.Id]
+                .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(f => BuildFolderNode(f, visited))
+                .ToList();
+
+            var requests = requestsByFolder[folder.Id]
+                .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(r => new RequestItemNodeDto(
+                    r.Id,
+                    r.Name,
+                    r.Method,
+                    r.Url,
+                    r.Target,
+                    r.BodyType,
+                    r.HeadersJson,
+                    r.BodyContent,
+                    r.CollectionId,
+                    r.FolderId))
+                .ToList();
+
+            return new FolderNodeDto(
+                folder.Id,
+                folder.Name,
+                folder.CollectionId.GetValueOrDefault(),
+                folder.ParentFolderId,
+                folder.DefaultTarget,
+                subFolders,
+                requests);
+        }
+
+        var visitedRoot = new HashSet<Guid>();
+        var rootFolders = allFolders
+            .Where(f => f.ParentFolderId == null && f.CollectionId == col.Id)
+            .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(f => BuildFolderNode(f, visitedRoot))
+            .ToList();
+
+        var directRequests = allRequests
+            .Where(r => r.CollectionId == col.Id && r.FolderId == null)
+            .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(r => new RequestItemNodeDto(
+                r.Id,
+                r.Name,
+                r.Method,
+                r.Url,
+                r.Target,
+                r.BodyType,
+                r.HeadersJson,
+                r.BodyContent,
+                r.CollectionId,
+                r.FolderId))
+            .ToList();
+
+        return new CollectionNodeDto(
+            col.Id,
+            col.Name,
+            col.DefaultTarget,
+            col.OpenApiSpecUrl,
+            rootFolders,
+            directRequests);
     }
 }
