@@ -48,15 +48,6 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
     dbContext.Database.EnsureCreated();
-    if (!dbContext.Workspaces.Any())
-    {
-        dbContext.Workspaces.Add(new Workspace
-        {
-            Id = Program.DefaultWorkspaceId,
-            Name = Program.DefaultWorkspaceName
-        });
-        dbContext.SaveChanges();
-    }
 }
 
 app.UseExceptionHandler();
@@ -66,6 +57,48 @@ app.MapGet("/health", () => Results.Ok(new
     status = "Healthy",
     timestamp = DateTime.UtcNow
 }));
+
+app.MapGet("/api/workspaces", async (
+    ApiDotDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    var workspaces = await db.Workspaces
+        .AsNoTracking()
+        .OrderBy(w => w.Name)
+        .Select(w => new WorkspaceDto(w.Id, w.Name, w.CreatedAtUtc))
+        .ToListAsync(cancellationToken);
+
+    return Results.Ok(workspaces);
+});
+
+app.MapPost("/api/workspaces", async (
+    CreateWorkspaceRequest? request,
+    ApiDotDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    if (request is null || string.IsNullOrWhiteSpace(request.Name))
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Workspace Name",
+            detail: "Workspace Name cannot be empty or whitespace.");
+    }
+
+    var trimmedName = request.Name.Trim();
+    if (trimmedName.Length > 200)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Workspace Name",
+            detail: "Workspace Name cannot exceed 200 characters.");
+    }
+
+    var ws = new Workspace { Name = trimmedName };
+    db.Workspaces.Add(ws);
+    await db.SaveChangesAsync(cancellationToken);
+
+    return Results.Created($"/api/workspaces/{ws.Id}", new WorkspaceDto(ws.Id, ws.Name, ws.CreatedAtUtc));
+});
 
 app.MapGet("/api/workspaces/{id:guid}/tree", async (
     Guid id,

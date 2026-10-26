@@ -4,6 +4,7 @@ WORKDIR /src
 
 # Copy solution and project files for optimal layer caching
 COPY ApiDot.sln ./
+COPY Directory.Build.props* ./
 COPY src/ApiDot.Core/ApiDot.Core.csproj src/ApiDot.Core/
 COPY src/ApiDot.Server/ApiDot.Server.csproj src/ApiDot.Server/
 COPY src/ApiDot.Agent/ApiDot.Agent.csproj src/ApiDot.Agent/

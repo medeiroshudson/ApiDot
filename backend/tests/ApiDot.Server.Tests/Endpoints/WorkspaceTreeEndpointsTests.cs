@@ -104,18 +104,29 @@ public class WorkspaceTreeEndpointsTests : IClassFixture<WebApplicationFactory<P
     }
 
     [Fact]
-    public async Task Startup_Seeds_Default_Workspace_When_Empty()
+    public async Task Startup_Does_Not_Seed_Workspace_Starts_Clean_And_Empty()
     {
-        var client = _factory.CreateClient();
-        var defaultWsId = Program.DefaultWorkspaceId;
-        var response = await client.GetAsync($"/api/workspaces/{defaultWsId}/tree");
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var dbName = "CleanStartupTest_" + Guid.NewGuid();
+        var customFactory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
+            {
+                var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<ApiDotDbContext>));
+                if (descriptor != null) services.Remove(descriptor);
 
-        var tree = await response.Content.ReadFromJsonAsync<WorkspaceTreeDto>();
-        tree.Should().NotBeNull();
-        tree!.WorkspaceId.Should().Be(defaultWsId);
-        tree.WorkspaceName.Should().Be("Default Workspace");
-        tree.Collections.Should().BeEmpty();
+                services.AddDbContext<ApiDotDbContext>(options =>
+                    options.UseSqlite($"Data Source={dbName}.db;Foreign Keys=True"));
+            });
+        });
+
+        using var scope = customFactory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
+        db.Database.EnsureCreated();
+        (await db.Workspaces.AnyAsync()).Should().BeFalse();
+
+        var client = customFactory.CreateClient();
+        var res = await client.GetAsync($"/api/workspaces/{Guid.NewGuid()}/tree");
+        res.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]

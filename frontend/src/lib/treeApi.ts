@@ -39,6 +39,32 @@ export interface WorkspaceTreeDto {
   collections: CollectionNodeDto[];
 }
 
+export interface WorkspaceDto {
+  id: string;
+  name: string;
+  createdAtUtc: string;
+}
+
+export async function fetchWorkspacesApi(): Promise<WorkspaceDto[]> {
+  const res = await fetch('/api/workspaces');
+  if (!res.ok) {
+    throw new Error('Falha ao listar workspaces');
+  }
+  return res.json();
+}
+
+export async function createWorkspaceApi(name: string): Promise<WorkspaceDto> {
+  const res = await fetch('/api/workspaces', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    throw new Error('Falha ao criar workspace');
+  }
+  return res.json();
+}
+
 export interface CreateCollectionRequest {
   name: string;
   workspaceId: string;

@@ -32,6 +32,8 @@ import {
   RequestItemNodeDto,
   ExecutionTarget,
   HttpBodyType,
+  fetchWorkspacesApi,
+  createWorkspaceApi,
 } from '@/lib/treeApi';
 import { CheckCircle2, X, AlertCircle } from 'lucide-react';
 
@@ -107,13 +109,44 @@ function findRequestInTree(
 }
 
 export default function Home() {
-  const [activeWorkspaceId] = useState<string>(DEFAULT_WORKSPACE_ID);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(DEFAULT_WORKSPACE_ID);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isAgentOnline, setIsAgentOnline] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [response, setResponse] = useState<ResponseData | null>(null);
   const [activeMobilePane, setActiveMobilePane] = useState<'request' | 'response'>('request');
   const [mounted, setMounted] = useState(false);
+
+  const ensureWorkspaceId = useCallback(async (): Promise<string> => {
+    try {
+      const list = await fetchWorkspacesApi();
+      if (list && list.length > 0) {
+        if (!activeWorkspaceId || !list.some((w) => w.id === activeWorkspaceId)) {
+          setActiveWorkspaceId(list[0].id);
+        }
+        return list[0].id;
+      }
+      const created = await createWorkspaceApi('Workspace');
+      setActiveWorkspaceId(created.id);
+      return created.id;
+    } catch {
+      return activeWorkspaceId || DEFAULT_WORKSPACE_ID;
+    }
+  }, [activeWorkspaceId]);
+
+  useEffect(() => {
+    async function loadWorkspaces() {
+      try {
+        const list = await fetchWorkspacesApi();
+        if (list && list.length > 0) {
+          setActiveWorkspaceId(list[0].id);
+        }
+      } catch {
+        // offline / fallback
+      }
+    }
+    loadWorkspaces();
+  }, []);
 
   // Tree Hook
   const {
@@ -406,11 +439,12 @@ export default function Home() {
       ? 'Json'
       : 'RawText';
 
+    const wsId = await ensureWorkspaceId();
     const created = await createRequest({
       name,
       method: dataToSave.method || 'GET',
       url: dataToSave.url || '',
-      workspaceId: activeWorkspaceId,
+      workspaceId: wsId,
       collectionId,
       folderId: folderId || null,
       target: dataToSave.target || 'Inherit',
@@ -446,9 +480,10 @@ export default function Home() {
     colId?: string | null,
     foldId?: string | null
   ) => {
+    const wsId = await ensureWorkspaceId();
     const defaultColId = colId || tree?.collections[0]?.id || selectedCollectionId;
     const created = await createRequest({
-      workspaceId: activeWorkspaceId,
+      workspaceId: wsId,
       name,
       method: 'GET',
       url: '',
@@ -699,7 +734,8 @@ export default function Home() {
       onOpenCollectionSettings={handleOpenCollectionSettings}
       onReload={reloadTree}
       onCreateCollection={async (name) => {
-        await createCollection({ name, workspaceId: activeWorkspaceId });
+        const wsId = await ensureWorkspaceId();
+        await createCollection({ name, workspaceId: wsId });
       }}
       onUpdateCollection={async (id, name) => {
         await updateCollection(id, { name });
@@ -708,11 +744,12 @@ export default function Home() {
         await deleteCollection(id);
       }}
       onCreateFolder={async (name, colId, parentId) => {
+        const wsId = await ensureWorkspaceId();
         await createFolder({
           name,
           collectionId: colId,
           parentFolderId: parentId,
-          workspaceId: activeWorkspaceId,
+          workspaceId: wsId,
         });
       }}
       onUpdateFolder={async (id, name) => {

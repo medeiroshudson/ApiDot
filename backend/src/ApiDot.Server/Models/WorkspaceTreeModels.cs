@@ -8,6 +8,14 @@ public record WorkspaceTreeDto(
     string WorkspaceName,
     List<CollectionNodeDto> Collections);
 
+public record WorkspaceDto(
+    Guid Id,
+    string Name,
+    DateTime CreatedAtUtc);
+
+public record CreateWorkspaceRequest(
+    string Name);
+
 public record CollectionNodeDto(
     Guid Id,
     string Name,
