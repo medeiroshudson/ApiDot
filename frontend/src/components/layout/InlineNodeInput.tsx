@@ -33,6 +33,7 @@ export function InlineNodeInput({
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing) return;
     e.stopPropagation();
 
     if (e.key === 'Enter') {

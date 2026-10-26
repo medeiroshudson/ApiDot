@@ -143,10 +143,16 @@ export function ContextMenu({
       }
     };
 
+    const handleScroll = () => {
+      onClose();
+    };
+
+    window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
     document.addEventListener('mousedown', handlePointerDown);
     document.addEventListener('touchstart', handlePointerDown);
 
     return () => {
+      window.removeEventListener('scroll', handleScroll, { capture: true });
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('touchstart', handlePointerDown);
     };
