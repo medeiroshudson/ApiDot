@@ -144,8 +144,7 @@ export default function Home() {
 
       if (res.ok) {
         const data = await res.json();
-        const report: SyncReport =
-          data?.report && typeof data.report === 'object' ? data.report : data;
+        const report: SyncReport = data as SyncReport;
         setAuditBanner({
           collectionName: item.name,
           report,
@@ -364,11 +363,11 @@ export default function Home() {
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>
               <strong>Sincronização de &ldquo;{auditBanner.collectionName}&rdquo;:</strong>{' '}
-              {auditBanner.report.addedRequests} requisições adicionadas,{' '}
-              {auditBanner.report.updatedRequests} atualizadas |{' '}
-              {auditBanner.report.fieldsAdded} campos adicionados,{' '}
-              {auditBanner.report.fieldsRemoved} removidos,{' '}
-              {auditBanner.report.fieldsPreserved} preservados intactos.
+              {auditBanner.report.addedRequests ?? 0} requisições adicionadas,{' '}
+              {auditBanner.report.updatedRequests ?? 0} atualizadas |{' '}
+              {auditBanner.report.fieldsAdded ?? 0} campos adicionados,{' '}
+              {auditBanner.report.fieldsRemoved ?? 0} removidos,{' '}
+              {auditBanner.report.fieldsPreserved ?? 0} preservados intactos.
             </span>
           </div>
           <button

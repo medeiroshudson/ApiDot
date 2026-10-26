@@ -391,19 +391,17 @@ test.describe('Request Editor and Execution Flow E2E', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          report: {
-            addedRequests: 1,
-            updatedRequests: 1,
-            fieldsAdded: 2,
-            fieldsRemoved: 1,
-            fieldsPreserved: 3,
-          },
+          addedRequests: 1,
+          updatedRequests: 1,
+          fieldsAdded: 2,
+          fieldsRemoved: 1,
+          fieldsPreserved: 3,
         }),
       });
     });
 
-    // Click the collection settings icon button (aria-label="Configurações da coleção Minha API")
-    const settingsBtn = page.getByRole('button', { name: 'Configurações da coleção Minha API' }).first();
+    // Click the collection settings icon button in sidebar
+    const settingsBtn = page.locator('aside').getByRole('button', { name: 'Configurações da coleção Minha API' });
     await expect(settingsBtn).toBeVisible();
     await settingsBtn.click();
 
@@ -464,13 +462,13 @@ test.describe('Request Editor and Execution Flow E2E', () => {
       });
     });
 
-    // Click the quick sync icon button (aria-label="Sincronizar coleção Minha API")
-    const quickSyncBtn = page.getByRole('button', { name: 'Sincronizar coleção Minha API' }).first();
+    // Click the quick sync icon button in sidebar
+    const quickSyncBtn = page.locator('aside').getByRole('button', { name: 'Sincronizar coleção Minha API' });
     await expect(quickSyncBtn).toBeVisible();
     await quickSyncBtn.click();
 
     // Verify spinner animation appears during sync
-    const spinner = page.locator('svg.animate-spin');
+    const spinner = quickSyncBtn.locator('svg.animate-spin');
     await expect(spinner).toBeVisible();
 
     // Complete the mock sync

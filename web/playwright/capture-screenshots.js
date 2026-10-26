@@ -2,7 +2,7 @@ const { chromium } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
 
-const SCREENSHOTS_DIR = '/opt/data/workspace/ApiDot/screenshots';
+const SCREENSHOTS_DIR = path.resolve(__dirname, '../../screenshots');
 if (!fs.existsSync(SCREENSHOTS_DIR)) {
   fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 }
