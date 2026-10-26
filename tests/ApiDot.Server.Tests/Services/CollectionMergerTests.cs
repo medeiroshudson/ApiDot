@@ -608,4 +608,323 @@ public class CollectionMergerTests
         netObj["newDns"]!.GetValue<string>().Should().Be("1.1.1.1");
         netObj.ContainsKey("oldDns").Should().BeFalse();
     }
+
+    [Fact]
+    public void Merge_WithCaseCollidingHeaders_ShouldNotThrowArgumentExceptionAndMergeProperly()
+    {
+        // Arrange
+        const string caseCollidingJson = "{\"Accept\": \"application/json\", \"accept\": \"text/plain\"}";
+        var collection = new Collection
+        {
+            Name = "Header Case API",
+            WorkspaceId = Guid.NewGuid(),
+            Requests =
+            [
+                new RequestItem
+                {
+                    Name = "Get Data",
+                    Method = "GET",
+                    Url = "/data",
+                    HeadersJson = caseCollidingJson
+                }
+            ]
+        };
+
+        var imported = new CanonicalCollectionImport
+        {
+            Name = "Header Case Spec",
+            Requests =
+            [
+                new CanonicalRequest
+                {
+                    Name = "Get Data",
+                    Method = "GET",
+                    Path = "/data",
+                    Url = "/data",
+                    Headers = new Dictionary<string, string>
+                    {
+                        { "Authorization", "Bearer token123" }
+                    }
+                }
+            ]
+        };
+
+        // Act
+        var act = () => _merger.Merge(collection, imported);
+
+        // Assert
+        act.Should().NotThrow<ArgumentException>();
+        var updated = collection.Requests.First();
+        var headers = JsonSerializer.Deserialize<Dictionary<string, string>>(updated.HeadersJson);
+        headers.Should().NotBeNull();
+        headers!.ContainsKey("Authorization").Should().BeTrue();
+        headers.ContainsKey("Accept").Should().BeTrue();
+    }
+
+    [Fact]
+    public void Merge_WhenExistingHeadersJsonIsMalformed_ShouldPreserveHeadersJsonUntouched()
+    {
+        // Arrange
+        const string malformedJson = "{ invalid-headers: json :: ";
+        var collection = new Collection
+        {
+            Name = "Malformed Header API",
+            WorkspaceId = Guid.NewGuid(),
+            Requests =
+            [
+                new RequestItem
+                {
+                    Name = "Broken Headers",
+                    Method = "GET",
+                    Url = "/broken",
+                    HeadersJson = malformedJson
+                }
+            ]
+        };
+
+        var imported = new CanonicalCollectionImport
+        {
+            Name = "Spec",
+            Requests =
+            [
+                new CanonicalRequest
+                {
+                    Name = "Broken Headers",
+                    Method = "GET",
+                    Path = "/broken",
+                    Url = "/broken",
+                    Headers = new Dictionary<string, string>
+                    {
+                        { "Authorization", "Bearer something" }
+                    }
+                }
+            ]
+        };
+
+        // Act
+        _merger.Merge(collection, imported);
+
+        // Assert
+        var req = collection.Requests.First();
+        req.HeadersJson.Should().Be(malformedJson);
+    }
+
+    [Fact]
+    public void Merge_WithDeeplyNestedObjectsExceedingDepthLimit_ShouldNotThrowStackOverflowExceptionAndPreserveNode()
+    {
+        // Arrange - build 40-level deep nested JSON (exceeds MaxRecursionDepth of 32)
+        var existingNested = BuildNestedJsonObject(40, "preservedKey", "customValue");
+        var importedNested = BuildNestedJsonObject(40, "newKey", "specValue");
+
+        var collection = new Collection
+        {
+            Name = "Deep Nesting API",
+            WorkspaceId = Guid.NewGuid(),
+            Requests =
+            [
+                new RequestItem
+                {
+                    Name = "Deep Config",
+                    Method = "POST",
+                    Url = "/deep",
+                    BodyType = HttpBodyType.Json,
+                    BodyContent = existingNested
+                }
+            ]
+        };
+
+        var imported = new CanonicalCollectionImport
+        {
+            Name = "Deep Nesting Spec",
+            Requests =
+            [
+                new CanonicalRequest
+                {
+                    Name = "Deep Config",
+                    Method = "POST",
+                    Path = "/deep",
+                    Url = "/deep",
+                    BodyType = HttpBodyType.Json,
+                    BodyContent = importedNested
+                }
+            ]
+        };
+
+        // Act
+        var act = () => _merger.Merge(collection, imported);
+
+        // Assert
+        act.Should().NotThrow<StackOverflowException>();
+        var req = collection.Requests.First();
+        req.BodyContent.Should().NotBeNullOrWhiteSpace();
+        req.BodyContent.Should().Contain("preservedKey");
+    }
+
+    [Fact]
+    public void Merge_WhenExistingBodyIsEmptyAndImportedBodyIsMalformedJson_ShouldNotAssignCorruptedBody()
+    {
+        // Arrange
+        const string malformedJson = "{ invalid json body : ";
+        var collection = new Collection
+        {
+            Name = "Empty Body API",
+            WorkspaceId = Guid.NewGuid(),
+            Requests =
+            [
+                new RequestItem
+                {
+                    Name = "Empty Endpoint",
+                    Method = "POST",
+                    Url = "/empty",
+                    BodyType = HttpBodyType.None,
+                    BodyContent = null
+                }
+            ]
+        };
+
+        var imported = new CanonicalCollectionImport
+        {
+            Name = "Empty Body Spec",
+            Requests =
+            [
+                new CanonicalRequest
+                {
+                    Name = "Empty Endpoint",
+                    Method = "POST",
+                    Path = "/empty",
+                    Url = "/empty",
+                    BodyType = HttpBodyType.Json,
+                    BodyContent = malformedJson
+                }
+            ]
+        };
+
+        // Act
+        var report = _merger.Merge(collection, imported);
+
+        // Assert
+        var req = collection.Requests.First();
+        req.BodyType.Should().Be(HttpBodyType.None);
+        req.BodyContent.Should().BeNull();
+        report.FieldsAdded.Should().Be(0);
+    }
+
+    [Fact]
+    public void Merge_WhenImportedRequestsContainDuplicateRoutes_ShouldNotMatchNewlyCreatedRequest()
+    {
+        // Arrange
+        var collection = new Collection
+        {
+            Name = "Empty Collection",
+            WorkspaceId = Guid.NewGuid(),
+            Requests = []
+        };
+
+        var imported = new CanonicalCollectionImport
+        {
+            Name = "Duplicate Routes Spec",
+            Requests =
+            [
+                new CanonicalRequest
+                {
+                    Name = "List Items 1",
+                    Method = "GET",
+                    Path = "/items",
+                    Url = "/items"
+                },
+                new CanonicalRequest
+                {
+                    Name = "List Items 2",
+                    Method = "GET",
+                    Path = "/items",
+                    Url = "/items"
+                }
+            ]
+        };
+
+        // Act
+        var report = _merger.Merge(collection, imported);
+
+        // Assert
+        report.AddedRequests.Should().Be(2);
+        report.UpdatedRequests.Should().Be(0);
+        collection.Requests.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void Merge_WhenExistingHasMultipleRequestsWithSameRoute_ShouldMatchEachInSnapshotOrder()
+    {
+        // Arrange
+        var id1 = Guid.NewGuid();
+        var id2 = Guid.NewGuid();
+        var collection = new Collection
+        {
+            Name = "Multi Match API",
+            WorkspaceId = Guid.NewGuid(),
+            Requests =
+            [
+                new RequestItem
+                {
+                    Id = id1,
+                    Name = "Existing 1",
+                    Method = "GET",
+                    Url = "/items",
+                    HeadersJson = "{}"
+                },
+                new RequestItem
+                {
+                    Id = id2,
+                    Name = "Existing 2",
+                    Method = "GET",
+                    Url = "/items",
+                    HeadersJson = "{}"
+                }
+            ]
+        };
+
+        var imported = new CanonicalCollectionImport
+        {
+            Name = "Multi Match Spec",
+            Requests =
+            [
+                new CanonicalRequest
+                {
+                    Name = "Imported 1",
+                    Method = "GET",
+                    Path = "/items",
+                    Url = "/items"
+                },
+                new CanonicalRequest
+                {
+                    Name = "Imported 2",
+                    Method = "GET",
+                    Path = "/items",
+                    Url = "/items"
+                }
+            ]
+        };
+
+        // Act
+        var report = _merger.Merge(collection, imported);
+
+        // Assert
+        report.UpdatedRequests.Should().Be(2);
+        report.AddedRequests.Should().Be(0);
+        collection.Requests.Should().HaveCount(2);
+    }
+
+    private static string BuildNestedJsonObject(int depth, string leafKey, string leafValue)
+    {
+        var sb = new System.Text.StringBuilder();
+        for (var i = 0; i < depth; i++)
+        {
+            sb.Append($"{{\"level{i}\": ");
+        }
+        sb.Append($"{{\"{leafKey}\": \"{leafValue}\"}}");
+        for (var i = 0; i < depth; i++)
+        {
+            sb.Append('}');
+        }
+        return sb.ToString();
+    }
 }

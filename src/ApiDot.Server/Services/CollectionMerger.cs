@@ -9,6 +9,7 @@ namespace ApiDot.Server.Services;
 
 public class CollectionMerger : ICollectionMerger
 {
+    private const int MaxRecursionDepth = 32;
     private static readonly JsonSerializerOptions IndentedOptions = new() { WriteIndented = true };
 
     public SyncReport Merge(Collection collection, CanonicalCollectionImport imported)
@@ -18,16 +19,65 @@ public class CollectionMerger : ICollectionMerger
 
         var report = new SyncReport();
         var matchedExistingIds = new HashSet<Guid>();
+        var initialExisting = collection.Requests.ToList();
+
+        var routeIndex = new Dictionary<(string Method, string Route), List<RequestItem>>();
+        var orderIndex = new Dictionary<Guid, int>(initialExisting.Count);
+
+        for (var i = 0; i < initialExisting.Count; i++)
+        {
+            var req = initialExisting[i];
+            orderIndex[req.Id] = i;
+
+            var method = req.Method?.ToUpperInvariant() ?? string.Empty;
+            var route = NormalizeRoute(req.Url);
+            var key = (method, route);
+            if (!routeIndex.TryGetValue(key, out var list))
+            {
+                list = new List<RequestItem>();
+                routeIndex[key] = list;
+            }
+            list.Add(req);
+        }
 
         foreach (var canonicalReq in imported.Requests)
         {
+            var canonicalMethod = canonicalReq.Method?.ToUpperInvariant() ?? string.Empty;
             var canonicalPathRoute = NormalizeRoute(canonicalReq.Path);
             var canonicalUrlRoute = NormalizeRoute(canonicalReq.Url);
 
-            var matched = collection.Requests.FirstOrDefault(existing =>
-                !matchedExistingIds.Contains(existing.Id) &&
-                string.Equals(existing.Method, canonicalReq.Method, StringComparison.OrdinalIgnoreCase) &&
-                IsRouteMatch(NormalizeRoute(existing.Url), canonicalPathRoute, canonicalUrlRoute));
+            RequestItem? matched = null;
+
+            if (canonicalPathRoute == canonicalUrlRoute)
+            {
+                if (routeIndex.TryGetValue((canonicalMethod, canonicalPathRoute), out var candidates))
+                {
+                    matched = candidates.FirstOrDefault(r => !matchedExistingIds.Contains(r.Id));
+                }
+            }
+            else
+            {
+                RequestItem? pathMatch = null;
+                if (!string.IsNullOrEmpty(canonicalPathRoute) && routeIndex.TryGetValue((canonicalMethod, canonicalPathRoute), out var pathCandidates))
+                {
+                    pathMatch = pathCandidates.FirstOrDefault(r => !matchedExistingIds.Contains(r.Id));
+                }
+
+                RequestItem? urlMatch = null;
+                if (!string.IsNullOrEmpty(canonicalUrlRoute) && routeIndex.TryGetValue((canonicalMethod, canonicalUrlRoute), out var urlCandidates))
+                {
+                    urlMatch = urlCandidates.FirstOrDefault(r => !matchedExistingIds.Contains(r.Id));
+                }
+
+                if (pathMatch != null && urlMatch != null)
+                {
+                    matched = orderIndex[pathMatch.Id] <= orderIndex[urlMatch.Id] ? pathMatch : urlMatch;
+                }
+                else
+                {
+                    matched = pathMatch ?? urlMatch;
+                }
+            }
 
             if (matched != null)
             {
@@ -44,8 +94,8 @@ public class CollectionMerger : ICollectionMerger
                     Id = Guid.NewGuid(),
                     Name = !string.IsNullOrWhiteSpace(canonicalReq.Name)
                         ? canonicalReq.Name
-                        : $"{canonicalReq.Method.ToUpperInvariant()} {canonicalReq.Path}",
-                    Method = canonicalReq.Method.ToUpperInvariant(),
+                        : $"{canonicalMethod} {canonicalReq.Path}",
+                    Method = canonicalMethod,
                     Url = !string.IsNullOrWhiteSpace(canonicalReq.Url) ? canonicalReq.Url : canonicalReq.Path,
                     HeadersJson = SerializeHeaders(canonicalReq.Headers),
                     BodyType = canonicalReq.BodyType,
@@ -58,17 +108,12 @@ public class CollectionMerger : ICollectionMerger
                     CreatedAtUtc = DateTime.UtcNow
                 };
 
+                matchedExistingIds.Add(newRequest.Id);
                 collection.Requests.Add(newRequest);
             }
         }
 
         return report;
-    }
-
-    private static bool IsRouteMatch(string existingRoute, string canonicalPathRoute, string canonicalUrlRoute)
-    {
-        return string.Equals(existingRoute, canonicalPathRoute, StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(existingRoute, canonicalUrlRoute, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void MergeRequest(RequestItem existing, CanonicalRequest canonicalReq, SyncReport report)
@@ -93,18 +138,32 @@ public class CollectionMerger : ICollectionMerger
         {
             if (canonicalReq.BodyType != HttpBodyType.None && !string.IsNullOrWhiteSpace(canonicalReq.BodyContent))
             {
-                existing.BodyType = canonicalReq.BodyType;
-                existing.BodyContent = canonicalReq.BodyContent;
                 if (canonicalReq.BodyType == HttpBodyType.Json)
                 {
+                    JsonNode? node;
                     try
                     {
-                        var node = JsonNode.Parse(canonicalReq.BodyContent);
-                        report.FieldsAdded += CountFields(node);
+                        node = JsonNode.Parse(canonicalReq.BodyContent);
                     }
                     catch
                     {
+                        // Invalid JSON, do not assign corrupted data
+                        return;
                     }
+
+                    if (node == null)
+                    {
+                        return;
+                    }
+
+                    existing.BodyType = canonicalReq.BodyType;
+                    existing.BodyContent = canonicalReq.BodyContent;
+                    report.FieldsAdded += CountFields(node);
+                }
+                else
+                {
+                    existing.BodyType = canonicalReq.BodyType;
+                    existing.BodyContent = canonicalReq.BodyContent;
                 }
             }
             return;
@@ -155,8 +214,13 @@ public class CollectionMerger : ICollectionMerger
         }
     }
 
-    private static JsonObject MergeObjects(JsonObject existingObj, JsonObject newObj, SyncReport report)
+    private static JsonObject MergeObjects(JsonObject existingObj, JsonObject newObj, SyncReport report, int depth = 0)
     {
+        if (depth > MaxRecursionDepth)
+        {
+            return (JsonObject)existingObj.DeepClone();
+        }
+
         var merged = new JsonObject();
 
         foreach (var newProp in newObj)
@@ -168,18 +232,18 @@ public class CollectionMerger : ICollectionMerger
             {
                 if (existingVal is JsonObject existingChildObj && newVal is JsonObject newChildObj)
                 {
-                    merged[propName] = MergeObjects(existingChildObj, newChildObj, report);
+                    merged[propName] = MergeObjects(existingChildObj, newChildObj, report, depth + 1);
                 }
                 else
                 {
                     merged[propName] = existingVal?.DeepClone();
-                    report.FieldsPreserved += CountFields(existingVal);
+                    report.FieldsPreserved += CountFields(existingVal, depth + 1);
                 }
             }
             else
             {
                 merged[propName] = newVal?.DeepClone();
-                report.FieldsAdded += CountFields(newVal);
+                report.FieldsAdded += CountFields(newVal, depth + 1);
             }
         }
 
@@ -188,15 +252,20 @@ public class CollectionMerger : ICollectionMerger
             var propName = existingProp.Key;
             if (!newObj.ContainsKey(propName))
             {
-                report.FieldsRemoved += CountFields(existingProp.Value);
+                report.FieldsRemoved += CountFields(existingProp.Value, depth + 1);
             }
         }
 
         return merged;
     }
 
-    private static int CountFields(JsonNode? node)
+    private static int CountFields(JsonNode? node, int depth = 0)
     {
+        if (depth > MaxRecursionDepth)
+        {
+            return 1;
+        }
+
         if (node is null)
         {
             return 1;
@@ -212,7 +281,7 @@ public class CollectionMerger : ICollectionMerger
             var sum = 0;
             foreach (var kvp in obj)
             {
-                sum += CountFields(kvp.Value);
+                sum += CountFields(kvp.Value, depth + 1);
             }
             return sum;
         }
@@ -222,19 +291,28 @@ public class CollectionMerger : ICollectionMerger
 
     private static void MergeHeaders(RequestItem existing, CanonicalRequest canonicalReq)
     {
-        Dictionary<string, string> existingHeaders;
-        try
+        Dictionary<string, string>? existingHeaders = null;
+        if (!string.IsNullOrWhiteSpace(existing.HeadersJson))
         {
-            existingHeaders = !string.IsNullOrWhiteSpace(existing.HeadersJson)
-                ? JsonSerializer.Deserialize<Dictionary<string, string>>(existing.HeadersJson) ?? new(StringComparer.OrdinalIgnoreCase)
-                : new(StringComparer.OrdinalIgnoreCase);
-        }
-        catch
-        {
-            existingHeaders = new(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                existingHeaders = JsonSerializer.Deserialize<Dictionary<string, string>>(existing.HeadersJson);
+            }
+            catch
+            {
+                // Malformed JSON: preserve existing.HeadersJson completely untouched
+                return;
+            }
         }
 
-        var mergedHeaders = new Dictionary<string, string>(existingHeaders, StringComparer.OrdinalIgnoreCase);
+        var mergedHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (existingHeaders != null)
+        {
+            foreach (var kvp in existingHeaders)
+            {
+                mergedHeaders[kvp.Key] = kvp.Value;
+            }
+        }
 
         if (canonicalReq.Headers != null)
         {
