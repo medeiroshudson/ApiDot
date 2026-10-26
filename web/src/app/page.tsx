@@ -47,6 +47,13 @@ const DEFAULT_COLLECTIONS: NavItem[] = [
     openApiSpecUrl: '',
     openApiSpecContent: '',
   },
+  {
+    id: '00000000-0000-0000-0000-000000000002',
+    name: 'Minha API',
+    icon: 'collection',
+    openApiSpecUrl: '',
+    openApiSpecContent: '',
+  },
   { id: 'auth-folder', name: 'Autenticação', icon: 'folder', isNested: true },
 ];
 
@@ -136,7 +143,9 @@ export default function Home() {
       });
 
       if (res.ok) {
-        const report: SyncReport = await res.json();
+        const data = await res.json();
+        const report: SyncReport =
+          data?.report && typeof data.report === 'object' ? data.report : data;
         setAuditBanner({
           collectionName: item.name,
           report,

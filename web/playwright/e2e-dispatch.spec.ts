@@ -380,4 +380,108 @@ test.describe('Request Editor and Execution Flow E2E', () => {
     await expect(keyTokens.filter({ hasText: '"success"' })).toBeVisible();
     await expect(keyTokens.filter({ hasText: '"authorizedUser"' })).toBeVisible();
   });
+
+  test('should sync collection via OpenAPI modal with non-destructive merge report and display audit banner', async ({ page }) => {
+    // Verify version badge shows v0.4.0
+    await expect(page.getByText('v0.4.0')).toBeVisible();
+
+    // Mock POST **/api/collections/**/sync to return SyncReport
+    await page.route('**/api/collections/**/sync', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          report: {
+            addedRequests: 1,
+            updatedRequests: 1,
+            fieldsAdded: 2,
+            fieldsRemoved: 1,
+            fieldsPreserved: 3,
+          },
+        }),
+      });
+    });
+
+    // Click the collection settings icon button (aria-label="Configurações da coleção Minha API")
+    const settingsBtn = page.getByRole('button', { name: 'Configurações da coleção Minha API' }).first();
+    await expect(settingsBtn).toBeVisible();
+    await settingsBtn.click();
+
+    // Verify CollectionSettingsModal opens (role="dialog")
+    const modal = page.getByRole('dialog');
+    await expect(modal).toBeVisible();
+
+    // Fill in OpenAPI Spec URL
+    const urlInput = modal.getByLabel('URL da Especificação OpenAPI (v3.x JSON/YAML)');
+    await urlInput.fill('https://api.example.com/openapi.json');
+
+    // Click "Sincronizar Coleção"
+    const syncBtn = modal.getByRole('button', { name: 'Sincronizar Coleção' });
+    await syncBtn.click();
+
+    // Verify sync report card appears (data-testid="sync-report-card") with audit counts
+    const reportCard = modal.getByTestId('sync-report-card');
+    await expect(reportCard).toBeVisible();
+    await expect(reportCard).toContainText('Requisições Adicionadas');
+    await expect(reportCard).toContainText('Requisições Atualizadas');
+    await expect(reportCard).toContainText('Campos Adicionados');
+    await expect(reportCard).toContainText('Campos Removidos');
+    await expect(reportCard).toContainText('Campos Preservados');
+
+    // Close modal
+    const closeBtn = modal.getByRole('button', { name: 'Fechar modal' });
+    await closeBtn.click();
+    await expect(modal).not.toBeVisible();
+
+    // Verify the audit banner (data-testid="audit-summary-banner") is visible on the main page
+    const auditBanner = page.getByTestId('audit-summary-banner');
+    await expect(auditBanner).toBeVisible();
+    await expect(auditBanner).toContainText('1 requisições adicionadas');
+    await expect(auditBanner).toContainText('1 atualizadas');
+    await expect(auditBanner).toContainText('2 campos adicionados');
+    await expect(auditBanner).toContainText('1 removidos');
+    await expect(auditBanner).toContainText('3 preservados intactos');
+  });
+
+  test('should perform quick sync on collection with spinner animation and show audit summary banner', async ({ page }) => {
+    let resolveSync: () => void = () => {};
+    const syncPromise = new Promise<void>((resolve) => {
+      resolveSync = resolve;
+    });
+
+    await page.route('**/api/collections/**/sync', async (route) => {
+      await syncPromise;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          addedRequests: 2,
+          updatedRequests: 1,
+          fieldsAdded: 3,
+          fieldsRemoved: 0,
+          fieldsPreserved: 5,
+        }),
+      });
+    });
+
+    // Click the quick sync icon button (aria-label="Sincronizar coleção Minha API")
+    const quickSyncBtn = page.getByRole('button', { name: 'Sincronizar coleção Minha API' }).first();
+    await expect(quickSyncBtn).toBeVisible();
+    await quickSyncBtn.click();
+
+    // Verify spinner animation appears during sync
+    const spinner = page.locator('svg.animate-spin');
+    await expect(spinner).toBeVisible();
+
+    // Complete the mock sync
+    resolveSync();
+
+    // Verify audit banner displays results on completion
+    const auditBanner = page.getByTestId('audit-summary-banner');
+    await expect(auditBanner).toBeVisible();
+    await expect(auditBanner).toContainText('2 requisições adicionadas');
+    await expect(auditBanner).toContainText('1 atualizadas');
+    await expect(auditBanner).toContainText('3 campos adicionados');
+    await expect(auditBanner).toContainText('5 preservados intactos');
+  });
 });

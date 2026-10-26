@@ -205,7 +205,11 @@ export function CollectionSettingsModal({
       };
 
       if (onSync) {
-        syncResult = await onSync(payload);
+        const result = await onSync(payload);
+        syncResult =
+          (result as any)?.report && typeof (result as any).report === 'object'
+            ? (result as any).report
+            : result;
       } else if (collection?.id) {
         const res = await fetch(`/api/collections/${collection.id}/sync`, {
           method: 'POST',
@@ -225,7 +229,9 @@ export function CollectionSettingsModal({
           throw new Error(errDetail);
         }
 
-        syncResult = await res.json();
+        const json = await res.json();
+        syncResult =
+          json?.report && typeof json.report === 'object' ? json.report : json;
       } else {
         throw new Error('Nenhuma coleção selecionada para sincronização.');
       }
