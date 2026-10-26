@@ -885,24 +885,23 @@ export function CollectionTree({
         className="flex-1 overflow-y-auto space-y-0.5 min-h-[120px] focus:outline-none"
       >
         {displayedTree && displayedTree.collections.length > 0 ? (
-          <>
-            {displayedTree.collections.map(renderCollection)}
-            {inlineCreating?.type === 'collection' && (
-              <div style={{ paddingLeft: '8px' }} className="flex items-center gap-1.5 pr-2 py-1">
-                <Layers className="w-4 h-4 text-blue-400/70 shrink-0" />
-                <InlineNodeInput
-                  initialValue=""
-                  placeholder="Nome da coleção..."
-                  aria-label="Nova coleção"
-                  onCommit={handleCommitCreate}
-                  onCancel={handleCancelCreate}
-                />
-              </div>
-            )}
-          </>
-        ) : (
+          displayedTree.collections.map(renderCollection)
+        ) : !inlineCreating ? (
           <div className="py-6 text-center text-xs text-neutral-500">
             {effectiveFilter ? 'Nenhum item encontrado.' : 'Nenhuma coleção disponível.'}
+          </div>
+        ) : null}
+
+        {inlineCreating?.type === 'collection' && (
+          <div style={{ paddingLeft: '8px' }} className="flex items-center gap-1.5 pr-2 py-1">
+            <Layers className="w-4 h-4 text-blue-400/70 shrink-0" />
+            <InlineNodeInput
+              initialValue=""
+              placeholder="Nome da coleção..."
+              aria-label="Nova coleção"
+              onCommit={handleCommitCreate}
+              onCancel={handleCancelCreate}
+            />
           </div>
         )}
 
@@ -939,6 +938,12 @@ export function CollectionTree({
           role="dialog"
           aria-modal="true"
           aria-labelledby="confirm-delete-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDeleteModal(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setDeleteModal(null);
+          }}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-100"
         >
           <div className="bg-zinc-900 border border-zinc-800 rounded-lg max-w-sm w-full p-4 shadow-2xl shadow-black/80 space-y-4">
