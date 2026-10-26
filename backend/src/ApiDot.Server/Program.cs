@@ -48,6 +48,15 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
     dbContext.Database.EnsureCreated();
+    if (!dbContext.Workspaces.Any())
+    {
+        dbContext.Workspaces.Add(new Workspace
+        {
+            Id = Program.DefaultWorkspaceId,
+            Name = Program.DefaultWorkspaceName
+        });
+        dbContext.SaveChanges();
+    }
 }
 
 app.UseExceptionHandler();
@@ -57,6 +66,136 @@ app.MapGet("/health", () => Results.Ok(new
     status = "Healthy",
     timestamp = DateTime.UtcNow
 }));
+
+app.MapGet("/api/workspaces/{id:guid}/tree", async (
+    Guid id,
+    ApiDotDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    var workspace = await db.Workspaces
+        .AsNoTracking()
+        .FirstOrDefaultAsync(w => w.Id == id, cancellationToken);
+
+    if (workspace is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Workspace Not Found",
+            detail: $"Workspace with ID '{id}' was not found.");
+    }
+
+    var collections = await db.Collections
+        .AsNoTracking()
+        .Where(c => c.WorkspaceId == id)
+        .OrderBy(c => c.Name)
+        .ToListAsync(cancellationToken);
+
+    var allFolders = await db.Folders
+        .AsNoTracking()
+        .Where(f => f.WorkspaceId == id)
+        .ToListAsync(cancellationToken);
+
+    var allRequests = await db.RequestItems
+        .AsNoTracking()
+        .Where(r => r.WorkspaceId == id)
+        .ToListAsync(cancellationToken);
+
+    var foldersByParent = allFolders
+        .Where(f => f.ParentFolderId.HasValue)
+        .ToLookup(f => f.ParentFolderId!.Value);
+
+    var rootFoldersByCollection = allFolders
+        .Where(f => f.ParentFolderId == null && f.CollectionId.HasValue)
+        .ToLookup(f => f.CollectionId!.Value);
+
+    var requestsByFolder = allRequests
+        .Where(r => r.FolderId.HasValue)
+        .ToLookup(r => r.FolderId!.Value);
+
+    var requestsByCollectionDirect = allRequests
+        .Where(r => r.CollectionId.HasValue && r.FolderId == null)
+        .ToLookup(r => r.CollectionId!.Value);
+
+    FolderNodeDto BuildFolderNode(Folder folder, HashSet<Guid> visited)
+    {
+        if (!visited.Add(folder.Id))
+        {
+            return new FolderNodeDto(
+                folder.Id,
+                folder.Name,
+                folder.CollectionId.GetValueOrDefault(),
+                folder.ParentFolderId,
+                folder.DefaultTarget,
+                [],
+                []);
+        }
+
+        var subFolders = foldersByParent[folder.Id]
+            .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(f => BuildFolderNode(f, visited))
+            .ToList();
+
+        var requests = requestsByFolder[folder.Id]
+            .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(r => new RequestItemNodeDto(
+                r.Id,
+                r.Name,
+                r.Method,
+                r.Url,
+                r.Target,
+                r.BodyType,
+                r.HeadersJson,
+                r.BodyContent,
+                r.CollectionId,
+                r.FolderId))
+            .ToList();
+
+        return new FolderNodeDto(
+            folder.Id,
+            folder.Name,
+            folder.CollectionId.GetValueOrDefault(),
+            folder.ParentFolderId,
+            folder.DefaultTarget,
+            subFolders,
+            requests);
+    }
+
+    var collectionNodes = collections
+        .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+        .Select(col =>
+        {
+            var visited = new HashSet<Guid>();
+            var rootFolders = rootFoldersByCollection[col.Id]
+                .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(f => BuildFolderNode(f, visited))
+                .ToList();
+
+            var directRequests = requestsByCollectionDirect[col.Id]
+                .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(r => new RequestItemNodeDto(
+                    r.Id,
+                    r.Name,
+                    r.Method,
+                    r.Url,
+                    r.Target,
+                    r.BodyType,
+                    r.HeadersJson,
+                    r.BodyContent,
+                    r.CollectionId,
+                    r.FolderId))
+                .ToList();
+
+            return new CollectionNodeDto(
+                col.Id,
+                col.Name,
+                col.DefaultTarget,
+                col.OpenApiSpecUrl,
+                rootFolders,
+                directRequests);
+        }).ToList();
+
+    return Results.Ok(new WorkspaceTreeDto(workspace.Id, workspace.Name, collectionNodes));
+});
 
 app.MapGet("/api/workspaces/{id:guid}/variables", async (
     Guid id,
@@ -618,6 +757,9 @@ app.Run();
 
 public partial class Program
 {
+    public static readonly Guid DefaultWorkspaceId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    public const string DefaultWorkspaceName = "Default Workspace";
+
     public const long MaxSpecSizeBytes = 10 * 1024 * 1024; // 10MB
 
     public static bool IsSafeSpecUrl(string? url, out Uri? validUri)
