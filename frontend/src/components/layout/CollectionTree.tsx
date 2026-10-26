@@ -14,9 +14,11 @@ import {
   Download,
   Settings,
   AlertTriangle,
+  Briefcase,
 } from 'lucide-react';
 import {
   WorkspaceTreeDto,
+  WorkspaceDto,
   CollectionNodeDto,
   FolderNodeDto,
   RequestItemNodeDto,
@@ -24,6 +26,7 @@ import {
 import { filterTree, ActiveTreeItem, ActiveTreeItemType } from '@/hooks/useCollectionTree';
 import { ContextMenu, ContextMenuItem, ContextMenuPosition } from '@/components/common/ContextMenu';
 import { InlineNodeInput } from './InlineNodeInput';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 export const HTTP_METHOD_BADGES: Record<string, string> = {
   GET: 'text-emerald-400 bg-emerald-950/60 border-emerald-800/80',
@@ -64,6 +67,13 @@ export interface CollectionTreeProps {
   onOpenCollectionSettings?: (collection: CollectionNodeDto) => void;
   onOpenSettings?: (collection: CollectionNodeDto) => void;
   className?: string;
+
+  // Workspace integration props
+  workspaces?: WorkspaceDto[];
+  activeWorkspaceId?: string | null;
+  onSelectWorkspace?: (id: string) => void;
+  onCreateWorkspaceClick?: () => void;
+  isWorkspacesLoading?: boolean;
 }
 
 interface InlineEditingState {
@@ -161,12 +171,21 @@ export function CollectionTree({
   onOpenCollectionSettings,
   onOpenSettings,
   className = '',
+  workspaces,
+  activeWorkspaceId,
+  onSelectWorkspace,
+  onCreateWorkspaceClick,
+  isWorkspacesLoading = false,
 }: CollectionTreeProps) {
   const treeContainerRef = useRef<HTMLDivElement>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
   const [localFilter, setLocalFilter] = useState('');
   const [isNewMenuOpen, setIsNewMenuOpen] = useState(false);
   const [newMenuPos, setNewMenuPos] = useState<ContextMenuPosition>({ x: 0, y: 0 });
+
+  const hasWorkspaces = workspaces !== undefined;
+  const hasActiveWorkspace =
+    !hasWorkspaces || Boolean(activeWorkspaceId) || (workspaces && workspaces.length > 0);
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     isOpen: false,
@@ -329,6 +348,7 @@ export function CollectionTree({
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
     setNewMenuPos({ x: rect.left, y: rect.bottom + 4 });
+    setContextMenu((prev) => ({ ...prev, isOpen: false }));
     setIsNewMenuOpen((prev) => !prev);
   };
 
@@ -850,87 +870,142 @@ export function CollectionTree({
       data-testid="collection-tree-container"
       className={`flex flex-col h-full overflow-hidden text-sm ${className}`}
     >
-      {/* Toolbar */}
+      {/* Unified Toolbar */}
       <div className="flex flex-col gap-2 pb-3 mb-2 border-b border-neutral-800 shrink-0">
-        <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
-            aria-label="+ Novo"
-            aria-haspopup="true"
-            aria-expanded={isNewMenuOpen}
-            onClick={handleNewButtonClick}
-            className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded bg-blue-600 hover:bg-blue-500 text-white transition-colors cursor-pointer shadow-sm"
-          >
-            <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>+ Novo</span>
-          </button>
+        <div className="flex items-center justify-between gap-1.5">
+          {hasWorkspaces && (
+            <WorkspaceSwitcher
+              workspaces={workspaces}
+              activeWorkspaceId={activeWorkspaceId ?? null}
+              onSelectWorkspace={onSelectWorkspace ?? (() => {})}
+              onCreateWorkspaceClick={onCreateWorkspaceClick ?? (() => {})}
+              onOpenChange={(open) => {
+                if (open) {
+                  setIsNewMenuOpen(false);
+                  setContextMenu((prev) => ({ ...prev, isOpen: false }));
+                }
+              }}
+              className="flex-1 min-w-0"
+            />
+          )}
 
-          <button
-            type="button"
-            title="Recarregar árvore"
-            aria-label="Recarregar 🔄"
-            disabled={isLoading}
-            onClick={() => onReload?.()}
-            className="p-1 rounded text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors disabled:opacity-40 cursor-pointer"
-          >
-            <RefreshCw
-              className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-blue-400' : ''}`}
+          {hasActiveWorkspace && (
+            <div className={`flex items-center gap-1.5 shrink-0 ${!hasWorkspaces ? 'w-full justify-between' : ''}`}>
+              <button
+                type="button"
+                aria-label="Novo"
+                aria-haspopup="true"
+                aria-expanded={isNewMenuOpen}
+                onClick={handleNewButtonClick}
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors cursor-pointer shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Novo</span>
+              </button>
+
+              <button
+                type="button"
+                title="Recarregar árvore"
+                aria-label="Recarregar 🔄"
+                disabled={isLoading}
+                onClick={() => onReload?.()}
+                className="p-1 rounded text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors disabled:opacity-40 cursor-pointer"
+              >
+                <RefreshCw
+                  className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-blue-400' : ''}`}
+                  aria-hidden="true"
+                />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {hasActiveWorkspace && (
+          <div className="relative">
+            <Search
+              className="w-3.5 h-3.5 text-neutral-500 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none"
               aria-hidden="true"
             />
-          </button>
-        </div>
-
-        <div className="relative">
-          <Search
-            className="w-3.5 h-3.5 text-neutral-500 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none"
-            aria-hidden="true"
-          />
-          <input
-            type="text"
-            value={effectiveFilter}
-            onChange={(e) => handleFilterChange(e.target.value)}
-            placeholder="Filtrar..."
-            aria-label="Filtrar coleções, pastas e requisições"
-            className="w-full bg-neutral-900 border border-neutral-800 rounded px-2 pl-7 py-1 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-neutral-700 focus:ring-1 focus:ring-neutral-700 transition-colors"
-          />
-        </div>
-      </div>
-
-      {/* Scrollable Tree Items */}
-      <div
-        role="tree"
-        aria-label="Árvore de Coleções"
-        className="flex-1 overflow-y-auto space-y-0.5 min-h-[120px] focus:outline-none"
-      >
-        {displayedTree && displayedTree.collections.length > 0 ? (
-          displayedTree.collections.map(renderCollection)
-        ) : !inlineCreating ? (
-          <div className="py-6 text-center text-xs text-neutral-500">
-            {effectiveFilter ? 'Nenhum item encontrado.' : 'Nenhuma coleção disponível.'}
-          </div>
-        ) : null}
-
-        {inlineCreating?.type === 'collection' && (
-          <div style={{ paddingLeft: '8px' }} className="flex items-center gap-1.5 pr-2 py-1">
-            <Layers className="w-4 h-4 text-blue-400/70 shrink-0" />
-            <InlineNodeInput
-              initialValue=""
-              placeholder="Nome da coleção..."
-              aria-label="Nova coleção"
-              onCommit={handleCommitCreate}
-              onCancel={handleCancelCreate}
+            <input
+              type="text"
+              value={effectiveFilter}
+              onChange={(e) => handleFilterChange(e.target.value)}
+              placeholder="Filtrar por nome ou rota..."
+              aria-label="Filtrar coleções, pastas e requisições"
+              className="w-full bg-neutral-900 border border-neutral-800 rounded px-2 pl-7 py-1 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-neutral-700 focus:ring-1 focus:ring-neutral-700 transition-colors"
             />
           </div>
         )}
-
-        {/* Empty scroll space to catch right clicks on empty area */}
-        <div
-          data-testid="collection-tree-empty-area"
-          aria-hidden="true"
-          onContextMenu={(e) => handleContextMenu(e, 'empty')}
-          className="flex-1 min-h-[80px] cursor-default"
-        />
       </div>
+
+      {/* Scrollable Tree Items or Welcome Card / Loading */}
+      {isWorkspacesLoading ? (
+        <div
+          data-testid="sidebar-workspaces-loading"
+          className="flex-1 flex items-center justify-center text-center p-4 text-xs text-neutral-500"
+        >
+          Carregando workspaces...
+        </div>
+      ) : hasWorkspaces && workspaces.length === 0 ? (
+        <div
+          data-testid="sidebar-empty-workspace"
+          className="flex-1 flex flex-col items-center justify-center text-center p-4 border border-dashed border-neutral-800 rounded-lg bg-neutral-900/30 my-auto"
+        >
+          <div className="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-3">
+            <Briefcase className="w-5 h-5" aria-hidden="true" />
+          </div>
+          <h3 className="text-xs font-semibold text-neutral-200 mb-1">
+            Comece criando seu Workspace
+          </h3>
+          <p className="text-[11px] text-neutral-400 mb-4 max-w-[200px]">
+            Workspaces isolam suas coleções, variáveis e requisições para cada projeto.
+          </p>
+          <button
+            type="button"
+            data-testid="create-workspace-empty-state-btn"
+            onClick={() => onCreateWorkspaceClick?.()}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors cursor-pointer shadow-sm"
+          >
+            <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Criar Workspace</span>
+          </button>
+        </div>
+      ) : (
+        <div
+          role="tree"
+          aria-label="Árvore de Coleções"
+          className="flex-1 overflow-y-auto space-y-0.5 min-h-[120px] focus:outline-none"
+        >
+          {displayedTree && displayedTree.collections.length > 0 ? (
+            displayedTree.collections.map(renderCollection)
+          ) : !inlineCreating ? (
+            <div className="py-6 text-center text-xs text-neutral-500">
+              {effectiveFilter ? 'Nenhum item encontrado.' : 'Nenhuma coleção disponível.'}
+            </div>
+          ) : null}
+
+          {inlineCreating?.type === 'collection' && (
+            <div style={{ paddingLeft: '8px' }} className="flex items-center gap-1.5 pr-2 py-1">
+              <Layers className="w-4 h-4 text-blue-400/70 shrink-0" />
+              <InlineNodeInput
+                initialValue=""
+                placeholder="Nome da coleção..."
+                aria-label="Nova coleção"
+                onCommit={handleCommitCreate}
+                onCancel={handleCancelCreate}
+              />
+            </div>
+          )}
+
+          {/* Empty scroll space to catch right clicks on empty area */}
+          <div
+            data-testid="collection-tree-empty-area"
+            aria-hidden="true"
+            onContextMenu={(e) => handleContextMenu(e, 'empty')}
+            className="flex-1 min-h-[80px] cursor-default"
+          />
+        </div>
+      )}
 
       {/* Creation Dropdown from + Novo */}
       <ContextMenu

@@ -2,7 +2,20 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { CollectionTree } from './CollectionTree';
-import { WorkspaceTreeDto } from '@/lib/treeApi';
+import { WorkspaceTreeDto, WorkspaceDto } from '@/lib/treeApi';
+
+const mockWorkspaces: WorkspaceDto[] = [
+  {
+    id: 'ws-1',
+    name: 'Workspace Pessoal',
+    createdAtUtc: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'ws-2',
+    name: 'Workspace Corporativo',
+    createdAtUtc: '2026-01-02T00:00:00Z',
+  },
+];
 
 const mockTree: WorkspaceTreeDto = {
   workspaceId: '00000000-0000-0000-0000-000000000001',
@@ -99,17 +112,17 @@ const mockTree: WorkspaceTreeDto = {
 };
 
 describe('CollectionTree', () => {
-  it('renders single + Novo button without chevron and filter bar', () => {
+  it('renders single Novo button without chevron and filter bar', () => {
     render(<CollectionTree tree={mockTree} />);
-    const btn = screen.getByRole('button', { name: /\+ novo/i });
+    const btn = screen.getByRole('button', { name: /novo/i });
     expect(btn).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/filtrar/i)).toBeInTheDocument();
   });
 
-  it('opens creation dropdown on + Novo click and triggers creation', async () => {
+  it('opens creation dropdown on Novo click and triggers creation', async () => {
     const onStartCreate = vi.fn();
     render(<CollectionTree tree={mockTree} onStartCreate={onStartCreate} />);
-    fireEvent.click(screen.getByRole('button', { name: /\+ novo/i }));
+    fireEvent.click(screen.getByRole('button', { name: /novo/i }));
 
     expect(screen.getByText(/nova coleção/i)).toBeInTheDocument();
     expect(screen.getByText(/nova pasta/i)).toBeInTheDocument();
@@ -434,8 +447,8 @@ describe('CollectionTree', () => {
     const onCreateCollection = vi.fn();
     render(<CollectionTree tree={mockTree} onCreateCollection={onCreateCollection} />);
 
-    // Click + Novo -> Nova Coleção
-    fireEvent.click(screen.getByRole('button', { name: /\+ novo/i }));
+    // Click Novo -> Nova Coleção
+    fireEvent.click(screen.getByRole('button', { name: /novo/i }));
     fireEvent.click(screen.getByText(/nova coleção/i));
 
     const inlineInput = screen.getByRole('textbox', { name: /nova coleção/i });
@@ -447,21 +460,21 @@ describe('CollectionTree', () => {
     expect(onCreateCollection).toHaveBeenCalledWith('Payments API');
   });
 
-  it('resolves target collection when clicking Nova Pasta in + Novo with collection selected', () => {
+  it('resolves target collection when clicking Nova Pasta in Novo with collection selected', () => {
     const onStartCreate = vi.fn();
     render(<CollectionTree tree={mockTree} selectedId="coll-1" onStartCreate={onStartCreate} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /\+ novo/i }));
+    fireEvent.click(screen.getByRole('button', { name: /novo/i }));
     fireEvent.click(screen.getByText(/nova pasta/i));
 
     expect(onStartCreate).toHaveBeenCalledWith('folder', 'coll-1');
   });
 
-  it('resolves target folder when clicking Nova Requisição in + Novo with folder selected', () => {
+  it('resolves target folder when clicking Nova Requisição in Novo with folder selected', () => {
     const onStartCreate = vi.fn();
     render(<CollectionTree tree={mockTree} selectedId="fold-1" onStartCreate={onStartCreate} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /\+ novo/i }));
+    fireEvent.click(screen.getByRole('button', { name: /novo/i }));
     fireEvent.click(screen.getByText(/nova requisição/i));
 
     expect(onStartCreate).toHaveBeenCalledWith('request', 'fold-1');
@@ -492,5 +505,114 @@ describe('CollectionTree', () => {
     expect(onOpenCollectionSettings).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'coll-1', name: 'Auth API' })
     );
+  });
+
+  describe('Unified Sidebar Header & Workspaces', () => {
+    it('renders WorkspaceSwitcher in the same top row as Novo when workspaces prop is provided', () => {
+      render(
+        <CollectionTree
+          tree={mockTree}
+          workspaces={mockWorkspaces}
+          activeWorkspaceId="ws-1"
+        />
+      );
+
+      const switcherBtn = screen.getByRole('button', { name: /workspace: workspace pessoal/i });
+      const novoBtn = screen.getByRole('button', { name: /^novo$/i });
+      const reloadBtn = screen.getByRole('button', { name: /recarregar 🔄/i });
+
+      expect(switcherBtn).toBeInTheDocument();
+      expect(novoBtn).toBeInTheDocument();
+      expect(reloadBtn).toBeInTheDocument();
+
+      // Ensure switcher and action buttons share the same parent row container
+      expect(switcherBtn.parentElement?.parentElement).toBe(novoBtn.parentElement?.parentElement);
+    });
+
+    it('renders clean welcome card and hides Novo button and search input when workspaces is empty', () => {
+      const onCreateWorkspaceClick = vi.fn();
+      render(
+        <CollectionTree
+          tree={null}
+          workspaces={[]}
+          onCreateWorkspaceClick={onCreateWorkspaceClick}
+        />
+      );
+
+      expect(screen.getByTestId('sidebar-empty-workspace')).toBeInTheDocument();
+      expect(screen.getByText('Comece criando seu Workspace')).toBeInTheDocument();
+      expect(
+        screen.getByText(/workspaces isolam suas coleções, variáveis e requisições para cada projeto/i)
+      ).toBeInTheDocument();
+
+      const createBtn = screen.getByRole('button', { name: /^criar workspace$/i });
+      expect(createBtn).toBeInTheDocument();
+      expect(createBtn.textContent).toBe('Criar Workspace');
+
+      fireEvent.click(createBtn);
+      expect(onCreateWorkspaceClick).toHaveBeenCalledTimes(1);
+
+      // Novo button and search bar should NOT be rendered in zero-workspaces state
+      expect(screen.queryByRole('button', { name: /^novo$/i })).toBeNull();
+      expect(screen.queryByPlaceholderText(/filtrar/i)).toBeNull();
+    });
+
+    it('renders active workspace name, Novo button, search input, and tree when workspaces has items', () => {
+      const onSelectWorkspace = vi.fn();
+      render(
+        <CollectionTree
+          tree={mockTree}
+          workspaces={mockWorkspaces}
+          activeWorkspaceId="ws-1"
+          onSelectWorkspace={onSelectWorkspace}
+        />
+      );
+
+      expect(screen.getByText('Workspace Pessoal')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^novo$/i })).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/filtrar/i)).toBeInTheDocument();
+      expect(screen.getByText('Auth API')).toBeInTheDocument();
+
+      // Select another workspace via the dropdown
+      fireEvent.click(screen.getByRole('button', { name: /workspace: workspace pessoal/i }));
+      fireEvent.click(screen.getByTestId('workspace-option-ws-2'));
+      expect(onSelectWorkspace).toHaveBeenCalledWith('ws-2');
+    });
+
+    it('renders loading state when isWorkspacesLoading is true', () => {
+      render(
+        <CollectionTree
+          tree={null}
+          workspaces={[]}
+          isWorkspacesLoading={true}
+        />
+      );
+
+      expect(screen.getByTestId('sidebar-workspaces-loading')).toBeInTheDocument();
+      expect(screen.getByText('Carregando workspaces...')).toBeInTheDocument();
+      expect(screen.queryByTestId('sidebar-empty-workspace')).toBeNull();
+      expect(screen.queryByRole('button', { name: /^novo$/i })).toBeNull();
+    });
+
+    it('closes Novo dropdown when WorkspaceSwitcher dropdown is opened', () => {
+      render(
+        <CollectionTree
+          tree={mockTree}
+          workspaces={mockWorkspaces}
+          activeWorkspaceId="ws-1"
+        />
+      );
+
+      // Open Novo dropdown
+      fireEvent.click(screen.getByRole('button', { name: /^novo$/i }));
+      expect(screen.getByText(/nova coleção/i)).toBeInTheDocument();
+
+      // Open Workspace dropdown
+      fireEvent.click(screen.getByRole('button', { name: /workspace: workspace pessoal/i }));
+      expect(screen.getByRole('listbox', { name: /workspaces/i })).toBeInTheDocument();
+
+      // Novo dropdown should be closed
+      expect(screen.queryByText(/nova coleção/i)).toBeNull();
+    });
   });
 });

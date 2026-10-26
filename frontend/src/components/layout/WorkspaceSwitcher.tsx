@@ -7,6 +7,8 @@ export interface WorkspaceSwitcherProps {
   activeWorkspaceId: string | null;
   onSelectWorkspace: (id: string) => void;
   onCreateWorkspaceClick: () => void;
+  onOpenChange?: (isOpen: boolean) => void;
+  className?: string;
 }
 
 export function WorkspaceSwitcher({
@@ -14,6 +16,8 @@ export function WorkspaceSwitcher({
   activeWorkspaceId,
   onSelectWorkspace,
   onCreateWorkspaceClick,
+  onOpenChange,
+  className = '',
 }: WorkspaceSwitcherProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -21,13 +25,23 @@ export function WorkspaceSwitcher({
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
   const displayName = activeWorkspace ? activeWorkspace.name : 'Selecionar Workspace';
 
+  const updateOpen = (openState: boolean | ((prev: boolean) => boolean)) => {
+    setIsOpen((prev) => {
+      const next = typeof openState === 'function' ? openState(prev) : openState;
+      if (next !== prev) {
+        onOpenChange?.(next);
+      }
+      return next;
+    });
+  };
+
   // Close on click outside
   useEffect(() => {
     if (!isOpen) return;
 
     const handlePointerDown = (e: MouseEvent | TouchEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
+        updateOpen(false);
       }
     };
 
@@ -46,7 +60,7 @@ export function WorkspaceSwitcher({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        setIsOpen(false);
+        updateOpen(false);
       }
     };
 
@@ -58,27 +72,27 @@ export function WorkspaceSwitcher({
 
   const handleSelect = (id: string) => {
     onSelectWorkspace(id);
-    setIsOpen(false);
+    updateOpen(false);
   };
 
   const handleCreate = () => {
     onCreateWorkspaceClick();
-    setIsOpen(false);
+    updateOpen(false);
   };
 
   return (
-    <div ref={containerRef} className="relative w-full">
+    <div ref={containerRef} className={`relative ${className || 'w-full'}`}>
       <button
         type="button"
         data-testid="workspace-switcher-trigger"
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-label={`Workspace: ${displayName}`}
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-neutral-200 bg-neutral-900/90 hover:bg-neutral-800/80 border border-neutral-800 hover:border-neutral-700 rounded-lg transition-colors focus:outline-none focus:ring-1 focus:ring-neutral-500"
+        onClick={() => updateOpen((prev) => !prev)}
+        className="w-full flex items-center justify-between gap-1.5 px-2.5 py-1 text-xs font-medium text-neutral-200 bg-neutral-900/90 hover:bg-neutral-800/80 border border-neutral-800 hover:border-neutral-700 rounded-md transition-colors focus:outline-none focus:ring-1 focus:ring-neutral-500"
       >
-        <div className="flex items-center gap-2 truncate min-w-0">
-          <Briefcase className="w-4 h-4 text-neutral-400 shrink-0" aria-hidden="true" />
+        <div className="flex items-center gap-1.5 truncate min-w-0">
+          <Briefcase className="w-3.5 h-3.5 text-neutral-400 shrink-0" aria-hidden="true" />
           <span className="truncate">{displayName}</span>
         </div>
         <ChevronDown
@@ -94,7 +108,7 @@ export function WorkspaceSwitcher({
           role="listbox"
           aria-label="Workspaces"
           data-testid="workspace-switcher-dropdown"
-          className="absolute left-0 right-0 top-full mt-1.5 z-40 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl py-1 flex flex-col"
+          className="absolute left-0 top-full mt-1 z-40 w-56 min-w-full bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl py-1 flex flex-col"
         >
           <div className="px-3 py-1.5 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
             Workspaces

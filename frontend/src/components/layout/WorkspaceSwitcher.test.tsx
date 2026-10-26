@@ -229,4 +229,41 @@ describe('WorkspaceSwitcher', () => {
       expect(screen.getByRole('button', { name: /^novo workspace$/i })).toBeInTheDocument();
     });
   });
+
+  describe('Compact Styling & Callbacks', () => {
+    it('accepts custom className and applies compact styling', () => {
+      render(
+        <WorkspaceSwitcher
+          workspaces={mockWorkspaces}
+          activeWorkspaceId="ws-1"
+          onSelectWorkspace={vi.fn()}
+          onCreateWorkspaceClick={vi.fn()}
+          className="flex-1 min-w-0"
+        />
+      );
+
+      const trigger = screen.getByRole('button', { name: /workspace: workspace pessoal/i });
+      expect(trigger).toHaveClass('py-1', 'px-2.5', 'text-xs');
+    });
+
+    it('notifies onOpenChange when dropdown is opened and closed', () => {
+      const onOpenChange = vi.fn();
+      render(
+        <WorkspaceSwitcher
+          workspaces={mockWorkspaces}
+          activeWorkspaceId="ws-1"
+          onSelectWorkspace={vi.fn()}
+          onCreateWorkspaceClick={vi.fn()}
+          onOpenChange={onOpenChange}
+        />
+      );
+
+      const trigger = screen.getByRole('button', { name: /workspace: workspace pessoal/i });
+      fireEvent.click(trigger);
+      expect(onOpenChange).toHaveBeenCalledWith(true);
+
+      fireEvent.click(trigger);
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+  });
 });
