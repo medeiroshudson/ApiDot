@@ -271,31 +271,56 @@ export default function Home() {
       const contentType = res.headers.get('content-type') || '';
       let bodyText = '';
       let timing = null;
+      let targetStatusCode = res.status;
+      let targetStatusText = res.statusText || (res.ok ? 'OK' : 'Error');
+      const targetHeaders: Record<string, string> = {};
 
       if (contentType.includes('application/json') || contentType.includes('application/problem+json')) {
         const json = await res.json();
         if (json.timing) {
           timing = json.timing;
         }
-        if (json.body) {
-          bodyText = typeof json.body === 'string' ? json.body : JSON.stringify(json.body);
+        if (typeof json.statusCode === 'number') {
+          targetStatusCode = json.statusCode;
+        }
+        if (json.statusText) {
+          targetStatusText = json.statusText;
+        }
+        if (json.headers && typeof json.headers === 'object') {
+          Object.entries(json.headers).forEach(([k, v]) => {
+            targetHeaders[k] = Array.isArray(v) ? v.join(', ') : String(v);
+          });
+        }
+
+        if (typeof json.bodyText === 'string') {
+          bodyText = json.bodyText;
+        } else if (typeof json.body === 'string') {
+          try {
+            const binary = atob(json.body);
+            const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+            bodyText = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+          } catch {
+            bodyText = json.body;
+          }
+        } else if (json.body !== undefined && json.body !== null) {
+          bodyText = JSON.stringify(json.body, null, 2);
+        } else if (json.errorMessage) {
+          bodyText = json.errorMessage;
         } else {
           bodyText = JSON.stringify(json, null, 2);
         }
       } else {
         bodyText = await res.text();
+        res.headers.forEach((val, key) => {
+          targetHeaders[key] = val;
+        });
       }
 
-      const resHeaders: Record<string, string> = {};
-      res.headers.forEach((val, key) => {
-        resHeaders[key] = val;
-      });
-
       setResponse({
-        statusCode: res.status,
-        statusText: res.statusText || (res.ok ? 'OK' : 'Error'),
+        statusCode: targetStatusCode,
+        statusText: targetStatusText,
         durationMs,
-        headers: resHeaders,
+        headers: targetHeaders,
         body: bodyText,
         timing,
       });
@@ -313,8 +338,8 @@ export default function Home() {
         method: request.method,
         url: request.url,
         response: {
-          statusCode: res.status,
-          headers: resHeaders,
+          statusCode: targetStatusCode,
+          headers: targetHeaders,
           body: parsedBodyForHistory as any,
         },
       };
