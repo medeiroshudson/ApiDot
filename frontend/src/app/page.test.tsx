@@ -347,4 +347,68 @@ describe('Home Page Collection Sync and Settings Integration', () => {
     expect(defaultButton).toBeInTheDocument();
     expect(defaultButton.getAttribute('aria-current')).toBe('page');
   });
+
+  it('decodes Base64 response body from /api/requests/execute into decoded UTF-8 text', async () => {
+    const rawContent = '{"message":"hello world"}';
+    const base64Body = btoa(rawContent);
+
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: {
+        get: (h: string) => (h.toLowerCase() === 'content-type' ? 'application/json' : null),
+        forEach: () => {},
+      },
+      json: async () => ({
+        statusCode: 200,
+        statusText: 'OK',
+        headers: { 'content-type': 'application/json' },
+        body: base64Body,
+      }),
+    } as any);
+
+    render(<Home />);
+
+    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    fireEvent.change(urlInput, { target: { value: 'https://api.example.com/test' } });
+
+    const sendBtn = screen.getByRole('button', { name: /enviar requisição|enviar/i });
+    fireEvent.click(sendBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('200')).toBeInTheDocument();
+      expect(screen.getByText(/"hello world"/i)).toBeInTheDocument();
+    });
+  });
+
+  it('handles empty Base64 body from /api/requests/execute cleanly', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 204,
+      statusText: 'No Content',
+      headers: {
+        get: (h: string) => (h.toLowerCase() === 'content-type' ? 'application/json' : null),
+        forEach: () => {},
+      },
+      json: async () => ({
+        statusCode: 204,
+        statusText: 'No Content',
+        headers: {},
+        body: '',
+      }),
+    } as any);
+
+    render(<Home />);
+
+    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    fireEvent.change(urlInput, { target: { value: 'https://api.example.com/empty' } });
+
+    const sendBtn = screen.getByRole('button', { name: /enviar requisição|enviar/i });
+    fireEvent.click(sendBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('204')).toBeInTheDocument();
+    });
+  });
 });

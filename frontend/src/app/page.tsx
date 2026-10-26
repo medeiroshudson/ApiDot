@@ -292,15 +292,17 @@ export default function Home() {
           });
         }
 
-        if (typeof json.bodyText === 'string') {
-          bodyText = json.bodyText;
-        } else if (typeof json.body === 'string') {
-          try {
-            const binary = atob(json.body);
-            const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-            bodyText = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-          } catch {
-            bodyText = json.body;
+        if (typeof json.body === 'string') {
+          if (json.body.length === 0) {
+            bodyText = '';
+          } else {
+            try {
+              const binary = atob(json.body);
+              const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+              bodyText = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+            } catch {
+              bodyText = json.body;
+            }
           }
         } else if (json.body !== undefined && json.body !== null) {
           bodyText = JSON.stringify(json.body, null, 2);
