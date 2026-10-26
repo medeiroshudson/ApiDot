@@ -22,12 +22,12 @@ jobs:
         include:
           - component: server
             image: ghcr.io/${{ github.repository }}-server
-            dockerfile: ./Dockerfile
-            context: .
+            dockerfile: ./backend/Dockerfile
+            context: ./backend
           - component: web
             image: ghcr.io/${{ github.repository }}-web
-            dockerfile: ./Dockerfile.web
-            context: .
+            dockerfile: ./frontend/Dockerfile
+            context: ./frontend
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
