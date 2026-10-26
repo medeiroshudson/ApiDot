@@ -5,6 +5,7 @@ import Home from './page';
 import { resolveVariables, interpolateVariables } from '@/lib/variables';
 import { VariableItem } from '@/components/environment/VariableGrid';
 import { EnvironmentGroup } from '@/components/environment/EnvironmentModal';
+import { WorkspaceTreeDto } from '@/lib/treeApi';
 
 describe('page variable resolution and interpolation helpers', () => {
   describe('resolveVariables', () => {
@@ -409,6 +410,340 @@ describe('Home Page Collection Sync and Settings Integration', () => {
 
     await waitFor(() => {
       expect(screen.getByText('204')).toBeInTheDocument();
+    });
+  });
+});
+
+describe('Home Page Collection Tree & Request Lifecycle Integration', () => {
+  const mockWorkspaceTree: WorkspaceTreeDto = {
+    workspaceId: '00000000-0000-0000-0000-000000000001',
+    workspaceName: 'Default Workspace',
+    collections: [
+      {
+        id: 'col-auth',
+        name: 'Auth API Collection',
+        defaultTarget: 'Inherit',
+        openApiSpecUrl: 'https://api.example.com/openapi.json',
+        folders: [
+          {
+            id: 'fold-v1',
+            name: 'V1 Auth',
+            collectionId: 'col-auth',
+            parentFolderId: null,
+            defaultTarget: 'Inherit',
+            subFolders: [],
+            requests: [
+              {
+                id: 'req-login',
+                name: 'Login User',
+                method: 'POST',
+                url: 'https://api.example.com/v1/auth/login',
+                target: 'Inherit',
+                bodyType: 'Json',
+                headersJson: '{"Content-Type": "application/json"}',
+                bodyContent: '{"user": "admin"}',
+                collectionId: 'col-auth',
+                folderId: 'fold-v1',
+              },
+            ],
+          },
+        ],
+        requests: [
+          {
+            id: 'req-ping',
+            name: 'Ping Service',
+            method: 'GET',
+            url: 'https://api.example.com/health/ping',
+            target: 'Server',
+            bodyType: 'None',
+            headersJson: '{"Accept": "application/json"}',
+            bodyContent: null,
+            collectionId: 'col-auth',
+            folderId: null,
+          },
+        ],
+      },
+    ],
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('loads tree from /api/workspaces/.../tree on mount and renders collections, folders, and requests', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/') && url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockWorkspaceTree,
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Auth API Collection')).toBeInTheDocument();
+      expect(screen.getByText('V1 Auth')).toBeInTheDocument();
+      expect(screen.getByText('Login User')).toBeInTheDocument();
+      expect(screen.getByText('Ping Service')).toBeInTheDocument();
+    });
+  });
+
+  it('loads request details into RequestEditor when clicking a request node in the tree', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/') && url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockWorkspaceTree,
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Ping Service')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Ping Service'));
+
+    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    expect(urlInput).toHaveValue('https://api.example.com/health/ping');
+
+    const methodSelect = screen.getByRole('combobox', { name: /método http/i });
+    expect(methodSelect).toHaveValue('GET');
+
+    const targetSelect = screen.getByRole('combobox', { name: /target de execução/i });
+    expect(targetSelect).toHaveValue('Server');
+
+    expect(screen.getByTestId('request-title')).toHaveTextContent('Ping Service');
+
+    const headersInput = screen.getByRole('textbox', { name: /cabeçalhos http/i });
+    expect(headersInput).toHaveValue('{"Accept": "application/json"}');
+  });
+
+  it('loads folder request details and body into RequestEditor', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/') && url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockWorkspaceTree,
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Login User')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Login User'));
+
+    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    expect(urlInput).toHaveValue('https://api.example.com/v1/auth/login');
+
+    const methodSelect = screen.getByRole('combobox', { name: /método http/i });
+    expect(methodSelect).toHaveValue('POST');
+
+    expect(screen.getByTestId('request-title')).toHaveTextContent('Login User');
+
+    // Switch to Body tab and verify body content
+    const bodyTab = screen.getByRole('tab', { name: /body/i });
+    fireEvent.click(bodyTab);
+    const bodyInput = screen.getByRole('textbox', { name: /corpo da requisição/i });
+    expect(bodyInput).toHaveValue('{"user": "admin"}');
+  });
+
+  it('opens SaveRequestModal when pressing Ctrl+S on unsaved request and creates new request on submit', async () => {
+    let postCalled = false;
+    let postBody: any = null;
+
+    vi.spyOn(global, 'fetch').mockImplementation((input: any, init?: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/') && url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockWorkspaceTree,
+        } as any);
+      }
+      if (url.includes('/api/requests') && init?.method === 'POST') {
+        postCalled = true;
+        postBody = JSON.parse(init.body);
+        return Promise.resolve({
+          ok: true,
+          status: 201,
+          json: async () => ({
+            id: 'req-new-999',
+            name: postBody.name,
+            method: postBody.method,
+            url: postBody.url,
+            target: postBody.target,
+            bodyType: postBody.bodyType,
+            headersJson: postBody.headersJson,
+            bodyContent: postBody.bodyContent,
+            collectionId: postBody.collectionId,
+            folderId: postBody.folderId,
+          }),
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Auth API Collection')).toBeInTheDocument();
+    });
+
+    // Enter URL on scratchpad
+    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    fireEvent.change(urlInput, { target: { value: 'https://api.example.com/v1/new-endpoint' } });
+
+    // Press Ctrl+S
+    fireEvent.keyDown(window, { key: 's', ctrlKey: true });
+
+    // Modal opens
+    const modalTitle = await screen.findByRole('heading', { name: /salvar requisição/i });
+    expect(modalTitle).toBeInTheDocument();
+
+    const dialog = screen.getByRole('dialog', { name: /salvar requisição/i });
+    const nameInput = within(dialog).getByRole('textbox', { name: /nome da requisição/i });
+    fireEvent.change(nameInput, { target: { value: 'Minha Nova Rota' } });
+
+    // Click submit in modal
+    const submitBtn = within(dialog).getByRole('button', { name: /^salvar$/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(postCalled).toBe(true);
+      expect(postBody.name).toBe('Minha Nova Rota');
+      expect(postBody.url).toBe('https://api.example.com/v1/new-endpoint');
+      expect(postBody.collectionId).toBe('col-auth');
+      expect(screen.getByTestId('request-title')).toHaveTextContent('Minha Nova Rota');
+    });
+
+    // Modal closed
+    expect(screen.queryByRole('dialog', { name: /salvar requisição/i })).toBeNull();
+  });
+
+  it('calls PUT /api/requests/{id} and clears dirty state when saving an existing request', async () => {
+    let putCalled = false;
+    let putBody: any = null;
+
+    vi.spyOn(global, 'fetch').mockImplementation((input: any, init?: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/') && url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockWorkspaceTree,
+        } as any);
+      }
+      if (url.includes('/api/requests/req-ping') && init?.method === 'PUT') {
+        putCalled = true;
+        putBody = JSON.parse(init.body);
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'req-ping',
+            name: 'Ping Service',
+            method: putBody.method,
+            url: putBody.url,
+            target: putBody.target,
+            bodyType: putBody.bodyType,
+            headersJson: putBody.headersJson,
+            bodyContent: putBody.bodyContent,
+            collectionId: 'col-auth',
+            folderId: null,
+          }),
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Ping Service')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Ping Service'));
+
+    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    expect(urlInput).toHaveValue('https://api.example.com/health/ping');
+    expect(screen.queryByTestId('dirty-indicator')).toBeNull();
+
+    // Modify URL
+    fireEvent.change(urlInput, { target: { value: 'https://api.example.com/health/ping-v2' } });
+    expect(screen.getByTestId('dirty-indicator')).toBeInTheDocument();
+
+    // Click "Salvar" button in RequestEditor
+    const saveBtn = screen.getByRole('button', { name: /salvar requisição/i });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(putCalled).toBe(true);
+      expect(putBody.url).toBe('https://api.example.com/health/ping-v2');
+      expect(screen.queryByTestId('dirty-indicator')).toBeNull();
+    });
+  });
+
+  it('resets RequestEditor to a blank scratchpad when an active request is deleted', async () => {
+    let deleteCalled = false;
+
+    vi.spyOn(global, 'fetch').mockImplementation((input: any, init?: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/') && url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockWorkspaceTree,
+        } as any);
+      }
+      if (url.includes('/api/requests/req-ping') && init?.method === 'DELETE') {
+        deleteCalled = true;
+        return Promise.resolve({
+          ok: true,
+          status: 204,
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Ping Service')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Ping Service'));
+
+    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    expect(urlInput).toHaveValue('https://api.example.com/health/ping');
+    expect(screen.getByTestId('request-title')).toHaveTextContent('Ping Service');
+
+    // Right-click request in tree to open context menu
+    fireEvent.contextMenu(screen.getAllByText('Ping Service')[0]);
+    const deleteOption = screen.getByText(/^excluir$/i);
+    fireEvent.click(deleteOption);
+
+    await waitFor(() => {
+      expect(deleteCalled).toBe(true);
+      expect(urlInput).toHaveValue('');
+      expect(screen.getByTestId('request-title')).toHaveTextContent('Nova Requisição');
     });
   });
 });

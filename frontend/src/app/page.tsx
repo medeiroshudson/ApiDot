@@ -1,10 +1,16 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { MobileDrawer } from '@/components/layout/MobileDrawer';
-import { CollectionsNav, NavItem } from '@/components/layout/CollectionsNav';
-import { RequestEditor, RequestData } from '@/components/request/RequestEditor';
+import { CollectionTree } from '@/components/layout/CollectionTree';
+import {
+  RequestEditor,
+  RequestData,
+  SaveRequestModal,
+  CollectionOption,
+  FolderOption,
+} from '@/components/request/RequestEditor';
 import { ResponseViewer, ResponseData } from '@/components/response/ResponseViewer';
 import { EnvironmentModal, EnvironmentGroup } from '@/components/environment/EnvironmentModal';
 import { VariableItem } from '@/components/environment/VariableGrid';
@@ -14,7 +20,22 @@ import {
   CollectionSettingsModal,
   SyncReport,
 } from '@/components/collection/CollectionSettingsModal';
+import {
+  useCollectionTree,
+  DEFAULT_WORKSPACE_TREE,
+  ActiveTreeItem,
+} from '@/hooks/useCollectionTree';
+import {
+  WorkspaceTreeDto,
+  CollectionNodeDto,
+  FolderNodeDto,
+  RequestItemNodeDto,
+  ExecutionTarget,
+  HttpBodyType,
+} from '@/lib/treeApi';
 import { CheckCircle2, X, AlertCircle } from 'lucide-react';
+
+const DEFAULT_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
 
 const DEFAULT_ENVIRONMENTS: EnvironmentGroup[] = [
   { name: 'Development', variables: [] },
@@ -39,31 +60,104 @@ const DEFAULT_REQUESTS: DependencyRequest[] = [
   },
 ];
 
-const DEFAULT_COLLECTIONS: NavItem[] = [
-  {
-    id: '00000000-0000-0000-0000-000000000001',
-    name: 'Coleção Padrão',
-    icon: 'collection',
-    openApiSpecUrl: '',
-    openApiSpecContent: '',
-  },
-  {
-    id: '00000000-0000-0000-0000-000000000002',
-    name: 'Minha API',
-    icon: 'collection',
-    openApiSpecUrl: '',
-    openApiSpecContent: '',
-  },
-  { id: 'auth-folder', name: 'Autenticação', icon: 'folder', isNested: true },
-];
+const CLEAN_SCRATCHPAD: RequestData = {
+  method: 'GET',
+  url: '',
+  target: 'Inherit',
+  headers: '',
+  body: '',
+  auth: { type: 'none' },
+};
+
+function flattenFolders(folders: FolderNodeDto[], prefix = ''): FolderOption[] {
+  const result: FolderOption[] = [];
+  for (const f of folders) {
+    const fullName = prefix ? `${prefix} / ${f.name}` : f.name;
+    result.push({ id: f.id, name: fullName });
+    if (f.subFolders && f.subFolders.length > 0) {
+      result.push(...flattenFolders(f.subFolders, fullName));
+    }
+  }
+  return result;
+}
+
+function findRequestInTree(
+  tree: WorkspaceTreeDto | null,
+  requestId: string
+): RequestItemNodeDto | null {
+  if (!tree) return null;
+  for (const c of tree.collections) {
+    for (const req of c.requests) {
+      if (req.id === requestId) return req;
+    }
+    const searchFolders = (folders: FolderNodeDto[]): RequestItemNodeDto | null => {
+      for (const f of folders) {
+        for (const req of f.requests) {
+          if (req.id === requestId) return req;
+        }
+        const sub = searchFolders(f.subFolders);
+        if (sub) return sub;
+      }
+      return null;
+    };
+    const found = searchFolders(c.folders);
+    if (found) return found;
+  }
+  return null;
+}
 
 export default function Home() {
+  const [activeWorkspaceId] = useState<string>(DEFAULT_WORKSPACE_ID);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isAgentOnline, setIsAgentOnline] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [response, setResponse] = useState<ResponseData | null>(null);
   const [activeMobilePane, setActiveMobilePane] = useState<'request' | 'response'>('request');
   const [mounted, setMounted] = useState(false);
+
+  // Tree Hook
+  const {
+    tree,
+    filteredTree,
+    isLoading: isTreeLoading,
+    error: treeError,
+    reload: reloadTree,
+    activeItem,
+    setActiveItem,
+    filterText,
+    setFilterText,
+    createCollection,
+    updateCollection,
+    deleteCollection,
+    createFolder,
+    updateFolder,
+    deleteFolder,
+    createRequest,
+    updateRequest,
+    duplicateRequest,
+    deleteRequest,
+  } = useCollectionTree(activeWorkspaceId, DEFAULT_WORKSPACE_TREE);
+
+  // Active Request State in RequestEditor
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
+  const [activeRequestDetails, setActiveRequestDetails] = useState<{
+    id: string;
+    name: string;
+    method: string;
+    url: string;
+    target: ExecutionTarget;
+    headers: string;
+    body: string;
+    auth: RequestData['auth'];
+    collectionId?: string | null;
+    folderId?: string | null;
+  } | null>(null);
+  const [currentEditorData, setCurrentEditorData] = useState<RequestData | null>(null);
+  const [isSavingRequest, setIsSavingRequest] = useState(false);
+
+  // Save As Modal State
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [pendingSaveData, setPendingSaveData] = useState<RequestData | null>(null);
 
   // Environments and Variables State
   const [isEnvModalOpen, setIsEnvModalOpen] = useState(false);
@@ -73,14 +167,11 @@ export default function Home() {
   const [collectionVariables, setCollectionVariables] = useState<VariableItem[]>([]);
   const [requestHistory, setRequestHistory] = useState<DependencyRequest[]>(DEFAULT_REQUESTS);
 
-  // Collections & Sync State
-  const [collections, setCollections] = useState<NavItem[]>(DEFAULT_COLLECTIONS);
-  const [selectedCollectionId, setSelectedCollectionId] = useState<string>(
-    '00000000-0000-0000-0000-000000000001'
-  );
+  // Selected Collection & Sync Modal State
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string>(DEFAULT_WORKSPACE_ID);
   const [syncingCollectionId, setSyncingCollectionId] = useState<string | null>(null);
   const [isCollectionSettingsOpen, setIsCollectionSettingsOpen] = useState(false);
-  const [editingCollection, setEditingCollection] = useState<NavItem | null>(null);
+  const [editingCollection, setEditingCollection] = useState<CollectionNodeDto | null>(null);
   const [auditBanner, setAuditBanner] = useState<{
     collectionName: string;
     report: SyncReport;
@@ -118,6 +209,14 @@ export default function Home() {
     setMounted(true);
   }, []);
 
+  // Sync active request details with activeItem state changes
+  useEffect(() => {
+    if (!activeItem || activeItem.type !== 'request') {
+      setActiveRequestId(null);
+      setActiveRequestDetails(null);
+    }
+  }, [activeItem]);
+
   const handleEnvironmentsChange = (updated: EnvironmentGroup[]) => {
     setEnvironments(updated);
     if (activeEnvironment && !updated.some((e) => e.name === activeEnvironment)) {
@@ -125,12 +224,14 @@ export default function Home() {
     }
   };
 
-  const handleOpenCollectionSettings = (item: NavItem) => {
+  const handleOpenCollectionSettings = (item: CollectionNodeDto) => {
     setEditingCollection(item);
     setIsCollectionSettingsOpen(true);
   };
 
-  const handleQuickSync = async (item: NavItem) => {
+  const handleQuickSync = async (
+    item: CollectionNodeDto | { id: string; name: string; openApiSpecUrl?: string | null }
+  ) => {
     setSyncingCollectionId(item.id);
     try {
       const res = await fetch(`/api/collections/${item.id}/sync`, {
@@ -138,7 +239,6 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           specUrl: item.openApiSpecUrl || undefined,
-          specContent: item.openApiSpecContent || undefined,
         }),
       });
 
@@ -150,6 +250,7 @@ export default function Home() {
           report,
         });
         setSyncError(null);
+        await reloadTree();
       } else {
         let errDetail = `Falha ao sincronizar a coleção "${item.name}".`;
         try {
@@ -178,6 +279,7 @@ export default function Home() {
       report,
     });
     setSyncError(null);
+    reloadTree();
   };
 
   const handleSaveCollectionSpec = async (data: { specUrl?: string; specContent?: string }) => {
@@ -203,14 +305,211 @@ export default function Home() {
       throw new Error(errDetail);
     }
 
-    setCollections((prev) =>
-      prev.map((c) =>
-        c.id === editingCollection.id
-          ? { ...c, openApiSpecUrl: data.specUrl, openApiSpecContent: data.specContent }
-          : c
-      )
-    );
+    await reloadTree();
   };
+
+  const handleSelectItem = useCallback(
+    (item: ActiveTreeItem) => {
+      setActiveItem(item);
+      if (item.type === 'request') {
+        const req =
+          (item.data as RequestItemNodeDto | undefined) || findRequestInTree(tree, item.id);
+        if (req) {
+          setActiveRequestId(req.id);
+          setActiveRequestDetails({
+            id: req.id,
+            name: req.name,
+            method: req.method || 'GET',
+            url: req.url || '',
+            target: req.target || 'Inherit',
+            headers: req.headersJson || '',
+            body: req.bodyContent || '',
+            auth: { type: 'none' },
+            collectionId: req.collectionId,
+            folderId: req.folderId,
+          });
+        }
+      } else if (item.type === 'collection') {
+        setSelectedCollectionId(item.id);
+      }
+    },
+    [setActiveItem, tree]
+  );
+
+  const handleSaveExisting = async (reqData: RequestData) => {
+    if (!activeRequestId) {
+      handleSaveAs(reqData);
+      return;
+    }
+    setIsSavingRequest(true);
+    try {
+      const bodyContent = reqData.body || null;
+      const bodyType: HttpBodyType =
+        bodyContent && (bodyContent.trim().startsWith('{') || bodyContent.trim().startsWith('['))
+          ? 'Json'
+          : 'None';
+
+      const updated = await updateRequest(activeRequestId, {
+        name: activeRequestDetails?.name || 'Requisição',
+        method: reqData.method,
+        url: reqData.url,
+        target: reqData.target,
+        headersJson: reqData.headers || '{}',
+        bodyType,
+        bodyContent,
+        collectionId: activeRequestDetails?.collectionId || null,
+        folderId: activeRequestDetails?.folderId || null,
+      });
+
+      setActiveRequestDetails({
+        id: updated.id,
+        name: updated.name,
+        method: updated.method,
+        url: updated.url,
+        target: updated.target,
+        headers: updated.headersJson,
+        body: updated.bodyContent || '',
+        auth: reqData.auth,
+        collectionId: updated.collectionId,
+        folderId: updated.folderId,
+      });
+    } finally {
+      setIsSavingRequest(false);
+    }
+  };
+
+  const handleSaveAs = (reqData: RequestData) => {
+    setPendingSaveData(reqData);
+    setIsSaveModalOpen(true);
+  };
+
+  const collectionOptions = useMemo<CollectionOption[]>(() => {
+    if (!tree?.collections) return [];
+    return tree.collections.map((col) => ({
+      id: col.id,
+      name: col.name,
+      folders: flattenFolders(col.folders),
+    }));
+  }, [tree]);
+
+  const handleSaveNewRequest = async (
+    name: string,
+    collectionId: string,
+    folderId?: string
+  ) => {
+    const dataToSave = pendingSaveData || currentEditorData || CLEAN_SCRATCHPAD;
+    const bodyContent = dataToSave.body || null;
+    const bodyType: HttpBodyType =
+      bodyContent && (bodyContent.trim().startsWith('{') || bodyContent.trim().startsWith('['))
+        ? 'Json'
+        : 'None';
+
+    const created = await createRequest({
+      name,
+      method: dataToSave.method || 'GET',
+      url: dataToSave.url || '',
+      workspaceId: activeWorkspaceId,
+      collectionId,
+      folderId: folderId || null,
+      target: dataToSave.target || 'Inherit',
+      headersJson: dataToSave.headers || '{}',
+      bodyType,
+      bodyContent,
+    });
+
+    setActiveItem({
+      type: 'request',
+      id: created.id,
+      data: created,
+    });
+    setActiveRequestId(created.id);
+    setActiveRequestDetails({
+      id: created.id,
+      name: created.name,
+      method: created.method,
+      url: created.url,
+      target: created.target,
+      headers: created.headersJson,
+      body: created.bodyContent || '',
+      auth: dataToSave.auth || { type: 'none' },
+      collectionId: created.collectionId,
+      folderId: created.folderId,
+    });
+    setIsSaveModalOpen(false);
+    setPendingSaveData(null);
+  };
+
+  const handleCreateRequest = async (
+    name: string,
+    colId?: string | null,
+    foldId?: string | null
+  ) => {
+    const defaultColId = colId || tree?.collections[0]?.id || selectedCollectionId;
+    const created = await createRequest({
+      workspaceId: activeWorkspaceId,
+      name,
+      method: 'GET',
+      url: '',
+      target: 'Inherit',
+      headersJson: '{}',
+      bodyContent: null,
+      bodyType: 'None',
+      collectionId: defaultColId,
+      folderId: foldId || null,
+    });
+    setActiveItem({
+      type: 'request',
+      id: created.id,
+      data: created,
+    });
+    return created;
+  };
+
+  const handleUpdateRequestName = async (id: string, name: string) => {
+    const existing = activeRequestId === id ? activeRequestDetails : findRequestInTree(tree, id);
+    const updated = await updateRequest(id, {
+      name,
+      method: existing?.method || 'GET',
+      url: existing?.url || '',
+      target: existing?.target || 'Inherit',
+      headersJson:
+        existing && 'headers' in existing
+          ? (existing as { headers: string }).headers
+          : (existing as RequestItemNodeDto | null)?.headersJson || '{}',
+      bodyContent:
+        existing && 'body' in existing
+          ? (existing as { body: string }).body || null
+          : (existing as RequestItemNodeDto | null)?.bodyContent || null,
+      bodyType: 'None',
+      collectionId: existing?.collectionId || null,
+      folderId: existing?.folderId || null,
+    });
+    if (activeRequestId === id) {
+      setActiveRequestDetails((prev) => (prev ? { ...prev, name } : null));
+    }
+    return updated;
+  };
+
+  const handleImportOpenApi = () => {
+    if (tree?.collections && tree.collections.length > 0) {
+      handleOpenCollectionSettings(tree.collections[0]);
+    }
+  };
+
+  const initialEditorRequest = useMemo<Partial<RequestData> & { id?: string }>(() => {
+    if (activeRequestDetails) {
+      return {
+        id: activeRequestDetails.id,
+        method: activeRequestDetails.method,
+        url: activeRequestDetails.url,
+        target: activeRequestDetails.target,
+        headers: activeRequestDetails.headers,
+        body: activeRequestDetails.body,
+        auth: activeRequestDetails.auth,
+      };
+    }
+    return CLEAN_SCRATCHPAD;
+  }, [activeRequestDetails]);
 
   const handleSend = async (request: RequestData) => {
     setIsLoading(true);
@@ -335,8 +634,8 @@ export default function Home() {
       }
 
       const executedItem: DependencyRequest = {
-        id: 'req-last',
-        name: request.url || 'Última Requisição',
+        id: activeRequestId || 'req-last',
+        name: activeRequestDetails?.name || request.url || 'Última Requisição',
         method: request.method,
         url: request.url,
         response: {
@@ -348,7 +647,7 @@ export default function Home() {
 
       setRequestHistory((prev) => [
         executedItem,
-        ...prev.filter((r) => r.id !== 'req-last'),
+        ...prev.filter((r) => r.id !== (activeRequestId || 'req-last')),
       ]);
     } catch (err: any) {
       const durationMs = Date.now() - startTime;
@@ -362,6 +661,59 @@ export default function Home() {
       setIsLoading(false);
     }
   };
+
+  const renderCollectionTree = (className?: string) => (
+    <CollectionTree
+      className={className}
+      tree={filteredTree}
+      selectedId={activeItem?.id || selectedCollectionId}
+      activeItem={activeItem}
+      isLoading={isTreeLoading}
+      syncingId={syncingCollectionId}
+      filterText={filterText}
+      onFilterChange={setFilterText}
+      onSelect={handleSelectItem}
+      onSelectItem={handleSelectItem}
+      onSyncCollection={handleQuickSync}
+      onSync={handleQuickSync}
+      onOpenCollectionSettings={handleOpenCollectionSettings}
+      onOpenSettings={handleOpenCollectionSettings}
+      onReload={reloadTree}
+      onCreateCollection={async (name) => {
+        await createCollection({ name, workspaceId: activeWorkspaceId });
+      }}
+      onUpdateCollection={async (id, name) => {
+        await updateCollection(id, { name });
+      }}
+      onDeleteCollection={async (id) => {
+        await deleteCollection(id);
+      }}
+      onCreateFolder={async (name, colId, parentId) => {
+        await createFolder({
+          name,
+          collectionId: colId,
+          parentFolderId: parentId,
+          workspaceId: activeWorkspaceId,
+        });
+      }}
+      onUpdateFolder={async (id, name) => {
+        await updateFolder(id, { name });
+      }}
+      onDeleteFolder={async (id) => {
+        await deleteFolder(id);
+      }}
+      onCreateRequest={handleCreateRequest}
+      onUpdateRequest={handleUpdateRequestName}
+      onUpdateRequestName={handleUpdateRequestName}
+      onDuplicateRequest={async (id) => {
+        await duplicateRequest(id);
+      }}
+      onDeleteRequest={async (id) => {
+        await deleteRequest(id);
+      }}
+      onImportOpenApi={handleImportOpenApi}
+    />
+  );
 
   return (
     <div
@@ -451,16 +803,25 @@ export default function Home() {
         onSyncSuccess={handleSyncSuccess}
       />
 
+      <SaveRequestModal
+        isOpen={isSaveModalOpen}
+        onClose={() => {
+          setIsSaveModalOpen(false);
+          setPendingSaveData(null);
+        }}
+        collections={collectionOptions}
+        defaultName={
+          activeRequestDetails?.name ||
+          (pendingSaveData?.url
+            ? pendingSaveData.url.replace(/^https?:\/\//, '')
+            : 'Nova Requisição')
+        }
+        onSave={handleSaveNewRequest}
+      />
+
       {/* Mobile Drawer */}
       <MobileDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)}>
-        <CollectionsNav
-          items={collections}
-          selectedId={selectedCollectionId}
-          syncingId={syncingCollectionId}
-          onSelect={(item) => setSelectedCollectionId(item.id)}
-          onSync={handleQuickSync}
-          onOpenSettings={handleOpenCollectionSettings}
-        />
+        {renderCollectionTree('flex-1 overflow-y-auto')}
       </MobileDrawer>
 
       <div className="flex flex-1 overflow-hidden">
@@ -471,15 +832,7 @@ export default function Home() {
               Coleções & Pastas
             </span>
           </div>
-          <CollectionsNav
-            className="flex-1 overflow-y-auto"
-            items={collections}
-            selectedId={selectedCollectionId}
-            syncingId={syncingCollectionId}
-            onSelect={(item) => setSelectedCollectionId(item.id)}
-            onSync={handleQuickSync}
-            onOpenSettings={handleOpenCollectionSettings}
-          />
+          {renderCollectionTree('flex-1 overflow-y-auto')}
         </aside>
 
         {/* Main Workspace Area (Request & Response panels) */}
@@ -527,9 +880,16 @@ export default function Home() {
             }`}
           >
             <RequestEditor
+              initialRequest={initialEditorRequest}
+              currentRequestId={activeRequestId || undefined}
+              requestName={activeRequestDetails?.name || undefined}
+              onSaveExisting={handleSaveExisting}
+              onSaveAs={handleSaveAs}
+              isSaving={isSavingRequest}
               isAgentOnline={isAgentOnline}
               isLoading={isLoading}
               onSend={handleSend}
+              onChange={setCurrentEditorData}
               availableRequests={requestHistory}
               availableVariables={availableVariables}
             />
