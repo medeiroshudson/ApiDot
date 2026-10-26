@@ -159,14 +159,61 @@ describe('page variable resolution and interpolation helpers', () => {
 });
 
 describe('Home Page Collection Sync and Settings Integration', () => {
+  const mockSyncWorkspace = {
+    id: 'ws-sync-1',
+    name: 'Sync Workspace',
+    createdAtUtc: '2026-10-26T00:00:00Z',
+  };
+
+  const mockSyncTree: WorkspaceTreeDto = {
+    workspaceId: 'ws-sync-1',
+    workspaceName: 'Sync Workspace',
+    collections: [
+      {
+        id: 'col-sync-1',
+        name: 'Coleção Teste',
+        defaultTarget: 'Inherit',
+        openApiSpecUrl: 'https://api.example.com/openapi.json',
+        folders: [],
+        requests: [],
+      },
+    ],
+  };
+
+  const mockFetchForSync = (customHandler?: (url: string, init?: any) => Promise<any> | undefined) => {
+    return vi.spyOn(global, 'fetch').mockImplementation((input: any, init?: any) => {
+      const url = String(input);
+      if (customHandler) {
+        const customRes = customHandler(url, init);
+        if (customRes !== undefined) return customRes;
+      }
+      if (url.includes('/api/workspaces/') && url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockSyncTree,
+        } as any);
+      }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [mockSyncWorkspace],
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+  };
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it('opens collection settings modal when settings button is clicked on collection nav', async () => {
+    mockFetchForSync();
     render(<Home />);
 
-    const settingsBtns = screen.getAllByRole('button', {
+    const settingsBtns = await screen.findAllByRole('button', {
       name: /configurações da coleção|configurações/i,
     });
     expect(settingsBtns.length).toBeGreaterThan(0);
@@ -185,14 +232,18 @@ describe('Home Page Collection Sync and Settings Integration', () => {
       fieldsRemoved: 0,
       fieldsPreserved: 3,
     };
-    vi.spyOn(global, 'fetch').mockResolvedValue({
-      ok: true,
-      json: async () => mockSyncReport,
-    } as any);
+    mockFetchForSync((url) => {
+      if (url.includes('/sync')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockSyncReport,
+        } as any);
+      }
+    });
 
     render(<Home />);
 
-    const settingsBtns = screen.getAllByRole('button', {
+    const settingsBtns = await screen.findAllByRole('button', {
       name: /configurações da coleção|configurações/i,
     });
     fireEvent.click(settingsBtns[0]);
@@ -219,14 +270,18 @@ describe('Home Page Collection Sync and Settings Integration', () => {
       fieldsRemoved: 1,
       fieldsPreserved: 5,
     };
-    vi.spyOn(global, 'fetch').mockResolvedValue({
-      ok: true,
-      json: async () => mockSyncReport,
-    } as any);
+    mockFetchForSync((url) => {
+      if (url.includes('/sync')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockSyncReport,
+        } as any);
+      }
+    });
 
     render(<Home />);
 
-    const syncBtns = screen.getAllByRole('button', {
+    const syncBtns = await screen.findAllByRole('button', {
       name: /sincronizar coleção|sincronizar/i,
     });
     fireEvent.click(syncBtns[0]);
@@ -249,14 +304,18 @@ describe('Home Page Collection Sync and Settings Integration', () => {
       fieldsRemoved: 1,
       fieldsPreserved: 5,
     };
-    vi.spyOn(global, 'fetch').mockResolvedValue({
-      ok: true,
-      json: async () => mockSyncReport,
-    } as any);
+    mockFetchForSync((url) => {
+      if (url.includes('/sync')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockSyncReport,
+        } as any);
+      }
+    });
 
     render(<Home />);
 
-    const syncBtns = screen.getAllByRole('button', {
+    const syncBtns = await screen.findAllByRole('button', {
       name: /sincronizar coleção|sincronizar/i,
     });
     fireEvent.click(syncBtns[0]);
@@ -269,15 +328,19 @@ describe('Home Page Collection Sync and Settings Integration', () => {
   });
 
   it('displays sync error banner when quick sync fails with non-ok response', async () => {
-    vi.spyOn(global, 'fetch').mockResolvedValue({
-      ok: false,
-      status: 500,
-      json: async () => ({ detail: 'Falha ao conectar ao servidor remoto de OpenAPI' }),
-    } as any);
+    mockFetchForSync((url) => {
+      if (url.includes('/sync')) {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: async () => ({ detail: 'Falha ao conectar ao servidor remoto de OpenAPI' }),
+        } as any);
+      }
+    });
 
     render(<Home />);
 
-    const syncBtns = screen.getAllByRole('button', {
+    const syncBtns = await screen.findAllByRole('button', {
       name: /sincronizar coleção|sincronizar/i,
     });
     fireEvent.click(syncBtns[0]);
@@ -295,11 +358,15 @@ describe('Home Page Collection Sync and Settings Integration', () => {
   });
 
   it('displays sync error banner when quick sync network fetch throws', async () => {
-    vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Network error on quick sync'));
+    mockFetchForSync((url) => {
+      if (url.includes('/sync')) {
+        return Promise.reject(new Error('Network error on quick sync'));
+      }
+    });
 
     render(<Home />);
 
-    const syncBtns = screen.getAllByRole('button', {
+    const syncBtns = await screen.findAllByRole('button', {
       name: /sincronizar coleção|sincronizar/i,
     });
     fireEvent.click(syncBtns[0]);
@@ -311,15 +378,19 @@ describe('Home Page Collection Sync and Settings Integration', () => {
   });
 
   it('propagates error when saving collection spec fails with HTTP error', async () => {
-    vi.spyOn(global, 'fetch').mockResolvedValue({
-      ok: false,
-      status: 400,
-      json: async () => ({ detail: 'Especificação OpenAPI inválida fornecida' }),
-    } as any);
+    mockFetchForSync((url) => {
+      if (url.includes('/openapi')) {
+        return Promise.resolve({
+          ok: false,
+          status: 400,
+          json: async () => ({ detail: 'Especificação OpenAPI inválida fornecida' }),
+        } as any);
+      }
+    });
 
     render(<Home />);
 
-    const settingsBtns = screen.getAllByRole('button', {
+    const settingsBtns = await screen.findAllByRole('button', {
       name: /configurações da coleção|configurações/i,
     });
     fireEvent.click(settingsBtns[0]);
@@ -342,32 +413,29 @@ describe('Home Page Collection Sync and Settings Integration', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
-  it('initializes default collection with a valid GUID identifier', () => {
-    render(<Home />);
-    const defaultButton = screen.getByRole('button', { name: /^coleção padrão$/i });
-    expect(defaultButton).toBeInTheDocument();
-    expect(defaultButton.getAttribute('aria-current')).toBe('page');
-  });
-
   it('decodes Base64 response body from /api/requests/execute into decoded UTF-8 text', async () => {
     const rawContent = '{"message":"hello world"}';
     const base64Body = btoa(rawContent);
 
-    vi.spyOn(global, 'fetch').mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      headers: {
-        get: (h: string) => (h.toLowerCase() === 'content-type' ? 'application/json' : null),
-        forEach: () => {},
-      },
-      json: async () => ({
-        statusCode: 200,
-        statusText: 'OK',
-        headers: { 'content-type': 'application/json' },
-        body: base64Body,
-      }),
-    } as any);
+    mockFetchForSync((url) => {
+      if (url.includes('/api/requests/execute')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: {
+            get: (h: string) => (h.toLowerCase() === 'content-type' ? 'application/json' : null),
+            forEach: () => {},
+          },
+          json: async () => ({
+            statusCode: 200,
+            statusText: 'OK',
+            headers: { 'content-type': 'application/json' },
+            body: base64Body,
+          }),
+        } as any);
+      }
+    });
 
     render(<Home />);
 
@@ -384,21 +452,25 @@ describe('Home Page Collection Sync and Settings Integration', () => {
   });
 
   it('handles empty Base64 body from /api/requests/execute cleanly', async () => {
-    vi.spyOn(global, 'fetch').mockResolvedValue({
-      ok: true,
-      status: 204,
-      statusText: 'No Content',
-      headers: {
-        get: (h: string) => (h.toLowerCase() === 'content-type' ? 'application/json' : null),
-        forEach: () => {},
-      },
-      json: async () => ({
-        statusCode: 204,
-        statusText: 'No Content',
-        headers: {},
-        body: '',
-      }),
-    } as any);
+    mockFetchForSync((url) => {
+      if (url.includes('/api/requests/execute')) {
+        return Promise.resolve({
+          ok: true,
+          status: 204,
+          statusText: 'No Content',
+          headers: {
+            get: (h: string) => (h.toLowerCase() === 'content-type' ? 'application/json' : null),
+            forEach: () => {},
+          },
+          json: async () => ({
+            statusCode: 204,
+            statusText: 'No Content',
+            headers: {},
+            body: '',
+          }),
+        } as any);
+      }
+    });
 
     render(<Home />);
 
@@ -466,6 +538,12 @@ describe('Home Page Collection Tree & Request Lifecycle Integration', () => {
     ],
   };
 
+  const mockDefaultWorkspace = {
+    id: '00000000-0000-0000-0000-000000000001',
+    name: 'Default Workspace',
+    createdAtUtc: '2026-10-26T00:00:00Z',
+  };
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -478,6 +556,13 @@ describe('Home Page Collection Tree & Request Lifecycle Integration', () => {
           ok: true,
           status: 200,
           json: async () => mockWorkspaceTree,
+        } as any);
+      }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [mockDefaultWorkspace],
         } as any);
       }
       return Promise.resolve({ ok: true, json: async () => ({}) } as any);
@@ -501,6 +586,13 @@ describe('Home Page Collection Tree & Request Lifecycle Integration', () => {
           ok: true,
           status: 200,
           json: async () => mockWorkspaceTree,
+        } as any);
+      }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [mockDefaultWorkspace],
         } as any);
       }
       return Promise.resolve({ ok: true, json: async () => ({}) } as any);
@@ -537,6 +629,13 @@ describe('Home Page Collection Tree & Request Lifecycle Integration', () => {
           ok: true,
           status: 200,
           json: async () => mockWorkspaceTree,
+        } as any);
+      }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [mockDefaultWorkspace],
         } as any);
       }
       return Promise.resolve({ ok: true, json: async () => ({}) } as any);
@@ -576,6 +675,13 @@ describe('Home Page Collection Tree & Request Lifecycle Integration', () => {
           ok: true,
           status: 200,
           json: async () => mockWorkspaceTree,
+        } as any);
+      }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [mockDefaultWorkspace],
         } as any);
       }
       if (url.includes('/api/requests') && init?.method === 'POST') {
@@ -651,6 +757,13 @@ describe('Home Page Collection Tree & Request Lifecycle Integration', () => {
           json: async () => mockWorkspaceTree,
         } as any);
       }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [mockDefaultWorkspace],
+        } as any);
+      }
       if (url.includes('/api/requests/req-ping') && init?.method === 'PUT') {
         putCalled = true;
         putBody = JSON.parse(init.body);
@@ -713,6 +826,13 @@ describe('Home Page Collection Tree & Request Lifecycle Integration', () => {
           json: async () => mockWorkspaceTree,
         } as any);
       }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [mockDefaultWorkspace],
+        } as any);
+      }
       if (url.includes('/api/requests/req-ping') && init?.method === 'DELETE') {
         deleteCalled = true;
         return Promise.resolve({
@@ -745,5 +865,272 @@ describe('Home Page Collection Tree & Request Lifecycle Integration', () => {
       expect(urlInput).toHaveValue('');
       expect(screen.getByTestId('request-title')).toHaveTextContent('Nova Requisição');
     });
+  });
+});
+
+describe('Home Page Workspace Management & Clean State Integration', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it('renders clean empty workspace state when /api/workspaces returns []', async () => {
+    localStorage.clear();
+    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [],
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    // Empty state heading and button rendered
+    expect(await screen.findByText('Nenhum workspace cadastrado')).toBeInTheDocument();
+    const createBtn = screen.getByRole('button', { name: /^criar workspace$/i });
+    expect(createBtn).toBeInTheDocument();
+
+    // WorkspaceSwitcher shows "Selecionar Workspace"
+    const trigger = screen.getByTestId('workspace-switcher-trigger');
+    expect(trigger).toHaveTextContent('Selecionar Workspace');
+
+    // No mock collections or fake default tree nodes exist
+    expect(screen.queryByText('Coleção Padrão')).toBeNull();
+    expect(screen.queryByText('Minha API')).toBeNull();
+
+    // Verify /tree was NEVER fetched
+    const treeCalls = fetchSpy.mock.calls.filter((call) => String(call[0]).includes('/tree'));
+    expect(treeCalls).toHaveLength(0);
+  });
+
+  it('opens WorkspaceModal when clicking Criar Workspace in empty state', async () => {
+    localStorage.clear();
+    vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [],
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    const createBtn = await screen.findByRole('button', { name: /^criar workspace$/i });
+    fireEvent.click(createBtn);
+
+    // Modal dialog is opened
+    expect(screen.getByRole('dialog', { name: /novo workspace/i })).toBeInTheDocument();
+    const nameInput = screen.getByRole('textbox', { name: /nome do workspace/i });
+    expect(nameInput).toBeInTheDocument();
+  });
+
+  it('submitting WorkspaceModal creates workspace, updates switcher and loads its tree', async () => {
+    localStorage.clear();
+    let workspacesList: any[] = [];
+    let createdWorkspace: any = null;
+
+    vi.spyOn(global, 'fetch').mockImplementation((input: any, init?: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces') && init?.method === 'POST') {
+        const body = JSON.parse(init.body);
+        createdWorkspace = {
+          id: 'ws-fin-100',
+          name: body.name,
+          createdAtUtc: '2026-10-26T00:00:00Z',
+        };
+        workspacesList = [createdWorkspace];
+        return Promise.resolve({
+          ok: true,
+          status: 201,
+          json: async () => createdWorkspace,
+        } as any);
+      }
+      if (url.includes('/api/workspaces/ws-fin-100/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            workspaceId: 'ws-fin-100',
+            workspaceName: 'Financeiro',
+            collections: [
+              {
+                id: 'col-fin',
+                name: 'Contas a Pagar',
+                defaultTarget: 'Inherit',
+                openApiSpecUrl: null,
+                folders: [],
+                requests: [],
+              },
+            ],
+          }),
+        } as any);
+      }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => workspacesList,
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    const createBtn = await screen.findByRole('button', { name: /^criar workspace$/i });
+    fireEvent.click(createBtn);
+
+    const nameInput = screen.getByRole('textbox', { name: /nome do workspace/i });
+    fireEvent.change(nameInput, { target: { value: 'Financeiro' } });
+
+    const submitBtn = within(screen.getByRole('dialog', { name: /novo workspace/i })).getByRole('button', {
+      name: /^criar workspace$/i,
+    });
+    fireEvent.click(submitBtn);
+
+    // Modal closes
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /novo workspace/i })).toBeNull();
+    });
+
+    // Switcher reflects new active workspace
+    expect(screen.getByTestId('workspace-switcher-trigger')).toHaveTextContent('Financeiro');
+
+    // Tree renders the newly created workspace collections
+    expect(await screen.findByText('Contas a Pagar')).toBeInTheDocument();
+
+    // Persisted to localStorage
+    expect(localStorage.getItem('apidot_active_workspace_id')).toBe('ws-fin-100');
+  });
+
+  it('switching workspace via WorkspaceSwitcher changes active tree and persists in localStorage', async () => {
+    localStorage.clear();
+    const ws1 = { id: 'ws-alpha', name: 'Workspace Alpha', createdAtUtc: '2026-10-26T00:00:00Z' };
+    const ws2 = { id: 'ws-beta', name: 'Workspace Beta', createdAtUtc: '2026-10-26T00:00:00Z' };
+
+    vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/ws-alpha/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            workspaceId: 'ws-alpha',
+            workspaceName: 'Workspace Alpha',
+            collections: [
+              {
+                id: 'col-alpha',
+                name: 'Alpha Collection',
+                defaultTarget: 'Inherit',
+                openApiSpecUrl: null,
+                folders: [],
+                requests: [],
+              },
+            ],
+          }),
+        } as any);
+      }
+      if (url.includes('/api/workspaces/ws-beta/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            workspaceId: 'ws-beta',
+            workspaceName: 'Workspace Beta',
+            collections: [
+              {
+                id: 'col-beta',
+                name: 'Beta Collection',
+                defaultTarget: 'Inherit',
+                openApiSpecUrl: null,
+                folders: [],
+                requests: [],
+              },
+            ],
+          }),
+        } as any);
+      }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [ws1, ws2],
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    // Initially loads Workspace Alpha
+    expect(await screen.findByText('Alpha Collection')).toBeInTheDocument();
+    expect(screen.getByTestId('workspace-switcher-trigger')).toHaveTextContent('Workspace Alpha');
+
+    // Click trigger to open dropdown
+    fireEvent.click(screen.getByTestId('workspace-switcher-trigger'));
+
+    // Click Workspace Beta option
+    const optionBeta = screen.getByTestId('workspace-option-ws-beta');
+    fireEvent.click(optionBeta);
+
+    // Switcher now displays Workspace Beta and loads Beta Collection
+    expect(screen.getByTestId('workspace-switcher-trigger')).toHaveTextContent('Workspace Beta');
+    expect(await screen.findByText('Beta Collection')).toBeInTheDocument();
+    expect(screen.queryByText('Alpha Collection')).toBeNull();
+
+    // Persisted to localStorage
+    expect(localStorage.getItem('apidot_active_workspace_id')).toBe('ws-beta');
+  });
+
+  it('restores active workspace from localStorage if it exists in the workspace list', async () => {
+    const ws1 = { id: 'ws-alpha', name: 'Workspace Alpha', createdAtUtc: '2026-10-26T00:00:00Z' };
+    const ws2 = { id: 'ws-beta', name: 'Workspace Beta', createdAtUtc: '2026-10-26T00:00:00Z' };
+    localStorage.setItem('apidot_active_workspace_id', 'ws-beta');
+
+    vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/ws-beta/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            workspaceId: 'ws-beta',
+            workspaceName: 'Workspace Beta',
+            collections: [
+              {
+                id: 'col-beta',
+                name: 'Beta Collection',
+                defaultTarget: 'Inherit',
+                openApiSpecUrl: null,
+                folders: [],
+                requests: [],
+              },
+            ],
+          }),
+        } as any);
+      }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [ws1, ws2],
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    expect(await screen.findByText('Beta Collection')).toBeInTheDocument();
+    expect(screen.getByTestId('workspace-switcher-trigger')).toHaveTextContent('Workspace Beta');
   });
 });

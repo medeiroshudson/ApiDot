@@ -22,11 +22,11 @@ import {
 } from '@/components/collection/CollectionSettingsModal';
 import {
   useCollectionTree,
-  DEFAULT_WORKSPACE_TREE,
   ActiveTreeItem,
 } from '@/hooks/useCollectionTree';
 import {
   WorkspaceTreeDto,
+  WorkspaceDto,
   CollectionNodeDto,
   FolderNodeDto,
   RequestItemNodeDto,
@@ -35,9 +35,11 @@ import {
   fetchWorkspacesApi,
   createWorkspaceApi,
 } from '@/lib/treeApi';
-import { CheckCircle2, X, AlertCircle } from 'lucide-react';
+import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
+import { WorkspaceModal } from '@/components/workspace/WorkspaceModal';
+import { CheckCircle2, X, AlertCircle, Briefcase, Plus } from 'lucide-react';
 
-const DEFAULT_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
+const STORAGE_KEY_ACTIVE_WORKSPACE = 'apidot_active_workspace_id';
 
 const DEFAULT_ENVIRONMENTS: EnvironmentGroup[] = [
   { name: 'Development', variables: [] },
@@ -109,7 +111,9 @@ function findRequestInTree(
 }
 
 export default function Home() {
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(DEFAULT_WORKSPACE_ID);
+  const [workspaces, setWorkspaces] = useState<WorkspaceDto[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+  const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isAgentOnline, setIsAgentOnline] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -117,36 +121,68 @@ export default function Home() {
   const [activeMobilePane, setActiveMobilePane] = useState<'request' | 'response'>('request');
   const [mounted, setMounted] = useState(false);
 
-  const ensureWorkspaceId = useCallback(async (): Promise<string> => {
+  const refreshWorkspaces = useCallback(async (preferredWorkspaceId?: string): Promise<WorkspaceDto[]> => {
     try {
       const list = await fetchWorkspacesApi();
-      if (list && list.length > 0) {
-        if (!activeWorkspaceId || !list.some((w) => w.id === activeWorkspaceId)) {
-          setActiveWorkspaceId(list[0].id);
+      const validList = Array.isArray(list) ? list : [];
+      setWorkspaces(validList);
+
+      if (validList.length === 0) {
+        setActiveWorkspaceId(null);
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(STORAGE_KEY_ACTIVE_WORKSPACE);
         }
-        return list[0].id;
+        return validList;
       }
-      const created = await createWorkspaceApi('Workspace');
-      setActiveWorkspaceId(created.id);
-      return created.id;
+
+      let chosenId: string | null = null;
+      if (preferredWorkspaceId && validList.some((w) => w.id === preferredWorkspaceId)) {
+        chosenId = preferredWorkspaceId;
+      } else {
+        const savedId = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY_ACTIVE_WORKSPACE) : null;
+        if (savedId && validList.some((w) => w.id === savedId)) {
+          chosenId = savedId;
+        } else {
+          chosenId = validList[0].id;
+        }
+      }
+
+      setActiveWorkspaceId(chosenId);
+      if (typeof window !== 'undefined' && chosenId) {
+        localStorage.setItem(STORAGE_KEY_ACTIVE_WORKSPACE, chosenId);
+      }
+      return validList;
     } catch {
-      return activeWorkspaceId || DEFAULT_WORKSPACE_ID;
+      return [];
     }
-  }, [activeWorkspaceId]);
+  }, []);
 
   useEffect(() => {
-    async function loadWorkspaces() {
-      try {
-        const list = await fetchWorkspacesApi();
-        if (list && list.length > 0) {
-          setActiveWorkspaceId(list[0].id);
-        }
-      } catch {
-        // offline / fallback
-      }
+    refreshWorkspaces();
+  }, [refreshWorkspaces]);
+
+  const handleSelectWorkspace = useCallback((id: string) => {
+    setActiveWorkspaceId(id);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY_ACTIVE_WORKSPACE, id);
     }
-    loadWorkspaces();
   }, []);
+
+  const handleCreateWorkspace = useCallback(async (name: string) => {
+    const created = await createWorkspaceApi(name);
+    await refreshWorkspaces(created.id);
+  }, [refreshWorkspaces]);
+
+  const ensureWorkspaceId = useCallback(async (): Promise<string> => {
+    if (activeWorkspaceId) return activeWorkspaceId;
+    const list = await refreshWorkspaces();
+    if (list && list.length > 0) {
+      return list[0].id;
+    }
+    const created = await createWorkspaceApi('Workspace');
+    await refreshWorkspaces(created.id);
+    return created.id;
+  }, [activeWorkspaceId, refreshWorkspaces]);
 
   // Tree Hook
   const {
@@ -169,7 +205,7 @@ export default function Home() {
     updateRequest,
     duplicateRequest,
     deleteRequest,
-  } = useCollectionTree(activeWorkspaceId, DEFAULT_WORKSPACE_TREE);
+  } = useCollectionTree(activeWorkspaceId);
 
   // Active Request State in RequestEditor
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
@@ -201,7 +237,7 @@ export default function Home() {
   const [requestHistory, setRequestHistory] = useState<DependencyRequest[]>(DEFAULT_REQUESTS);
 
   // Selected Collection & Sync Modal State
-  const [selectedCollectionId, setSelectedCollectionId] = useState<string>(DEFAULT_WORKSPACE_ID);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [syncingCollectionId, setSyncingCollectionId] = useState<string | null>(null);
   const [isCollectionSettingsOpen, setIsCollectionSettingsOpen] = useState(false);
   const [editingCollection, setEditingCollection] = useState<CollectionNodeDto | null>(null);
@@ -770,6 +806,48 @@ export default function Home() {
     />
   );
 
+  const renderSidebarContent = (className?: string) => (
+    <div className={`flex flex-col h-full overflow-hidden ${className || ''}`}>
+      {/* Workspace Switcher at the top of the sidebar */}
+      <div className="mb-3 shrink-0">
+        <WorkspaceSwitcher
+          workspaces={workspaces}
+          activeWorkspaceId={activeWorkspaceId}
+          onSelectWorkspace={handleSelectWorkspace}
+          onCreateWorkspaceClick={() => setIsWorkspaceModalOpen(true)}
+        />
+      </div>
+
+      {workspaces.length === 0 ? (
+        <div
+          data-testid="sidebar-empty-workspace"
+          className="flex-1 flex flex-col items-center justify-center text-center p-4 border border-dashed border-neutral-800 rounded-lg bg-neutral-900/30 my-auto"
+        >
+          <div className="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-3">
+            <Briefcase className="w-5 h-5" aria-hidden="true" />
+          </div>
+          <h3 className="text-xs font-semibold text-neutral-200 mb-1">
+            Nenhum workspace cadastrado
+          </h3>
+          <p className="text-[11px] text-neutral-400 mb-4 max-w-[180px]">
+            Crie seu primeiro espaço de trabalho para começar a organizar suas requisições.
+          </p>
+          <button
+            type="button"
+            data-testid="create-workspace-empty-state-btn"
+            onClick={() => setIsWorkspaceModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors cursor-pointer shadow-sm"
+          >
+            <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Criar Workspace</span>
+          </button>
+        </div>
+      ) : (
+        renderCollectionTree('flex-1 overflow-y-auto')
+      )}
+    </div>
+  );
+
   return (
     <div
       data-hydrated={mounted}
@@ -858,6 +936,12 @@ export default function Home() {
         onSyncSuccess={handleSyncSuccess}
       />
 
+      <WorkspaceModal
+        isOpen={isWorkspaceModalOpen}
+        onClose={() => setIsWorkspaceModalOpen(false)}
+        onSave={handleCreateWorkspace}
+      />
+
       <SaveRequestModal
         isOpen={isSaveModalOpen}
         onClose={() => {
@@ -876,18 +960,13 @@ export default function Home() {
 
       {/* Mobile Drawer */}
       <MobileDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)}>
-        {renderCollectionTree('flex-1 overflow-y-auto')}
+        {renderSidebarContent()}
       </MobileDrawer>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Desktop Sidebar (hidden on mobile, visible on md+) */}
-        <aside className="hidden md:flex flex-col w-64 border-r border-neutral-800 bg-neutral-900/50 p-4">
-          <div className="flex items-center justify-between mb-4 pb-2 border-b border-neutral-800">
-            <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-              Coleções & Pastas
-            </span>
-          </div>
-          {renderCollectionTree('flex-1 overflow-y-auto')}
+        <aside className="hidden md:flex flex-col w-64 border-r border-neutral-800 bg-neutral-900/50 p-4 overflow-hidden">
+          {renderSidebarContent()}
         </aside>
 
         {/* Main Workspace Area (Request & Response panels) */}

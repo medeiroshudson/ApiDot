@@ -175,6 +175,26 @@ describe('useCollectionTree', () => {
       expect(result.current.tree).toBeNull();
     });
 
+    it('handles null workspaceId gracefully without fetching', async () => {
+      const fetchSpy = vi.spyOn(treeApi, 'fetchWorkspaceTree');
+
+      const { result } = renderHook(() => useCollectionTree(null));
+
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.tree).toBeNull();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('handles undefined workspaceId gracefully without fetching', async () => {
+      const fetchSpy = vi.spyOn(treeApi, 'fetchWorkspaceTree');
+
+      const { result } = renderHook(() => useCollectionTree(undefined));
+
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.tree).toBeNull();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
     it('manages activeItem state correctly', async () => {
       vi.spyOn(treeApi, 'fetchWorkspaceTree').mockResolvedValue(mockTree);
       const { result } = renderHook(() => useCollectionTree('ws-1'));

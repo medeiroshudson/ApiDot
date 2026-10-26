@@ -31,39 +31,6 @@ export interface ActiveTreeItem {
   data?: CollectionNodeDto | FolderNodeDto | RequestItemNodeDto | unknown;
 }
 
-export const DEFAULT_WORKSPACE_TREE: WorkspaceTreeDto = {
-  workspaceId: '00000000-0000-0000-0000-000000000001',
-  workspaceName: 'Default Workspace',
-  collections: [
-    {
-      id: '00000000-0000-0000-0000-000000000001',
-      name: 'Coleção Padrão',
-      defaultTarget: 'Inherit',
-      openApiSpecUrl: '',
-      folders: [
-        {
-          id: 'auth-folder',
-          name: 'Autenticação',
-          collectionId: '00000000-0000-0000-0000-000000000001',
-          parentFolderId: null,
-          defaultTarget: 'Inherit',
-          subFolders: [],
-          requests: [],
-        },
-      ],
-      requests: [],
-    },
-    {
-      id: '00000000-0000-0000-0000-000000000002',
-      name: 'Minha API',
-      defaultTarget: 'Inherit',
-      openApiSpecUrl: '',
-      folders: [],
-      requests: [],
-    },
-  ],
-};
-
 export function filterTree(tree: WorkspaceTreeDto | null, filterText: string): WorkspaceTreeDto | null {
   if (!tree || !Array.isArray(tree.collections)) return null;
   const term = filterText.trim().toLowerCase();
@@ -180,11 +147,11 @@ function itemExistsInCollections(collections: CollectionNodeDto[], type: string,
 }
 
 export function useCollectionTree(
-  workspaceId: string,
+  workspaceId: string | null | undefined,
   initialTree: WorkspaceTreeDto | null = null
 ): UseCollectionTreeResult {
   const [tree, setTree] = useState<WorkspaceTreeDto | null>(initialTree);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(Boolean(workspaceId));
   const [error, setError] = useState<string | null>(null);
   const [filterText, setFilterText] = useState<string>('');
   const [activeItem, setActiveItem] = useState<ActiveTreeItem | null>(null);
@@ -229,8 +196,12 @@ export function useCollectionTree(
     ): Promise<CollectionNodeDto> => {
       setError(null);
       try {
+        const targetWorkspaceId = data.workspaceId || workspaceId;
+        if (!targetWorkspaceId) {
+          throw new Error('Nenhum workspace selecionado');
+        }
         const created = await createCollectionApi({
-          workspaceId: data.workspaceId || workspaceId,
+          workspaceId: targetWorkspaceId,
           name: data.name,
           defaultTarget: data.defaultTarget,
         });
@@ -300,8 +271,12 @@ export function useCollectionTree(
     ): Promise<FolderNodeDto> => {
       setError(null);
       try {
+        const targetWorkspaceId = data.workspaceId || workspaceId;
+        if (!targetWorkspaceId) {
+          throw new Error('Nenhum workspace selecionado');
+        }
         const created = await createFolderApi({
-          workspaceId: data.workspaceId || workspaceId,
+          workspaceId: targetWorkspaceId,
           name: data.name,
           collectionId: data.collectionId,
           parentFolderId: data.parentFolderId,
@@ -373,8 +348,12 @@ export function useCollectionTree(
     ): Promise<RequestItemNodeDto> => {
       setError(null);
       try {
+        const targetWorkspaceId = data.workspaceId || workspaceId;
+        if (!targetWorkspaceId) {
+          throw new Error('Nenhum workspace selecionado');
+        }
         const created = await createRequestApi({
-          workspaceId: data.workspaceId || workspaceId,
+          workspaceId: targetWorkspaceId,
           name: data.name,
           method: data.method,
           url: data.url,
