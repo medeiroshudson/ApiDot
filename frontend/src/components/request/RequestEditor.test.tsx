@@ -67,6 +67,8 @@ describe('RequestEditor', () => {
 
     // Switch to Body tab
     fireEvent.click(bodyTab);
+    expect(screen.getByTestId('body-empty-placeholder')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: /json/i }));
     expect(screen.getByTestId('body-code-editor')).toBeDefined();
 
     // Switch to Auth tab

@@ -480,24 +480,18 @@ describe('CollectionTree', () => {
     expect(onStartCreate).toHaveBeenCalledWith('request', 'fold-1');
   });
 
-  it('renders sync and settings action buttons on collections', () => {
-    const onSyncCollection = vi.fn();
+  it('renders settings action button on collections and excludes redundant sync button', () => {
     const onOpenCollectionSettings = vi.fn();
 
     render(
       <CollectionTree
         tree={mockTree}
-        onSyncCollection={onSyncCollection}
         onOpenCollectionSettings={onOpenCollectionSettings}
       />
     );
 
-    const syncBtn = screen.getByRole('button', { name: /sincronizar coleção auth api/i });
-    expect(syncBtn).toBeInTheDocument();
-    fireEvent.click(syncBtn);
-    expect(onSyncCollection).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'coll-1', name: 'Auth API' })
-    );
+    // Sync button should NOT be in the collection row
+    expect(screen.queryByRole('button', { name: /sincronizar coleção auth api/i })).toBeNull();
 
     const settingsBtn = screen.getByRole('button', { name: /configurações da coleção auth api/i });
     expect(settingsBtn).toBeInTheDocument();

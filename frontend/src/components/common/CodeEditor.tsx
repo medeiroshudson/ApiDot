@@ -4,6 +4,7 @@ import React, { useMemo, useCallback, useRef } from 'react';
 import CodeMirror, {
   Extension,
   EditorView,
+  Prec,
   keymap,
   oneDark,
   ReactCodeMirrorRef,
@@ -26,6 +27,7 @@ export interface CodeEditorProps {
     pos: number,
     view?: EditorView
   ) => void;
+  onSpecialKeyDown?: (key: 'ArrowDown' | 'ArrowUp' | 'Enter' | 'Escape') => boolean;
   language?: 'json' | 'text';
   placeholder?: string;
   minHeight?: string;
@@ -48,6 +50,9 @@ const apiDotTheme = EditorView.theme(
         'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
       borderRadius: '0.375rem',
       border: '1px solid #262626',
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
     },
     '&.cm-focused': {
       outline: 'none',
@@ -57,6 +62,8 @@ const apiDotTheme = EditorView.theme(
     '.cm-scroller': {
       overflow: 'auto',
       fontFamily: 'inherit',
+      flex: '1 1 auto',
+      minHeight: '0',
     },
     '.cm-content': {
       padding: '8px 4px',
@@ -92,10 +99,22 @@ const apiDotTheme = EditorView.theme(
   { dark: true }
 );
 
+// Safe JSON linter that skips linting when content is empty or whitespace
+const safeJsonLinter = (view: EditorView) => {
+  const doc = view.state.doc.toString().trim();
+  if (!doc) return [];
+  try {
+    return jsonParseLinter()(view);
+  } catch {
+    return [];
+  }
+};
+
 export function CodeEditor({
   value,
   onChange,
   onCursorChange,
+  onSpecialKeyDown,
   language = 'json',
   placeholder = '',
   minHeight = '160px',
@@ -118,7 +137,32 @@ export function CodeEditor({
     if (language === 'json') {
       list.push(json());
       list.push(lintGutter());
-      list.push(linter(jsonParseLinter()));
+      list.push(linter(safeJsonLinter));
+    }
+
+    if (onSpecialKeyDown) {
+      list.push(
+        Prec.highest(
+          keymap.of([
+            {
+              key: 'ArrowDown',
+              run: () => Boolean(onSpecialKeyDown('ArrowDown')),
+            },
+            {
+              key: 'ArrowUp',
+              run: () => Boolean(onSpecialKeyDown('ArrowUp')),
+            },
+            {
+              key: 'Enter',
+              run: () => Boolean(onSpecialKeyDown('Enter')),
+            },
+            {
+              key: 'Escape',
+              run: () => Boolean(onSpecialKeyDown('Escape')),
+            },
+          ])
+        )
+      );
     }
 
     if (onCursorChange) {
@@ -150,7 +194,7 @@ export function CodeEditor({
     }
 
     return list;
-  }, [language, onCursorChange]);
+  }, [language, onCursorChange, onSpecialKeyDown]);
 
   const handleChange = useCallback(
     (val: string) => {
@@ -162,7 +206,7 @@ export function CodeEditor({
   return (
     <div
       data-testid={testId}
-      className={`relative w-full ${className}`}
+      className={`relative w-full h-full flex flex-col flex-1 min-h-0 ${className}`}
       aria-label={ariaLabel}
     >
       <CodeMirror
@@ -172,6 +216,7 @@ export function CodeEditor({
         theme="none"
         extensions={extensions}
         placeholder={placeholder}
+        height="100%"
         minHeight={minHeight}
         maxHeight={maxHeight}
         readOnly={readOnly || disabled}

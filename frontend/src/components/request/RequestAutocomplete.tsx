@@ -19,8 +19,14 @@ export interface CursorCoords {
   bottom: number;
 }
 
+export interface AutocompleteNavigationHandle {
+  isOpen: boolean;
+  onKeyDown: (key: 'ArrowDown' | 'ArrowUp' | 'Enter' | 'Escape') => boolean;
+}
+
 export interface RequestAutocompleteProps {
   inputRef?: React.RefObject<HTMLInputElement | HTMLTextAreaElement | null>;
+  navigationRef?: React.MutableRefObject<AutocompleteNavigationHandle | null>;
   value?: string;
   cursorCoords?: CursorCoords | null;
   cursorPos?: number;
@@ -85,6 +91,7 @@ function getAutocompleteContext(text: string, cursorPos: number) {
 
 export function RequestAutocomplete({
   inputRef,
+  navigationRef,
   value = '',
   cursorCoords,
   cursorPos,
@@ -380,6 +387,40 @@ export function RequestAutocomplete({
       el.removeEventListener('select', handleEventUpdate);
     };
   }, [getTargetElement, handleSelect, isOpen, selectedIndex, suggestions, updateCursorFromElement]);
+
+  const handleExternalKeyDown = useCallback(
+    (key: 'ArrowDown' | 'ArrowUp' | 'Enter' | 'Escape'): boolean => {
+      if (!isOpen || suggestions.length === 0) return false;
+
+      if (key === 'ArrowDown') {
+        setSelectedIndex((prev) => (prev + 1) % suggestions.length);
+        return true;
+      } else if (key === 'ArrowUp') {
+        setSelectedIndex((prev) => (prev - 1 + suggestions.length) % suggestions.length);
+        return true;
+      } else if (key === 'Enter') {
+        const selected = suggestions[selectedIndex];
+        if (selected) {
+          handleSelect(selected);
+          return true;
+        }
+      } else if (key === 'Escape') {
+        setIsDismissed(true);
+        return true;
+      }
+      return false;
+    },
+    [handleSelect, isOpen, selectedIndex, suggestions]
+  );
+
+  useEffect(() => {
+    if (navigationRef) {
+      navigationRef.current = {
+        isOpen,
+        onKeyDown: handleExternalKeyDown,
+      };
+    }
+  }, [navigationRef, isOpen, handleExternalKeyDown]);
 
   const liveRegion = (
     <span className="sr-only" role="status" aria-live="polite">

@@ -80,16 +80,22 @@ describe('CollectionSettingsModal', () => {
       );
 
       const tabGeneral = screen.getByRole('tab', { name: /geral & alvo/i });
+      const tabAuth = screen.getByRole('tab', { name: /autenticação/i });
       const tabOpenApi = screen.getByRole('tab', { name: /openapi \/ sync/i });
       const tabDeps = screen.getByRole('tab', { name: /vínculos & dependências/i });
 
       expect(tabGeneral).toBeInTheDocument();
+      expect(tabAuth).toBeInTheDocument();
       expect(tabOpenApi).toBeInTheDocument();
       expect(tabDeps).toBeInTheDocument();
 
       // Tab 1 (General) is active by default
       expect(screen.getByLabelText(/nome da coleção/i)).toBeInTheDocument();
       expect(screen.getByRole('combobox', { name: /target de execução/i })).toBeInTheDocument();
+
+      // Switch to Auth tab
+      fireEvent.click(tabAuth);
+      expect(screen.getByRole('combobox', { name: /tipo de autenticação da coleção/i })).toBeInTheDocument();
 
       // Switch to OpenAPI tab
       fireEvent.click(tabOpenApi);
@@ -100,6 +106,43 @@ describe('CollectionSettingsModal', () => {
       fireEvent.click(tabDeps);
       expect(screen.getAllByText(/get user profile/i).length).toBeGreaterThan(0);
       expect(screen.getAllByRole('button', { name: /copiar/i }).length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Tab 2: Autenticação', () => {
+    it('allows configuring collection-level auth and saves it', async () => {
+      const onSave = vi.fn();
+      render(
+        <CollectionSettingsModal
+          isOpen={true}
+          onClose={() => {}}
+          collection={mockCollection}
+          onSave={onSave}
+        />
+      );
+
+      const tabAuth = screen.getByRole('tab', { name: /autenticação/i });
+      fireEvent.click(tabAuth);
+
+      const authSelect = screen.getByRole('combobox', { name: /tipo de autenticação da coleção/i });
+      fireEvent.change(authSelect, { target: { value: 'bearer' } });
+
+      const tokenInput = screen.getByLabelText(/token:/i);
+      fireEvent.change(tokenInput, { target: { value: 'my-coll-token-123' } });
+
+      const saveBtn = screen.getByRole('button', { name: /salvar alterações/i });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(onSave).toHaveBeenCalledWith(
+          expect.objectContaining({
+            auth: expect.objectContaining({
+              type: 'bearer',
+              token: 'my-coll-token-123',
+            }),
+          })
+        );
+      });
     });
   });
 

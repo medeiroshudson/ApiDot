@@ -778,25 +778,6 @@ export function CollectionTree({
           {/* Action icons on hover */}
           {!isEditing && (
             <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity ml-1 shrink-0">
-              {(col.openApiSpecUrl || onSyncCollection || onSync) && (
-                <button
-                  type="button"
-                  title={`Sincronizar coleção ${col.name}`}
-                  aria-label={`Sincronizar coleção ${col.name}`}
-                  disabled={isSyncing}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    (onSyncCollection ?? onSync)?.(col);
-                  }}
-                  className="p-1 rounded text-neutral-400 hover:text-white hover:bg-neutral-700/60 transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  <RefreshCw
-                    className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-blue-400' : ''}`}
-                    data-testid={isSyncing ? `nav-sync-spinning-${col.id}` : undefined}
-                  />
-                </button>
-              )}
-
               {(onOpenCollectionSettings || onOpenSettings) && (
                 <button
                   type="button"

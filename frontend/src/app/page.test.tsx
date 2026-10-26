@@ -283,10 +283,16 @@ describe('Home Page Collection Sync and Settings Integration', () => {
 
     render(<Home />);
 
-    const syncBtns = await screen.findAllByRole('button', {
-      name: /sincronizar coleção|sincronizar/i,
+    const settingsBtns = await screen.findAllByRole('button', {
+      name: /configurações da coleção|configurações/i,
     });
-    fireEvent.click(syncBtns[0]);
+    fireEvent.click(settingsBtns[0]);
+
+    const dialog = screen.getByRole('dialog');
+    const openApiTab = within(dialog).getByRole('tab', { name: /openapi \/ sync/i });
+    fireEvent.click(openApiTab);
+    const syncBtn = within(dialog).getByRole('button', { name: /sincronizar coleção/i });
+    fireEvent.click(syncBtn);
 
     await waitFor(() => {
       expect(screen.getByTestId('audit-summary-banner')).toBeInTheDocument();
@@ -298,7 +304,7 @@ describe('Home Page Collection Sync and Settings Integration', () => {
     expect(screen.queryByTestId('audit-summary-banner')).toBeNull();
   });
 
-  it('triggers quick sync on collection nav item and shows audit banner', async () => {
+  it('triggers sync in collection settings and shows audit banner', async () => {
     const mockSyncReport = {
       addedRequests: 2,
       updatedRequests: 0,
@@ -317,10 +323,16 @@ describe('Home Page Collection Sync and Settings Integration', () => {
 
     render(<Home />);
 
-    const syncBtns = await screen.findAllByRole('button', {
-      name: /sincronizar coleção|sincronizar/i,
+    const settingsBtns = await screen.findAllByRole('button', {
+      name: /configurações da coleção|configurações/i,
     });
-    fireEvent.click(syncBtns[0]);
+    fireEvent.click(settingsBtns[0]);
+
+    const dialog = screen.getByRole('dialog');
+    const openApiTab = within(dialog).getByRole('tab', { name: /openapi \/ sync/i });
+    fireEvent.click(openApiTab);
+    const syncBtn = within(dialog).getByRole('button', { name: /sincronizar coleção/i });
+    fireEvent.click(syncBtn);
 
     await waitFor(() => {
       expect(screen.getByTestId('audit-summary-banner')).toBeInTheDocument();
@@ -329,7 +341,7 @@ describe('Home Page Collection Sync and Settings Integration', () => {
     expect(screen.getByText(/2 requisições adicionadas/i)).toBeInTheDocument();
   });
 
-  it('displays sync error banner when quick sync fails with non-ok response', async () => {
+  it('displays sync error banner when sync fails with non-ok response', async () => {
     mockFetchForSync((url) => {
       if (url.includes('/sync')) {
         return Promise.resolve({
@@ -342,24 +354,26 @@ describe('Home Page Collection Sync and Settings Integration', () => {
 
     render(<Home />);
 
-    const syncBtns = await screen.findAllByRole('button', {
-      name: /sincronizar coleção|sincronizar/i,
+    const settingsBtns = await screen.findAllByRole('button', {
+      name: /configurações da coleção|configurações/i,
     });
-    fireEvent.click(syncBtns[0]);
+    fireEvent.click(settingsBtns[0]);
+
+    const dialog = screen.getByRole('dialog');
+    const openApiTab = within(dialog).getByRole('tab', { name: /openapi \/ sync/i });
+    fireEvent.click(openApiTab);
+    const syncBtn = within(dialog).getByRole('button', { name: /sincronizar coleção/i });
+    fireEvent.click(syncBtn);
 
     await waitFor(() => {
-      expect(screen.getByTestId('sync-error-banner')).toBeInTheDocument();
+      expect(within(dialog).getByRole('alert')).toBeInTheDocument();
       expect(
-        screen.getByText('Falha ao conectar ao servidor remoto de OpenAPI')
+        within(dialog).getByText('Falha ao conectar ao servidor remoto de OpenAPI')
       ).toBeInTheDocument();
     });
-
-    const closeBtn = screen.getByRole('button', { name: /fechar notificação de erro/i });
-    fireEvent.click(closeBtn);
-    expect(screen.queryByTestId('sync-error-banner')).toBeNull();
   });
 
-  it('displays sync error banner when quick sync network fetch throws', async () => {
+  it('displays sync error banner when sync network fetch throws', async () => {
     mockFetchForSync((url) => {
       if (url.includes('/sync')) {
         return Promise.reject(new Error('Network error on quick sync'));
@@ -368,14 +382,20 @@ describe('Home Page Collection Sync and Settings Integration', () => {
 
     render(<Home />);
 
-    const syncBtns = await screen.findAllByRole('button', {
-      name: /sincronizar coleção|sincronizar/i,
+    const settingsBtns = await screen.findAllByRole('button', {
+      name: /configurações da coleção|configurações/i,
     });
-    fireEvent.click(syncBtns[0]);
+    fireEvent.click(settingsBtns[0]);
+
+    const dialog = screen.getByRole('dialog');
+    const openApiTab = within(dialog).getByRole('tab', { name: /openapi \/ sync/i });
+    fireEvent.click(openApiTab);
+    const syncBtn = within(dialog).getByRole('button', { name: /sincronizar coleção/i });
+    fireEvent.click(syncBtn);
 
     await waitFor(() => {
-      expect(screen.getByTestId('sync-error-banner')).toBeInTheDocument();
-      expect(screen.getByText('Network error on quick sync')).toBeInTheDocument();
+      expect(within(dialog).getByRole('alert')).toBeInTheDocument();
+      expect(within(dialog).getByText('Network error on quick sync')).toBeInTheDocument();
     });
   });
 

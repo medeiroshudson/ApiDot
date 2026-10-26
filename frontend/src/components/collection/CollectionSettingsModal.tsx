@@ -9,6 +9,7 @@ import {
   AlertCircle,
   FileCode,
   Sliders,
+  Shield,
   Link2,
   Copy,
   Check,
@@ -20,6 +21,7 @@ import {
 import { ExecutionTarget, TargetSelector } from '../request/TargetSelector';
 import { CollectionNodeDto, FolderNodeDto, RequestItemNodeDto } from '@/lib/treeApi';
 import { CodeEditor } from '../common/CodeEditor';
+import { AuthConfig } from '../request/RequestEditor';
 
 export interface SyncReport {
   addedRequests: number;
@@ -29,7 +31,7 @@ export interface SyncReport {
   fieldsPreserved: number;
 }
 
-export type CollectionModalTab = 'general' | 'openapi' | 'dependencies';
+export type CollectionModalTab = 'general' | 'auth' | 'openapi' | 'dependencies';
 
 export interface CollectionSettingsModalProps {
   isOpen: boolean;
@@ -40,6 +42,7 @@ export interface CollectionSettingsModalProps {
   onSave?: (data: {
     name?: string;
     defaultTarget?: ExecutionTarget;
+    auth?: AuthConfig;
     specUrl?: string;
     specContent?: string;
   }) => Promise<void> | void;
@@ -150,6 +153,7 @@ export function CollectionSettingsModal({
   const [activeTab, setActiveTab] = useState<CollectionModalTab>('general');
   const [name, setName] = useState('');
   const [defaultTarget, setDefaultTarget] = useState<ExecutionTarget>('Inherit');
+  const [auth, setAuth] = useState<AuthConfig>({ type: 'none' });
   const [specUrl, setSpecUrl] = useState('');
   const [specContent, setSpecContent] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -176,6 +180,7 @@ export function CollectionSettingsModal({
       setDefaultTarget(collection.defaultTarget || 'Inherit');
       setSpecUrl(collection.openApiSpecUrl || '');
       setSpecContent((collection as { openApiSpecContent?: string | null })?.openApiSpecContent || '');
+      setAuth((collection as { auth?: AuthConfig })?.auth || { type: 'none' });
       setError(null);
       setReport(null);
       setActiveTab('general');
@@ -312,6 +317,7 @@ export function CollectionSettingsModal({
       await onSave?.({
         name: name.trim() || collection.name,
         defaultTarget,
+        auth,
         specUrl: specUrl.trim() || undefined,
         specContent: specContent.trim() || undefined,
       });
@@ -383,6 +389,21 @@ export function CollectionSettingsModal({
           >
             <Sliders className="w-3.5 h-3.5" />
             <span>Geral & Alvo</span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'auth'}
+            onClick={() => setActiveTab('auth')}
+            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-medium border-b-2 transition-colors ${
+              activeTab === 'auth'
+                ? 'border-blue-500 text-white font-semibold'
+                : 'border-transparent text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <Shield className="w-3.5 h-3.5" />
+            <span>Autenticação</span>
           </button>
 
           <button
@@ -469,7 +490,123 @@ export function CollectionSettingsModal({
             </div>
           )}
 
-          {/* TAB 2: OPENAPI / SYNC */}
+          {/* TAB 2: AUTENTICAÇÃO */}
+          {activeTab === 'auth' && (
+            <div className="space-y-4 animate-in fade-in duration-100">
+              <p className="text-xs text-neutral-400">
+                Define a autenticação padrão para as requisições desta coleção que estiverem configuradas com &ldquo;Herdar da Coleção&rdquo;.
+              </p>
+
+              <div className="space-y-1.5">
+                <label htmlFor="collection-auth-type-select" className="text-xs font-medium text-neutral-300 block">
+                  Tipo de Autenticação da Coleção:
+                </label>
+                <select
+                  id="collection-auth-type-select"
+                  aria-label="Tipo de Autenticação da Coleção"
+                  value={auth.type}
+                  disabled={isBusy}
+                  onChange={(e) => setAuth((prev) => ({ ...prev, type: e.target.value as AuthConfig['type'] }))}
+                  className="bg-neutral-950 border border-neutral-800 text-xs rounded-lg px-3 py-2 text-neutral-200 outline-none focus:ring-1 focus:ring-blue-500 block w-full sm:w-64"
+                >
+                  <option value="none">Nenhuma Autenticação</option>
+                  <option value="bearer">Bearer Token</option>
+                  <option value="basic">Basic Auth</option>
+                  <option value="apikey">API Key</option>
+                </select>
+              </div>
+
+              {auth.type === 'bearer' && (
+                <div className="space-y-1.5">
+                  <label htmlFor="collection-bearer-token" className="text-xs font-medium text-neutral-300 block">
+                    Token:
+                  </label>
+                  <input
+                    id="collection-bearer-token"
+                    type="text"
+                    aria-label="Token Bearer da Coleção"
+                    placeholder="Token ou {{variavel}}"
+                    value={auth.token || ''}
+                    disabled={isBusy}
+                    onChange={(e) => setAuth((prev) => ({ ...prev, token: e.target.value }))}
+                    className="w-full sm:w-96 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-200 font-mono outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              )}
+
+              {auth.type === 'basic' && (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label htmlFor="collection-basic-username" className="text-xs font-medium text-neutral-300 block">
+                      Usuário:
+                    </label>
+                    <input
+                      id="collection-basic-username"
+                      type="text"
+                      aria-label="Usuário Basic Auth da Coleção"
+                      placeholder="Nome de usuário"
+                      value={auth.username || ''}
+                      disabled={isBusy}
+                      onChange={(e) => setAuth((prev) => ({ ...prev, username: e.target.value }))}
+                      className="w-full sm:w-80 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-200 outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="collection-basic-password" className="text-xs font-medium text-neutral-300 block">
+                      Senha:
+                    </label>
+                    <input
+                      id="collection-basic-password"
+                      type="password"
+                      aria-label="Senha Basic Auth da Coleção"
+                      placeholder="Senha"
+                      value={auth.password || ''}
+                      disabled={isBusy}
+                      onChange={(e) => setAuth((prev) => ({ ...prev, password: e.target.value }))}
+                      className="w-full sm:w-80 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-200 outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {auth.type === 'apikey' && (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label htmlFor="collection-apikey-key" className="text-xs font-medium text-neutral-300 block">
+                      Nome da Chave API:
+                    </label>
+                    <input
+                      id="collection-apikey-key"
+                      type="text"
+                      aria-label="Nome da Chave API da Coleção"
+                      placeholder="ex: X-API-Key"
+                      value={auth.key || ''}
+                      disabled={isBusy}
+                      onChange={(e) => setAuth((prev) => ({ ...prev, key: e.target.value }))}
+                      className="w-full sm:w-80 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-200 font-mono outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="collection-apikey-value" className="text-xs font-medium text-neutral-300 block">
+                      Valor:
+                    </label>
+                    <input
+                      id="collection-apikey-value"
+                      type="text"
+                      aria-label="Valor da Chave API da Coleção"
+                      placeholder="Valor da chave"
+                      value={auth.value || ''}
+                      disabled={isBusy}
+                      onChange={(e) => setAuth((prev) => ({ ...prev, value: e.target.value }))}
+                      className="w-full sm:w-80 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-200 font-mono outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: OPENAPI / SYNC */}
           {activeTab === 'openapi' && (
             <div className="space-y-4 animate-in fade-in duration-100">
               <div className="space-y-1.5">

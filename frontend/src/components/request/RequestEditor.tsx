@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Send, Loader2, X, Sparkles, Save, ChevronDown, Server, Cpu } from 'lucide-react';
+import { Send, Loader2, X, Sparkles, Save, ChevronDown, Server, Cpu, Shield, FileCode } from 'lucide-react';
 import { ExecutionTarget } from './TargetSelector';
 import {
   RequestAutocomplete,
   AutocompleteVariable,
   CursorCoords,
+  AutocompleteNavigationHandle,
   METHOD_COLORS,
 } from './RequestAutocomplete';
 import {
@@ -19,13 +20,15 @@ export { SaveRequestModal } from './SaveRequestModal';
 export type { SaveRequestModalProps, CollectionOption, FolderOption } from './SaveRequestModal';
 
 export interface AuthConfig {
-  type: 'none' | 'bearer' | 'basic' | 'apikey';
+  type: 'inherit' | 'none' | 'bearer' | 'basic' | 'apikey';
   token?: string;
   username?: string;
   password?: string;
   key?: string;
   value?: string;
 }
+
+export type BodyFormat = 'none' | 'json' | 'text';
 
 export interface RequestData {
   method: string;
@@ -100,6 +103,11 @@ export function RequestEditor({
   const [target, setTarget] = useState<ExecutionTarget>(initialRequest?.target || 'Inherit');
   const [headers, setHeaders] = useState(initialRequest?.headers || '');
   const [body, setBody] = useState(initialRequest?.body || '');
+  const [bodyFormat, setBodyFormat] = useState<BodyFormat>(() => {
+    if (!initialRequest?.body) return 'none';
+    if (initialRequest.body.trim().startsWith('{') || initialRequest.body.trim().startsWith('[')) return 'json';
+    return 'text';
+  });
   const [auth, setAuth] = useState<AuthConfig>(
     initialRequest?.auth || { type: 'none' }
   );
@@ -111,6 +119,9 @@ export function RequestEditor({
   // Split Send button state
   const [isSendMenuOpen, setIsSendMenuOpen] = useState(false);
   const sendMenuRef = useRef<HTMLDivElement>(null);
+
+  // Navigation ref for ArrowDown/ArrowUp/Enter in CodeMirror autocomplete
+  const autocompleteNavRef = useRef<AutocompleteNavigationHandle | null>(null);
 
   // Cursor coords for floating autocomplete
   const [cursorCoords, setCursorCoords] = useState<CursorCoords | null>(null);
@@ -138,7 +149,6 @@ export function RequestEditor({
   }, [method, url, headers, body, target, auth, initialRequest]);
 
   // Primary execution target based on priority rule:
-  // If target override is Inherit (or unset): Agent if online, else Server
   const defaultExecutionTarget: ExecutionTarget = useMemo(() => {
     if (target && target !== 'Inherit') return target;
     return isAgentOnline ? 'Agent' : 'Server';
@@ -154,7 +164,7 @@ export function RequestEditor({
       url: url.trim(),
       target,
       headers,
-      body,
+      body: bodyFormat === 'none' ? '' : body,
       auth,
     };
     const effectiveId = currentRequestId ?? (initialRequest as { id?: string } | undefined)?.id;
@@ -163,7 +173,7 @@ export function RequestEditor({
     } else {
       onSaveAs?.(requestData);
     }
-  }, [isLoading, isSaving, method, url, target, headers, body, auth, currentRequestId, initialRequest, onSaveExisting, onSaveAs]);
+  }, [isLoading, isSaving, method, url, target, headers, body, bodyFormat, auth, currentRequestId, initialRequest, onSaveExisting, onSaveAs]);
 
   // Global Ctrl+S / Cmd+S shortcut
   useEffect(() => {
@@ -204,7 +214,16 @@ export function RequestEditor({
       if (initialRequest.url !== undefined) setUrl(initialRequest.url);
       if (initialRequest.target !== undefined) setTarget(initialRequest.target);
       if (initialRequest.headers !== undefined) setHeaders(initialRequest.headers);
-      if (initialRequest.body !== undefined) setBody(initialRequest.body);
+      if (initialRequest.body !== undefined) {
+        setBody(initialRequest.body);
+        if (!initialRequest.body) {
+          setBodyFormat('none');
+        } else if (initialRequest.body.trim().startsWith('{') || initialRequest.body.trim().startsWith('[')) {
+          setBodyFormat('json');
+        } else {
+          setBodyFormat('text');
+        }
+      }
       if (initialRequest.auth !== undefined) setAuth(initialRequest.auth);
     }
   }, [initialRequest]);
@@ -216,12 +235,12 @@ export function RequestEditor({
         url,
         target,
         headers,
-        body,
+        body: bodyFormat === 'none' ? '' : body,
         auth,
       });
       onChange?.(updated);
     },
-    [method, url, target, headers, body, auth, onChange]
+    [method, url, target, headers, body, bodyFormat, auth, onChange]
   );
 
   const handleMethodChange = (newMethod: string) => {
@@ -305,7 +324,7 @@ export function RequestEditor({
       url: trimmedUrl,
       target: effectiveTarget,
       headers,
-      body,
+      body: bodyFormat === 'none' ? '' : body,
       auth,
     };
     onSend?.(requestData);
@@ -544,7 +563,7 @@ export function RequestEditor({
       </div>
 
       {/* Tabs navigation: Headers, Body, Auth */}
-      <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/20 px-3 sm:px-4">
+      <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/20 px-3 sm:px-4 shrink-0">
         <div
           role="tablist"
           aria-label="Abas de configuração da requisição"
@@ -584,19 +603,19 @@ export function RequestEditor({
         </div>
       </div>
 
-      {/* Tab Panels */}
-      <div className="flex-1 p-3 sm:p-4 overflow-y-auto">
+      {/* Tab Panels - filling 100% available vertical height */}
+      <div className="flex-1 p-3 sm:p-4 flex flex-col min-h-0 overflow-hidden">
         {/* Headers Panel */}
         <div
           role="tabpanel"
           id="panel-headers"
           aria-labelledby="tab-headers"
           hidden={activeTab !== 'headers'}
-          className={activeTab === 'headers' ? 'h-full flex flex-col' : 'hidden'}
+          className={activeTab === 'headers' ? 'flex-1 h-full flex flex-col min-h-0' : 'hidden'}
         >
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-2 shrink-0">
             <span className="text-xs text-neutral-400 font-medium">
-              Cabeçalhos HTTP (JSON estrito):
+              Cabeçalhos HTTP:
             </span>
             <div className="flex items-center gap-2">
               {formatNotice?.target === 'headers' && (
@@ -623,7 +642,7 @@ export function RequestEditor({
             </div>
           </div>
 
-          <div className="flex-1 relative min-h-[160px]">
+          <div className="flex-1 min-h-0 relative h-full flex flex-col">
             <CodeEditor
               value={headers}
               onChange={handleHeadersChange}
@@ -632,16 +651,19 @@ export function RequestEditor({
                 setCursorCoords(coords);
                 setCursorPos(pos);
               }}
+              onSpecialKeyDown={(key) => autocompleteNavRef.current?.onKeyDown(key) ?? false}
               language="json"
               placeholder={`{\n  "Content-Type": "application/json",\n  "Authorization": "Bearer token"\n}`}
               ariaLabel="Cabeçalhos HTTP"
               testId="headers-code-editor"
-              minHeight="180px"
+              minHeight="100%"
               disabled={isLoading}
+              className="flex-1 h-full"
             />
 
             {activeArea === 'headers' && (
               <RequestAutocomplete
+                navigationRef={autocompleteNavRef}
                 value={headers}
                 cursorCoords={cursorCoords}
                 cursorPos={cursorPos}
@@ -659,12 +681,62 @@ export function RequestEditor({
           id="panel-body"
           aria-labelledby="tab-body"
           hidden={activeTab !== 'body'}
-          className={activeTab === 'body' ? 'h-full flex flex-col' : 'hidden'}
+          className={activeTab === 'body' ? 'flex-1 h-full flex flex-col min-h-0' : 'hidden'}
         >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-neutral-400 font-medium">
-              Corpo da Requisição (JSON estrito):
-            </span>
+          <div className="flex items-center justify-between mb-2 shrink-0">
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-neutral-400 font-medium">
+                Corpo da Requisição:
+              </span>
+
+              {/* Body Type Selector (None / JSON / Text) */}
+              <div
+                role="radiogroup"
+                aria-label="Tipo de Corpo"
+                className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 rounded p-0.5 text-xs"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={bodyFormat === 'none'}
+                  onClick={() => setBodyFormat('none')}
+                  className={`px-2 py-0.5 rounded transition-colors ${
+                    bodyFormat === 'none'
+                      ? 'bg-neutral-800 text-white font-medium shadow-sm'
+                      : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  Nenhum
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={bodyFormat === 'json'}
+                  onClick={() => setBodyFormat('json')}
+                  className={`px-2 py-0.5 rounded transition-colors ${
+                    bodyFormat === 'json'
+                      ? 'bg-neutral-800 text-white font-medium shadow-sm'
+                      : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  JSON
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={bodyFormat === 'text'}
+                  onClick={() => setBodyFormat('text')}
+                  className={`px-2 py-0.5 rounded transition-colors ${
+                    bodyFormat === 'text'
+                      ? 'bg-neutral-800 text-white font-medium shadow-sm'
+                      : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  Texto
+                </button>
+              </div>
+            </div>
+
             <div className="flex items-center gap-2">
               {formatNotice?.target === 'body' && (
                 <span
@@ -677,38 +749,58 @@ export function RequestEditor({
                   {formatNotice.message}
                 </span>
               )}
-              <button
-                type="button"
-                aria-label="Formatar JSON"
-                onClick={handleFormatJson}
-                disabled={isLoading || !body.trim()}
-                className="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors border border-neutral-700/60 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
-                <span>Formatar JSON</span>
-              </button>
+              {bodyFormat === 'json' && (
+                <button
+                  type="button"
+                  aria-label="Formatar JSON"
+                  onClick={handleFormatJson}
+                  disabled={isLoading || !body.trim()}
+                  className="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors border border-neutral-700/60 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
+                  <span>Formatar JSON</span>
+                </button>
+              )}
             </div>
           </div>
 
-          <div className="flex-1 relative min-h-[180px]">
-            <CodeEditor
-              value={body}
-              onChange={handleBodyChange}
-              onCursorChange={(coords, pos) => {
-                setActiveArea('body');
-                setCursorCoords(coords);
-                setCursorPos(pos);
-              }}
-              language="json"
-              placeholder={`{\n  "key": "value"\n}`}
-              ariaLabel="Corpo da requisição"
-              testId="body-code-editor"
-              minHeight="220px"
-              disabled={isLoading}
-            />
+          <div className="flex-1 min-h-0 relative h-full flex flex-col">
+            {bodyFormat === 'none' ? (
+              <div
+                data-testid="body-empty-placeholder"
+                className="flex-1 flex flex-col items-center justify-center p-8 text-center border border-dashed border-neutral-800/80 rounded-lg bg-neutral-900/20 my-auto text-neutral-500"
+              >
+                <FileCode className="w-8 h-8 mb-2 opacity-40 text-neutral-600" />
+                <p className="text-xs font-medium text-neutral-300">
+                  Esta requisição não possui corpo (body).
+                </p>
+                <p className="text-[11px] text-neutral-500 mt-1 max-w-xs">
+                  Selecione <strong className="text-neutral-400">JSON</strong> ou <strong className="text-neutral-400">Texto</strong> acima para enviar dados.
+                </p>
+              </div>
+            ) : (
+              <CodeEditor
+                value={body}
+                onChange={handleBodyChange}
+                onCursorChange={(coords, pos) => {
+                  setActiveArea('body');
+                  setCursorCoords(coords);
+                  setCursorPos(pos);
+                }}
+                onSpecialKeyDown={(key) => autocompleteNavRef.current?.onKeyDown(key) ?? false}
+                language={bodyFormat === 'json' ? 'json' : 'text'}
+                placeholder={bodyFormat === 'json' ? '{\n  "key": "value"\n}' : 'Conteúdo do corpo...'}
+                ariaLabel="Corpo da requisição"
+                testId="body-code-editor"
+                minHeight="100%"
+                disabled={isLoading}
+                className="flex-1 h-full"
+              />
+            )}
 
-            {activeArea === 'body' && (
+            {activeArea === 'body' && bodyFormat !== 'none' && (
               <RequestAutocomplete
+                navigationRef={autocompleteNavRef}
                 value={body}
                 cursorCoords={cursorCoords}
                 cursorPos={cursorPos}
@@ -740,12 +832,20 @@ export function RequestEditor({
               onChange={(e) => handleAuthTypeChange(e.target.value as AuthConfig['type'])}
               className="bg-neutral-900 border border-neutral-800 text-xs rounded-md px-3 py-1.5 text-neutral-200 outline-none focus:ring-1 focus:ring-blue-500 block w-full sm:w-64"
             >
+              <option value="inherit">Herdar da Coleção</option>
               <option value="none">Nenhuma Autenticação</option>
               <option value="bearer">Bearer Token</option>
               <option value="basic">Basic Auth</option>
               <option value="apikey">API Key</option>
             </select>
           </div>
+
+          {auth.type === 'inherit' && (
+            <div className="p-3.5 rounded-lg bg-neutral-900/40 border border-neutral-800 text-neutral-400 text-xs flex items-center gap-2.5">
+              <Shield className="w-4 h-4 text-blue-400 shrink-0" />
+              <span>Esta requisição herda a autenticação configurada na Coleção.</span>
+            </div>
+          )}
 
           {auth.type === 'bearer' && (
             <div className="space-y-1">
