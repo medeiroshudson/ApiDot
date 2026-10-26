@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Send, Loader2, X, Sparkles, Link2 } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Send, Loader2, X, Sparkles, Link2, Save } from 'lucide-react';
 import { TargetSelector, ExecutionTarget } from './TargetSelector';
 import {
   RequestAutocomplete,
@@ -11,6 +11,9 @@ import {
   DependencyLinkerModal,
   DependencyRequest,
 } from './DependencyLinkerModal';
+
+export { SaveRequestModal } from './SaveRequestModal';
+export type { SaveRequestModalProps, CollectionOption, FolderOption } from './SaveRequestModal';
 
 export interface AuthConfig {
   type: 'none' | 'bearer' | 'basic' | 'apikey';
@@ -33,6 +36,10 @@ export interface RequestData {
 export interface RequestEditorProps {
   initialRequest?: Partial<RequestData> & { id?: string };
   currentRequestId?: string;
+  requestName?: string;
+  onSaveExisting?: (request: RequestData) => Promise<void> | void;
+  onSaveAs?: (request: RequestData) => Promise<void> | void;
+  isSaving?: boolean;
   isAgentOnline?: boolean;
   isLoading?: boolean;
   onSend?: (request: RequestData) => void;
@@ -74,6 +81,10 @@ export function insertTokenAtCursor(
 export function RequestEditor({
   initialRequest,
   currentRequestId,
+  requestName,
+  onSaveExisting,
+  onSaveAs,
+  isSaving = false,
   isAgentOnline = false,
   isLoading = false,
   onSend,
@@ -98,6 +109,68 @@ export function RequestEditor({
   const urlInputRef = useRef<HTMLInputElement>(null);
   const headersRef = useRef<HTMLTextAreaElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  const isDirty = useMemo(() => {
+    const initialMethod = initialRequest?.method ?? 'GET';
+    const initialUrl = initialRequest?.url ?? '';
+    const initialHeaders = initialRequest?.headers ?? '';
+    const initialBody = initialRequest?.body ?? '';
+
+    return (
+      method !== initialMethod ||
+      url !== initialUrl ||
+      headers !== initialHeaders ||
+      body !== initialBody
+    );
+  }, [method, url, headers, body, initialRequest]);
+
+  const handleSave = useCallback(() => {
+    if (isLoading || isSaving) return;
+    const requestData: RequestData = {
+      method,
+      url: url.trim(),
+      target,
+      headers,
+      body,
+      auth,
+    };
+    const effectiveId = currentRequestId ?? (initialRequest as { id?: string } | undefined)?.id;
+    if (effectiveId) {
+      onSaveExisting?.(requestData);
+    } else {
+      onSaveAs?.(requestData);
+    }
+  }, [
+    isLoading,
+    isSaving,
+    method,
+    url,
+    target,
+    headers,
+    body,
+    auth,
+    currentRequestId,
+    initialRequest,
+    onSaveExisting,
+    onSaveAs,
+  ]);
+
+  const handleSaveRef = useRef(handleSave);
+  useEffect(() => {
+    handleSaveRef.current = handleSave;
+  }, [handleSave]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleSaveRef.current();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     setMethod(initialRequest?.method ?? 'GET');
@@ -240,6 +313,55 @@ export function RequestEditor({
 
   return (
     <div className="flex flex-col h-full bg-neutral-950 text-neutral-100">
+      {/* Title Bar / Action Bar: Request Title, Dirty State, Save Button */}
+      <div className="px-3 sm:px-4 py-2 border-b border-neutral-800 bg-neutral-900/60 flex items-center justify-between gap-3 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider shrink-0">
+            Requisição:
+          </span>
+          <span
+            data-testid="request-title"
+            className="text-sm font-medium text-neutral-200 truncate"
+            title={requestName || 'Nova Requisição'}
+          >
+            {requestName || 'Nova Requisição'}
+          </span>
+          {isDirty && (
+            <span
+              data-testid="dirty-indicator"
+              className="w-2 h-2 rounded-full bg-amber-400 shrink-0"
+              title="Alterações não salvas"
+              aria-label="Alterações não salvas"
+            />
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            aria-label="Salvar requisição"
+            title="Salvar (Ctrl+S / Cmd+S)"
+            onClick={handleSave}
+            disabled={isLoading || isSaving}
+            className="h-8 px-3 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-colors border border-neutral-700/60 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+          >
+            {isSaving ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400" aria-hidden="true" />
+            ) : (
+              <Save className="w-3.5 h-3.5 text-neutral-400" aria-hidden="true" />
+            )}
+            <span>{isSaving ? 'Salvando...' : 'Salvar'}</span>
+            {isDirty && (
+              <span
+                data-testid="save-button-dirty-dot"
+                className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"
+                aria-hidden="true"
+              />
+            )}
+          </button>
+        </div>
+      </div>
+
       {/* Top Bar: Method, Expanded URL, Send Button */}
       <div className="p-3 sm:p-4 border-b border-neutral-800 bg-neutral-900/40 flex flex-col gap-2">
         <div className="flex flex-col sm:flex-row gap-2.5 sm:items-center w-full">

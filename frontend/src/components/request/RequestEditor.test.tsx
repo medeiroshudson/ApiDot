@@ -668,4 +668,262 @@ describe('RequestEditor', () => {
       expect(onChangeEmpty).toHaveBeenCalledWith('first-token');
     });
   });
+
+  describe('Save and Save-As workflow & dirty indicator integration', () => {
+    it('renders default request title "Nova Requisição" when requestName is not provided', () => {
+      render(<RequestEditor />);
+      expect(screen.getByTestId('request-title')).toHaveTextContent('Nova Requisição');
+    });
+
+    it('renders custom requestName in the title bar when provided', () => {
+      render(<RequestEditor requestName="Buscar Usuários Ativos" />);
+      expect(screen.getByTestId('request-title')).toHaveTextContent('Buscar Usuários Ativos');
+    });
+
+    it('does not display dirty indicator initially when initialRequest is unchanged', () => {
+      render(
+        <RequestEditor
+          initialRequest={{
+            method: 'GET',
+            url: 'https://api.example.com/items',
+            headers: '{"Accept": "application/json"}',
+            body: '{"page": 1}',
+          }}
+        />
+      );
+
+      expect(screen.queryByTestId('dirty-indicator')).toBeNull();
+      expect(screen.queryByTestId('save-button-dirty-dot')).toBeNull();
+    });
+
+    it('displays dirty indicator when url, method, headers, or body are modified', () => {
+      render(
+        <RequestEditor
+          initialRequest={{
+            method: 'GET',
+            url: 'https://api.example.com/items',
+            headers: '{"Accept": "application/json"}',
+            body: '',
+          }}
+        />
+      );
+
+      const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+      fireEvent.change(urlInput, { target: { value: 'https://api.example.com/items/42' } });
+
+      expect(screen.getByTestId('dirty-indicator')).toBeInTheDocument();
+      expect(screen.getByTestId('save-button-dirty-dot')).toBeInTheDocument();
+
+      // Revert URL to original
+      fireEvent.change(urlInput, { target: { value: 'https://api.example.com/items' } });
+      expect(screen.queryByTestId('dirty-indicator')).toBeNull();
+
+      // Change method
+      const methodSelect = screen.getByRole('combobox', { name: /método http/i });
+      fireEvent.change(methodSelect, { target: { value: 'DELETE' } });
+      expect(screen.getByTestId('dirty-indicator')).toBeInTheDocument();
+
+      // Revert method
+      fireEvent.change(methodSelect, { target: { value: 'GET' } });
+      expect(screen.queryByTestId('dirty-indicator')).toBeNull();
+
+      // Change headers
+      const headersInput = screen.getByRole('textbox', { name: /cabeçalhos http/i });
+      fireEvent.change(headersInput, { target: { value: '{"X-Custom": "test"}' } });
+      expect(screen.getByTestId('dirty-indicator')).toBeInTheDocument();
+
+      // Revert headers
+      fireEvent.change(headersInput, { target: { value: '{"Accept": "application/json"}' } });
+      expect(screen.queryByTestId('dirty-indicator')).toBeNull();
+
+      // Change body
+      const bodyTab = screen.getByRole('tab', { name: /body/i });
+      fireEvent.click(bodyTab);
+      const bodyInput = screen.getByRole('textbox', { name: /corpo da requisição/i });
+      fireEvent.change(bodyInput, { target: { value: '{"id": 100}' } });
+      expect(screen.getByTestId('dirty-indicator')).toBeInTheDocument();
+
+      // Revert body
+      fireEvent.change(bodyInput, { target: { value: '' } });
+      expect(screen.queryByTestId('dirty-indicator')).toBeNull();
+    });
+
+    it('clears dirty indicator when initialRequest is updated via props', () => {
+      const { rerender } = render(
+        <RequestEditor
+          initialRequest={{
+            method: 'GET',
+            url: 'https://api.example.com/items',
+          }}
+        />
+      );
+
+      const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+      fireEvent.change(urlInput, { target: { value: 'https://api.example.com/items/new' } });
+      expect(screen.getByTestId('dirty-indicator')).toBeInTheDocument();
+
+      // Parent updates initialRequest after saving
+      rerender(
+        <RequestEditor
+          initialRequest={{
+            method: 'GET',
+            url: 'https://api.example.com/items/new',
+          }}
+        />
+      );
+
+      expect(screen.queryByTestId('dirty-indicator')).toBeNull();
+    });
+
+    it('calls onSaveExisting when clicking "Salvar" button with currentRequestId', () => {
+      const onSaveExisting = vi.fn();
+      const onSaveAs = vi.fn();
+
+      render(
+        <RequestEditor
+          currentRequestId="req-saved-001"
+          onSaveExisting={onSaveExisting}
+          onSaveAs={onSaveAs}
+          initialRequest={{
+            method: 'POST',
+            url: 'https://api.example.com/login',
+            headers: '{"Content-Type": "application/json"}',
+            body: '{"user": "admin"}',
+          }}
+        />
+      );
+
+      const saveButton = screen.getByRole('button', { name: /salvar requisição/i });
+      fireEvent.click(saveButton);
+
+      expect(onSaveExisting).toHaveBeenCalledTimes(1);
+      expect(onSaveExisting).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'POST',
+          url: 'https://api.example.com/login',
+          headers: '{"Content-Type": "application/json"}',
+          body: '{"user": "admin"}',
+        })
+      );
+      expect(onSaveAs).not.toHaveBeenCalled();
+    });
+
+    it('calls onSaveExisting when pressing Ctrl+S or Cmd+S with currentRequestId', () => {
+      const onSaveExisting = vi.fn();
+      const onSaveAs = vi.fn();
+
+      render(
+        <RequestEditor
+          currentRequestId="req-saved-002"
+          onSaveExisting={onSaveExisting}
+          onSaveAs={onSaveAs}
+          initialRequest={{
+            method: 'GET',
+            url: 'https://api.example.com/users',
+          }}
+        />
+      );
+
+      // Trigger Ctrl+S
+      fireEvent.keyDown(window, { key: 's', ctrlKey: true });
+      expect(onSaveExisting).toHaveBeenCalledTimes(1);
+      expect(onSaveAs).not.toHaveBeenCalled();
+
+      // Trigger Cmd+S (metaKey)
+      fireEvent.keyDown(window, { key: 's', metaKey: true });
+      expect(onSaveExisting).toHaveBeenCalledTimes(2);
+      expect(onSaveAs).not.toHaveBeenCalled();
+    });
+
+    it('calls onSaveAs when clicking "Salvar" button without currentRequestId', () => {
+      const onSaveExisting = vi.fn();
+      const onSaveAs = vi.fn();
+
+      render(
+        <RequestEditor
+          onSaveExisting={onSaveExisting}
+          onSaveAs={onSaveAs}
+          initialRequest={{
+            method: 'GET',
+            url: 'https://api.example.com/scratchpad',
+          }}
+        />
+      );
+
+      const saveButton = screen.getByRole('button', { name: /salvar requisição/i });
+      fireEvent.click(saveButton);
+
+      expect(onSaveAs).toHaveBeenCalledTimes(1);
+      expect(onSaveAs).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'GET',
+          url: 'https://api.example.com/scratchpad',
+        })
+      );
+      expect(onSaveExisting).not.toHaveBeenCalled();
+    });
+
+    it('calls onSaveAs when pressing Ctrl+S or Cmd+S without currentRequestId', () => {
+      const onSaveExisting = vi.fn();
+      const onSaveAs = vi.fn();
+
+      render(
+        <RequestEditor
+          onSaveExisting={onSaveExisting}
+          onSaveAs={onSaveAs}
+          initialRequest={{
+            method: 'POST',
+            url: 'https://api.example.com/new-feature',
+          }}
+        />
+      );
+
+      // Trigger Ctrl+S
+      fireEvent.keyDown(window, { key: 's', ctrlKey: true });
+      expect(onSaveAs).toHaveBeenCalledTimes(1);
+      expect(onSaveExisting).not.toHaveBeenCalled();
+
+      // Trigger Cmd+S
+      fireEvent.keyDown(window, { key: 's', metaKey: true });
+      expect(onSaveAs).toHaveBeenCalledTimes(2);
+      expect(onSaveExisting).not.toHaveBeenCalled();
+    });
+
+    it('disables "Salvar" button and shows loading text when isSaving is true', () => {
+      const onSaveExisting = vi.fn();
+
+      render(
+        <RequestEditor
+          currentRequestId="req-003"
+          isSaving={true}
+          onSaveExisting={onSaveExisting}
+        />
+      );
+
+      const saveButton = screen.getByRole('button', { name: /salvar requisição/i });
+      expect(saveButton).toBeDisabled();
+      expect(screen.getByText(/salvando\.\.\./i)).toBeInTheDocument();
+
+      fireEvent.click(saveButton);
+      expect(onSaveExisting).not.toHaveBeenCalled();
+
+      fireEvent.keyDown(window, { key: 's', ctrlKey: true });
+      expect(onSaveExisting).not.toHaveBeenCalled();
+    });
+
+    it('does not trigger save hotkey when isLoading is true', () => {
+      const onSaveExisting = vi.fn();
+
+      render(
+        <RequestEditor
+          currentRequestId="req-004"
+          isLoading={true}
+          onSaveExisting={onSaveExisting}
+        />
+      );
+
+      fireEvent.keyDown(window, { key: 's', ctrlKey: true });
+      expect(onSaveExisting).not.toHaveBeenCalled();
+    });
+  });
 });
