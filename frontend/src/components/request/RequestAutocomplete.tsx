@@ -13,9 +13,17 @@ export interface AutocompleteRequest {
   method: string;
 }
 
+export interface CursorCoords {
+  left: number;
+  top: number;
+  bottom: number;
+}
+
 export interface RequestAutocompleteProps {
   inputRef?: React.RefObject<HTMLInputElement | HTMLTextAreaElement | null>;
   value?: string;
+  cursorCoords?: CursorCoords | null;
+  cursorPos?: number;
   onChange?: (val: string, newCursor?: number) => void;
   availableVariables?: AutocompleteVariable[];
   availableRequests?: AutocompleteRequest[];
@@ -78,6 +86,8 @@ function getAutocompleteContext(text: string, cursorPos: number) {
 export function RequestAutocomplete({
   inputRef,
   value = '',
+  cursorCoords,
+  cursorPos,
   onChange,
   availableVariables = [],
   availableRequests = [],
@@ -94,6 +104,8 @@ export function RequestAutocomplete({
   const [cursorPosition, setCursorPosition] = useState<number>(value.length);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
+  const effectiveCursorPos = cursorPos !== undefined ? cursorPos : cursorPosition;
+
   const getTargetElement = useCallback((): HTMLInputElement | HTMLTextAreaElement | null => {
     if (inputRef?.current) return inputRef.current;
     if (containerRef.current) {
@@ -104,13 +116,14 @@ export function RequestAutocomplete({
 
   // Track cursor position from target element events
   const updateCursorFromElement = useCallback(() => {
+    if (cursorPos !== undefined) return;
     const el = getTargetElement();
     if (el && el.selectionStart !== null && el.selectionStart !== undefined) {
       setCursorPosition(el.selectionStart);
     } else {
       setCursorPosition(value.length);
     }
-  }, [getTargetElement, value.length]);
+  }, [cursorPos, getTargetElement, value.length]);
 
   // When value prop changes, re-evaluate cursor and undis-miss
   useEffect(() => {
@@ -120,8 +133,8 @@ export function RequestAutocomplete({
 
   // Parse trigger context
   const context = useMemo(() => {
-    return getAutocompleteContext(value, cursorPosition);
-  }, [value, cursorPosition]);
+    return getAutocompleteContext(value, effectiveCursorPos);
+  }, [value, effectiveCursorPos]);
 
   // Generate suggestions based on context
   const suggestions = useMemo<SuggestionItem[]>(() => {
@@ -381,7 +394,21 @@ export function RequestAutocomplete({
       role="listbox"
       id={listboxId}
       aria-label="Sugestões de autocompletar"
-      className="absolute z-50 left-0 top-full mt-1 w-full min-w-[280px] max-w-md max-h-60 overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl text-neutral-200 py-1"
+      style={
+        cursorCoords
+          ? {
+              position: 'fixed',
+              left: Math.max(16, Math.min(cursorCoords.left, (typeof window !== 'undefined' ? window.innerWidth : 800) - 300)),
+              top: cursorCoords.bottom + 4,
+              zIndex: 9999,
+            }
+          : undefined
+      }
+      className={
+        cursorCoords
+          ? 'w-[280px] max-h-60 overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl text-neutral-200 py-1 animate-in fade-in duration-75'
+          : 'absolute z-50 left-0 top-full mt-1 w-full min-w-[280px] max-w-md max-h-60 overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl text-neutral-200 py-1'
+      }
     >
       {suggestions.map((item, index) => {
         const isSelected = index === selectedIndex;

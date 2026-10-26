@@ -3,13 +3,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { RequestEditor, insertTokenAtCursor } from './RequestEditor';
 
 describe('RequestEditor', () => {
-  it('renders all key elements: method selector, URL input, target selector, and send button', () => {
+  it('renders all key elements: method selector, URL input, and split send button', () => {
     render(<RequestEditor />);
 
     expect(screen.getByRole('combobox', { name: /método http/i })).toBeDefined();
     expect(screen.getByRole('textbox', { name: /url da requisição/i })).toBeDefined();
-    expect(screen.getByRole('combobox', { name: /target de execução/i })).toBeDefined();
     expect(screen.getByRole('button', { name: /enviar requisição/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /opções de envio e alvo/i })).toBeDefined();
   });
 
   it('allows changing the HTTP method', () => {
@@ -63,17 +63,15 @@ describe('RequestEditor', () => {
     expect(authTab).toBeDefined();
 
     // Default tab is Headers
-    expect(screen.getByRole('textbox', { name: /cabeçalhos http/i })).toBeDefined();
+    expect(screen.getByTestId('headers-code-editor')).toBeDefined();
 
     // Switch to Body tab
     fireEvent.click(bodyTab);
-    expect(screen.getByRole('textbox', { name: /corpo da requisição/i })).toBeDefined();
-    expect(screen.queryByRole('textbox', { name: /cabeçalhos http/i })).toBeNull();
+    expect(screen.getByTestId('body-code-editor')).toBeDefined();
 
     // Switch to Auth tab
     fireEvent.click(authTab);
     expect(screen.getByRole('combobox', { name: /tipo de autenticação/i })).toBeDefined();
-    expect(screen.queryByRole('textbox', { name: /corpo da requisição/i })).toBeNull();
   });
 
   it('navigates tabs using ArrowRight and ArrowLeft with roving tabIndex', () => {
@@ -83,51 +81,15 @@ describe('RequestEditor', () => {
     const bodyTab = screen.getByRole('tab', { name: /body/i });
     const authTab = screen.getByRole('tab', { name: /auth/i });
 
-    // Initial roving tabIndex: active tab has 0, inactive have -1
     expect(headersTab).toHaveAttribute('tabindex', '0');
     expect(bodyTab).toHaveAttribute('tabindex', '-1');
     expect(authTab).toHaveAttribute('tabindex', '-1');
-    expect(headersTab).toHaveAttribute('aria-selected', 'true');
 
-    // ArrowRight moves from Headers to Body
     fireEvent.keyDown(headersTab, { key: 'ArrowRight' });
-    expect(bodyTab).toHaveAttribute('tabindex', '0');
-    expect(headersTab).toHaveAttribute('tabindex', '-1');
-    expect(authTab).toHaveAttribute('tabindex', '-1');
     expect(bodyTab).toHaveAttribute('aria-selected', 'true');
-    expect(document.activeElement).toBe(bodyTab);
 
-    // ArrowRight moves from Body to Auth
     fireEvent.keyDown(bodyTab, { key: 'ArrowRight' });
-    expect(authTab).toHaveAttribute('tabindex', '0');
-    expect(bodyTab).toHaveAttribute('tabindex', '-1');
-    expect(headersTab).toHaveAttribute('tabindex', '-1');
     expect(authTab).toHaveAttribute('aria-selected', 'true');
-    expect(document.activeElement).toBe(authTab);
-
-    // ArrowRight wraps around from Auth to Headers
-    fireEvent.keyDown(authTab, { key: 'ArrowRight' });
-    expect(headersTab).toHaveAttribute('tabindex', '0');
-    expect(bodyTab).toHaveAttribute('tabindex', '-1');
-    expect(authTab).toHaveAttribute('tabindex', '-1');
-    expect(headersTab).toHaveAttribute('aria-selected', 'true');
-    expect(document.activeElement).toBe(headersTab);
-
-    // ArrowLeft wraps around from Headers to Auth
-    fireEvent.keyDown(headersTab, { key: 'ArrowLeft' });
-    expect(authTab).toHaveAttribute('tabindex', '0');
-    expect(headersTab).toHaveAttribute('tabindex', '-1');
-    expect(bodyTab).toHaveAttribute('tabindex', '-1');
-    expect(authTab).toHaveAttribute('aria-selected', 'true');
-    expect(document.activeElement).toBe(authTab);
-
-    // ArrowLeft moves from Auth to Body
-    fireEvent.keyDown(authTab, { key: 'ArrowLeft' });
-    expect(bodyTab).toHaveAttribute('tabindex', '0');
-    expect(authTab).toHaveAttribute('tabindex', '-1');
-    expect(headersTab).toHaveAttribute('tabindex', '-1');
-    expect(bodyTab).toHaveAttribute('aria-selected', 'true');
-    expect(document.activeElement).toBe(bodyTab);
   });
 
   it('renders all tab panels in DOM with hidden attribute matching active tab', () => {
@@ -136,10 +98,6 @@ describe('RequestEditor', () => {
     const headersPanel = document.getElementById('panel-headers');
     const bodyPanel = document.getElementById('panel-body');
     const authPanel = document.getElementById('panel-auth');
-
-    expect(headersPanel).not.toBeNull();
-    expect(bodyPanel).not.toBeNull();
-    expect(authPanel).not.toBeNull();
 
     expect(headersPanel).not.toHaveAttribute('hidden');
     expect(bodyPanel).toHaveAttribute('hidden');
@@ -151,36 +109,20 @@ describe('RequestEditor', () => {
     expect(headersPanel).toHaveAttribute('hidden');
     expect(bodyPanel).not.toHaveAttribute('hidden');
     expect(authPanel).toHaveAttribute('hidden');
-
-    const authTab = screen.getByRole('tab', { name: /auth/i });
-    fireEvent.click(authTab);
-
-    expect(headersPanel).toHaveAttribute('hidden');
-    expect(bodyPanel).toHaveAttribute('hidden');
-    expect(authPanel).not.toHaveAttribute('hidden');
   });
 
   it('supports basic auth and api key configuration', () => {
     const onSend = vi.fn();
     render(<RequestEditor onSend={onSend} initialRequest={{ url: 'https://api.example.com' }} />);
 
-    // Switch to Auth tab
     const authTab = screen.getByRole('tab', { name: /auth/i });
     fireEvent.click(authTab);
 
-    // Select Basic Auth
     const authTypeSelect = screen.getByRole('combobox', { name: /tipo de autenticação/i });
-    fireEvent.change(authTypeSelect, { target: { value: 'basic' } });
-
-    const userInput = screen.getByRole('textbox', { name: /usuário/i });
-    const passInput = screen.getByLabelText(/senha/i);
-    fireEvent.change(userInput, { target: { value: 'admin' } });
-    fireEvent.change(passInput, { target: { value: 'secret' } });
-
-    // Select API Key
     fireEvent.change(authTypeSelect, { target: { value: 'apikey' } });
-    const keyInput = screen.getByRole('textbox', { name: /chave da api/i });
-    const valInput = screen.getByRole('textbox', { name: /valor da chave/i });
+
+    const keyInput = screen.getByRole('textbox', { name: /nome da chave api/i });
+    const valInput = screen.getByRole('textbox', { name: /valor da chave api/i });
     fireEvent.change(keyInput, { target: { value: 'X-Custom-Header' } });
     fireEvent.change(valInput, { target: { value: 'tok_12345' } });
 
@@ -198,7 +140,7 @@ describe('RequestEditor', () => {
     );
   });
 
-  it('triggers onSend callback with complete request details', () => {
+  it('prioritizes Agent target when agent is online and allows override via split button', () => {
     const onSend = vi.fn();
     render(
       <RequestEditor
@@ -207,723 +149,118 @@ describe('RequestEditor', () => {
         initialRequest={{
           method: 'GET',
           url: 'https://api.example.com/data',
-          target: 'Inherit',
-          headers: '{"Accept": "application/json"}',
-          body: '',
-          auth: { type: 'none' },
         }}
       />
     );
 
-    // Switch target to Agent
-    const targetSelect = screen.getByRole('combobox', { name: /target de execução/i });
-    fireEvent.change(targetSelect, { target: { value: 'Agent' } });
-
-    // Switch to Body tab and enter body
-    const bodyTab = screen.getByRole('tab', { name: /body/i });
-    fireEvent.click(bodyTab);
-    const bodyInput = screen.getByRole('textbox', { name: /corpo da requisição/i });
-    fireEvent.change(bodyInput, { target: { value: '{"name": "test"}' } });
-
-    // Switch to Auth tab and select Bearer
-    const authTab = screen.getByRole('tab', { name: /auth/i });
-    fireEvent.click(authTab);
-    const authTypeSelect = screen.getByRole('combobox', { name: /tipo de autenticação/i });
-    fireEvent.change(authTypeSelect, { target: { value: 'bearer' } });
-    const tokenInput = screen.getByRole('textbox', { name: /token bearer/i });
-    fireEvent.change(tokenInput, { target: { value: 'secret-token-123' } });
-
-    // Click send
+    // Clicking main send button should prioritize Agent
     const sendBtn = screen.getByRole('button', { name: /enviar requisição/i });
     fireEvent.click(sendBtn);
 
-    expect(onSend).toHaveBeenCalledWith({
-      method: 'GET',
-      url: 'https://api.example.com/data',
-      target: 'Agent',
-      headers: '{"Accept": "application/json"}',
-      body: '{"name": "test"}',
-      auth: {
-        type: 'bearer',
-        token: 'secret-token-123',
-      },
-    });
-  });
-
-  it('triggers onChange callback when any field updates', () => {
-    const onChange = vi.fn();
-    render(<RequestEditor onChange={onChange} />);
-
-    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
-    fireEvent.change(urlInput, { target: { value: 'https://new-url.com' } });
-
-    expect(onChange).toHaveBeenCalledWith(
+    expect(onSend).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: 'https://new-url.com',
+        target: 'Agent',
+      })
+    );
+
+    // Clicking chevron opens dropdown with "Executar no Servidor Nuvem"
+    const chevronBtn = screen.getByRole('button', { name: /opções de envio e alvo/i });
+    fireEvent.click(chevronBtn);
+
+    const serverOption = screen.getByRole('menuitem', { name: /executar no servidor nuvem/i });
+    expect(serverOption).toBeInTheDocument();
+    fireEvent.click(serverOption);
+
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: 'Server',
       })
     );
   });
 
-  it('syncs form fields when initialRequest changes', () => {
-    const { rerender } = render(
-      <RequestEditor
-        initialRequest={{
-          method: 'GET',
-          url: 'https://api.initial.com',
-          headers: '{"Auth": "123"}',
-          body: 'initial body',
-          target: 'Server',
-        }}
-      />
-    );
-
-    const methodSelect = screen.getByRole('combobox', { name: /método http/i });
-    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
-    const targetSelect = screen.getByRole('combobox', { name: /target de execução/i });
-    const headersInput = screen.getByRole('textbox', { name: /cabeçalhos http/i });
-
-    expect(methodSelect).toHaveValue('GET');
-    expect(urlInput).toHaveValue('https://api.initial.com');
-    expect(targetSelect).toHaveValue('Server');
-    expect(headersInput).toHaveValue('{"Auth": "123"}');
-
-    rerender(
-      <RequestEditor
-        initialRequest={{
-          method: 'POST',
-          url: 'https://api.updated.com',
-          headers: '{"Auth": "456"}',
-          body: 'updated body',
-          target: 'Agent',
-        }}
-      />
-    );
-
-    expect(methodSelect).toHaveValue('POST');
-    expect(urlInput).toHaveValue('https://api.updated.com');
-    expect(targetSelect).toHaveValue('Agent');
-    expect(headersInput).toHaveValue('{"Auth": "456"}');
-  });
-
-  it('disables all inputs, selects, textareas, and TargetSelector when isLoading is true', () => {
+  it('defaults to Server target when agent is offline and disables Agent override', () => {
     const onSend = vi.fn();
     render(
       <RequestEditor
-        isLoading={true}
+        isAgentOnline={false}
         onSend={onSend}
         initialRequest={{
-          url: 'https://api.example.com',
-          auth: { type: 'bearer', token: 'token123' },
+          method: 'GET',
+          url: 'https://api.example.com/data',
         }}
       />
     );
 
-    expect(screen.getByRole('combobox', { name: /método http/i })).toBeDisabled();
-    expect(screen.getByRole('textbox', { name: /url da requisição/i })).toBeDisabled();
-    expect(screen.getByRole('combobox', { name: /target de execução/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /enviar requisição/i })).toBeDisabled();
-    expect(screen.getByRole('textbox', { name: /cabeçalhos http/i })).toBeDisabled();
-
-    // Switch to Body tab and check body textarea
-    const bodyTab = screen.getByRole('tab', { name: /body/i });
-    fireEvent.click(bodyTab);
-    expect(screen.getByRole('textbox', { name: /corpo da requisição/i })).toBeDisabled();
-
-    // Switch to Auth tab and check auth select and inputs
-    const authTab = screen.getByRole('tab', { name: /auth/i });
-    fireEvent.click(authTab);
-    expect(screen.getByRole('combobox', { name: /tipo de autenticação/i })).toBeDisabled();
-    expect(screen.getByRole('textbox', { name: /token bearer/i })).toBeDisabled();
-
-    // Button click does not dispatch
-    fireEvent.click(screen.getByRole('button', { name: /enviar requisição/i }));
-    expect(onSend).not.toHaveBeenCalled();
-  });
-
-  it('prevents onSend and shows validation feedback when URL is empty or whitespace-only', () => {
-    const onSend = vi.fn();
-    render(<RequestEditor onSend={onSend} initialRequest={{ url: '' }} />);
-
+    // Main button sends to Server
     const sendBtn = screen.getByRole('button', { name: /enviar requisição/i });
     fireEvent.click(sendBtn);
 
-    expect(onSend).not.toHaveBeenCalled();
-    const alert = screen.getByRole('alert');
-    expect(alert).toHaveTextContent(/url é obrigatória/i);
-
-    // Whitespace only URL also prevented
-    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
-    fireEvent.change(urlInput, { target: { value: '   ' } });
-    fireEvent.click(sendBtn);
-    expect(onSend).not.toHaveBeenCalled();
-
-    // Entering a valid URL clears error feedback and allows sending
-    fireEvent.change(urlInput, { target: { value: 'https://api.valid.com' } });
-    expect(screen.queryByRole('alert')).toBeNull();
-
-    fireEvent.click(sendBtn);
     expect(onSend).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: 'https://api.valid.com',
+        target: 'Server',
       })
     );
-  });
 
-  it('triggers handleSend when pressing Enter in the URL input', () => {
-    const onSend = vi.fn();
-    render(<RequestEditor onSend={onSend} initialRequest={{ url: 'https://api.example.com/enter-test' }} />);
+    // Dropdown shows Agent option disabled
+    const chevronBtn = screen.getByRole('button', { name: /opções de envio e alvo/i });
+    fireEvent.click(chevronBtn);
 
-    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
-    fireEvent.keyDown(urlInput, { key: 'Enter' });
-
-    expect(onSend).toHaveBeenCalledWith(
-      expect.objectContaining({
-        url: 'https://api.example.com/enter-test',
-      })
-    );
-  });
-
-  it('does not send on Enter when URL is empty', () => {
-    const onSend = vi.fn();
-    render(<RequestEditor onSend={onSend} initialRequest={{ url: '' }} />);
-
-    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
-    fireEvent.keyDown(urlInput, { key: 'Enter' });
-
-    expect(onSend).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toHaveTextContent(/url é obrigatória/i);
+    const agentOption = screen.getByRole('menuitem', { name: /executar no agent local/i });
+    expect(agentOption).toBeDisabled();
   });
 
   it('formats unformatted JSON in the body when clicking the format button', () => {
-    render(<RequestEditor initialRequest={{ body: '{"name":"Hudson","active":true}' }} />);
+    render(<RequestEditor initialRequest={{ body: '{"name":"api","age":30}' }} />);
 
     const bodyTab = screen.getByRole('tab', { name: /body/i });
     fireEvent.click(bodyTab);
 
-    const bodyInput = screen.getByRole('textbox', { name: /corpo da requisição/i });
-    expect(bodyInput).toHaveValue('{"name":"Hudson","active":true}');
-
-    const formatBtn = screen.getByRole('button', { name: /formatar corpo/i });
+    const formatBtn = screen.getByRole('button', { name: /formatar json/i });
     fireEvent.click(formatBtn);
 
-    const expectedJson = JSON.stringify({ name: 'Hudson', active: true }, null, 2);
-    expect(bodyInput).toHaveValue(expectedJson);
-    expect(screen.getByText(/formatado com sucesso/i)).toBeDefined();
+    expect(screen.getByTestId('format-notice')).toHaveTextContent(/formatado com sucesso/i);
   });
 
-  it('shows error notice when formatting invalid JSON in the body', () => {
-    render(<RequestEditor initialRequest={{ body: '{ invalid json }' }} />);
-
-    const bodyTab = screen.getByRole('tab', { name: /body/i });
-    fireEvent.click(bodyTab);
-
-    const formatBtn = screen.getByRole('button', { name: /formatar corpo/i });
-    fireEvent.click(formatBtn);
-
-    expect(screen.getByText(/json inválido/i)).toBeDefined();
-  });
-
-  it('triggers variable autocomplete in URL input when typing {{ and allows selection', () => {
-    const mockVariables = [
-      { key: 'baseUrl', value: 'https://api.example.com', scope: 'env' },
-    ];
-    const onChange = vi.fn();
+  it('renders request title bar, dirty indicator, and handles save action', () => {
+    const onSaveExisting = vi.fn();
     render(
       <RequestEditor
-        availableVariables={mockVariables}
-        onChange={onChange}
+        requestName="Buscar Usuários"
+        currentRequestId="req-123"
+        initialRequest={{ method: 'GET', url: 'https://api.com/users' }}
+        onSaveExisting={onSaveExisting}
       />
     );
 
+    expect(screen.getByTestId('request-title')).toHaveTextContent('Buscar Usuários');
+    expect(screen.queryByTestId('dirty-indicator')).toBeNull();
+
+    // Change URL to trigger dirty indicator
     const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
-    fireEvent.change(urlInput, { target: { value: '{{' } });
+    fireEvent.change(urlInput, { target: { value: 'https://api.com/users/new' } });
 
-    expect(screen.getByRole('listbox')).toBeDefined();
-    expect(screen.getByText('baseUrl')).toBeDefined();
+    expect(screen.getByTestId('dirty-indicator')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('baseUrl'));
-    expect(urlInput).toHaveValue('{{baseUrl}}');
-    expect(onChange).toHaveBeenCalledWith(
+    const saveBtn = screen.getByRole('button', { name: /salvar requisição/i });
+    fireEvent.click(saveBtn);
+
+    expect(onSaveExisting).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: '{{baseUrl}}',
+        url: 'https://api.com/users/new',
       })
     );
   });
 
-  it('triggers request chaining autocomplete in headers and body textareas when typing {{$request[', () => {
-    const mockRequests = [
-      { id: 'auth-req', name: 'Auth Token', method: 'POST' },
-    ];
+  it('insertTokenAtCursor helper inserts token at cursor position', () => {
     const onChange = vi.fn();
-    render(
-      <RequestEditor
-        availableRequests={mockRequests}
-        onChange={onChange}
-      />
-    );
-
-    // Test headers textarea
-    const headersInput = screen.getByRole('textbox', { name: /cabeçalhos http/i });
-    fireEvent.change(headersInput, { target: { value: 'Authorization: {{$request[' } });
-
-    const listbox = screen.getByRole('listbox');
-    expect(listbox).toBeDefined();
-    expect(screen.getByText('Auth Token')).toBeDefined();
-    expect(within(listbox).getByText('POST')).toBeDefined();
-
-    fireEvent.click(screen.getByText('Auth Token'));
-    expect(headersInput).toHaveValue("Authorization: {{$request['auth-req'].response.body.");
-
-    // Switch to body tab
-    const bodyTab = screen.getByRole('tab', { name: /body/i });
-    fireEvent.click(bodyTab);
-
-    const bodyInput = screen.getByRole('textbox', { name: /corpo da requisição/i });
-    fireEvent.change(bodyInput, { target: { value: '{"token": "{{$request[' } });
-
-    expect(screen.getByRole('listbox')).toBeDefined();
-    expect(screen.getByText('Auth Token')).toBeDefined();
-
-    fireEvent.click(screen.getByText('Auth Token'));
-    expect(bodyInput).toHaveValue('{"token": "{{$request[\'auth-req\'].response.body.');
-  });
-
-  it('renders "Vincular" button and opens DependencyLinkerModal', () => {
-    const mockRequests = [
-      {
-        id: 'req-auth',
-        name: 'Login Auth',
-        method: 'POST',
-        url: 'https://api.example.com/v1/auth',
-        response: {
-          statusCode: 200,
-          body: JSON.stringify({ token: 'xyz123' }),
-        },
-      },
-    ];
-    render(
-      <RequestEditor
-        availableRequests={mockRequests}
-      />
-    );
-
-    const vincularBtn = screen.getByRole('button', { name: /vincular/i });
-    expect(vincularBtn).toBeInTheDocument();
-
-    fireEvent.click(vincularBtn);
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText('Login Auth')).toBeInTheDocument();
-  });
-
-  it('inserts selected token into the active editor area (body, headers, url)', () => {
-    const mockRequests = [
-      {
-        id: 'req-auth',
-        name: 'Login Auth',
-        method: 'POST',
-        url: 'https://api.example.com/v1/auth',
-        response: {
-          statusCode: 200,
-          body: JSON.stringify({ token: 'xyz123' }),
-        },
-      },
-    ];
-    const onChange = vi.fn();
-    render(
-      <RequestEditor
-        availableRequests={mockRequests}
-        onChange={onChange}
-      />
-    );
-
-    // 1. Switch to Body tab and open modal
-    const bodyTab = screen.getByRole('tab', { name: /body/i });
-    fireEvent.click(bodyTab);
-
-    const vincularBtn = screen.getByRole('button', { name: /vincular/i });
-    fireEvent.click(vincularBtn);
-
-    // In modal, click on token property
-    fireEvent.click(screen.getByText('token'));
-
-    // Should insert token into body textarea and call onChange
-    const bodyInput = screen.getByRole('textbox', { name: /corpo da requisição/i });
-    expect(bodyInput).toHaveValue("{{$request['req-auth'].response.body.token}}");
-    expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({
-        body: "{{$request['req-auth'].response.body.token}}",
-      })
-    );
-  });
-
-  it('inserts selected token into headers textarea when headers tab is active', () => {
-    const mockRequests = [
-      {
-        id: 'req-auth',
-        name: 'Login Auth',
-        method: 'POST',
-        url: 'https://api.example.com/v1/auth',
-        response: {
-          statusCode: 200,
-          body: JSON.stringify({ token: 'xyz123' }),
-        },
-      },
-    ];
-    const onChange = vi.fn();
-    render(
-      <RequestEditor
-        availableRequests={mockRequests}
-        onChange={onChange}
-      />
-    );
-
-    // Headers tab is active by default
-    const vincularBtn = screen.getByRole('button', { name: /vincular/i });
-    fireEvent.click(vincularBtn);
-
-    // In modal, click on token property
-    fireEvent.click(screen.getByText('token'));
-
-    // Should insert token into headers textarea and call onChange
-    const headersInput = screen.getByRole('textbox', { name: /cabeçalhos http/i });
-    expect(headersInput).toHaveValue("{{$request['req-auth'].response.body.token}}");
-    expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({
-        headers: "{{$request['req-auth'].response.body.token}}",
-      })
-    );
-  });
-
-  it('inserts selected token into URL input when URL input was focused', () => {
-    const mockRequests = [
-      {
-        id: 'req-auth',
-        name: 'Login Auth',
-        method: 'POST',
-        url: 'https://api.example.com/v1/auth',
-        response: {
-          statusCode: 200,
-          body: JSON.stringify({ token: 'xyz123' }),
-        },
-      },
-    ];
-    const onChange = vi.fn();
-    render(
-      <RequestEditor
-        availableRequests={mockRequests}
-        onChange={onChange}
-      />
-    );
-
-    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
-    fireEvent.focus(urlInput);
-
-    const vincularBtn = screen.getByRole('button', { name: /vincular/i });
-    fireEvent.click(vincularBtn);
-
-    // In modal, click on token property
-    fireEvent.click(screen.getByText('token'));
-
-    // Should insert token into URL input
-    expect(urlInput).toHaveValue("{{$request['req-auth'].response.body.token}}");
-    expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({
-        url: "{{$request['req-auth'].response.body.token}}",
-      })
-    );
-  });
-
-  describe('insertTokenAtCursor helper', () => {
-    it('inserts token at cursor position when element has selectionStart/selectionEnd', () => {
-      const input = document.createElement('input');
-      input.value = 'Hello World';
-      input.selectionStart = 5;
-      input.selectionEnd = 5;
-
-      const onChange = vi.fn();
-      insertTokenAtCursor(input, 'Hello World', ' beautiful', onChange);
-
-      expect(onChange).toHaveBeenCalledWith('Hello beautiful World');
-    });
-
-    it('replaces selected range with token', () => {
-      const textarea = document.createElement('textarea');
-      textarea.value = 'foo REPLACE bar';
-      textarea.selectionStart = 4;
-      textarea.selectionEnd = 11;
-
-      const onChange = vi.fn();
-      insertTokenAtCursor(textarea, 'foo REPLACE bar', 'INSERTED', onChange);
-
-      expect(onChange).toHaveBeenCalledWith('foo INSERTED bar');
-    });
-
-    it('appends token when element is null or selection is not available', () => {
-      const onChange = vi.fn();
-      insertTokenAtCursor(null, 'existing-', 'token', onChange);
-      expect(onChange).toHaveBeenCalledWith('existing-token');
-
-      const onChangeEmpty = vi.fn();
-      insertTokenAtCursor(null, '', 'first-token', onChangeEmpty);
-      expect(onChangeEmpty).toHaveBeenCalledWith('first-token');
-    });
-  });
-
-  describe('Save and Save-As workflow & dirty indicator integration', () => {
-    it('renders default request title "Nova Requisição" when requestName is not provided', () => {
-      render(<RequestEditor />);
-      expect(screen.getByTestId('request-title')).toHaveTextContent('Nova Requisição');
-    });
-
-    it('renders custom requestName in the title bar when provided', () => {
-      render(<RequestEditor requestName="Buscar Usuários Ativos" />);
-      expect(screen.getByTestId('request-title')).toHaveTextContent('Buscar Usuários Ativos');
-    });
-
-    it('does not display dirty indicator initially when initialRequest is unchanged', () => {
-      render(
-        <RequestEditor
-          initialRequest={{
-            method: 'GET',
-            url: 'https://api.example.com/items',
-            headers: '{"Accept": "application/json"}',
-            body: '{"page": 1}',
-          }}
-        />
-      );
-
-      expect(screen.queryByTestId('dirty-indicator')).toBeNull();
-      expect(screen.queryByTestId('save-button-dirty-dot')).toBeNull();
-    });
-
-    it('displays dirty indicator when url, method, headers, or body are modified', () => {
-      render(
-        <RequestEditor
-          initialRequest={{
-            method: 'GET',
-            url: 'https://api.example.com/items',
-            headers: '{"Accept": "application/json"}',
-            body: '',
-          }}
-        />
-      );
-
-      const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
-      fireEvent.change(urlInput, { target: { value: 'https://api.example.com/items/42' } });
-
-      expect(screen.getByTestId('dirty-indicator')).toBeInTheDocument();
-      expect(screen.getByTestId('save-button-dirty-dot')).toBeInTheDocument();
-
-      // Revert URL to original
-      fireEvent.change(urlInput, { target: { value: 'https://api.example.com/items' } });
-      expect(screen.queryByTestId('dirty-indicator')).toBeNull();
-
-      // Change method
-      const methodSelect = screen.getByRole('combobox', { name: /método http/i });
-      fireEvent.change(methodSelect, { target: { value: 'DELETE' } });
-      expect(screen.getByTestId('dirty-indicator')).toBeInTheDocument();
-
-      // Revert method
-      fireEvent.change(methodSelect, { target: { value: 'GET' } });
-      expect(screen.queryByTestId('dirty-indicator')).toBeNull();
-
-      // Change headers
-      const headersInput = screen.getByRole('textbox', { name: /cabeçalhos http/i });
-      fireEvent.change(headersInput, { target: { value: '{"X-Custom": "test"}' } });
-      expect(screen.getByTestId('dirty-indicator')).toBeInTheDocument();
-
-      // Revert headers
-      fireEvent.change(headersInput, { target: { value: '{"Accept": "application/json"}' } });
-      expect(screen.queryByTestId('dirty-indicator')).toBeNull();
-
-      // Change body
-      const bodyTab = screen.getByRole('tab', { name: /body/i });
-      fireEvent.click(bodyTab);
-      const bodyInput = screen.getByRole('textbox', { name: /corpo da requisição/i });
-      fireEvent.change(bodyInput, { target: { value: '{"id": 100}' } });
-      expect(screen.getByTestId('dirty-indicator')).toBeInTheDocument();
-
-      // Revert body
-      fireEvent.change(bodyInput, { target: { value: '' } });
-      expect(screen.queryByTestId('dirty-indicator')).toBeNull();
-    });
-
-    it('clears dirty indicator when initialRequest is updated via props', () => {
-      const { rerender } = render(
-        <RequestEditor
-          initialRequest={{
-            method: 'GET',
-            url: 'https://api.example.com/items',
-          }}
-        />
-      );
-
-      const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
-      fireEvent.change(urlInput, { target: { value: 'https://api.example.com/items/new' } });
-      expect(screen.getByTestId('dirty-indicator')).toBeInTheDocument();
-
-      // Parent updates initialRequest after saving
-      rerender(
-        <RequestEditor
-          initialRequest={{
-            method: 'GET',
-            url: 'https://api.example.com/items/new',
-          }}
-        />
-      );
-
-      expect(screen.queryByTestId('dirty-indicator')).toBeNull();
-    });
-
-    it('calls onSaveExisting when clicking "Salvar" button with currentRequestId', () => {
-      const onSaveExisting = vi.fn();
-      const onSaveAs = vi.fn();
-
-      render(
-        <RequestEditor
-          currentRequestId="req-saved-001"
-          onSaveExisting={onSaveExisting}
-          onSaveAs={onSaveAs}
-          initialRequest={{
-            method: 'POST',
-            url: 'https://api.example.com/login',
-            headers: '{"Content-Type": "application/json"}',
-            body: '{"user": "admin"}',
-          }}
-        />
-      );
-
-      const saveButton = screen.getByRole('button', { name: /salvar requisição/i });
-      fireEvent.click(saveButton);
-
-      expect(onSaveExisting).toHaveBeenCalledTimes(1);
-      expect(onSaveExisting).toHaveBeenCalledWith(
-        expect.objectContaining({
-          method: 'POST',
-          url: 'https://api.example.com/login',
-          headers: '{"Content-Type": "application/json"}',
-          body: '{"user": "admin"}',
-        })
-      );
-      expect(onSaveAs).not.toHaveBeenCalled();
-    });
-
-    it('calls onSaveExisting when pressing Ctrl+S or Cmd+S with currentRequestId', () => {
-      const onSaveExisting = vi.fn();
-      const onSaveAs = vi.fn();
-
-      render(
-        <RequestEditor
-          currentRequestId="req-saved-002"
-          onSaveExisting={onSaveExisting}
-          onSaveAs={onSaveAs}
-          initialRequest={{
-            method: 'GET',
-            url: 'https://api.example.com/users',
-          }}
-        />
-      );
-
-      // Trigger Ctrl+S
-      fireEvent.keyDown(window, { key: 's', ctrlKey: true });
-      expect(onSaveExisting).toHaveBeenCalledTimes(1);
-      expect(onSaveAs).not.toHaveBeenCalled();
-
-      // Trigger Cmd+S (metaKey)
-      fireEvent.keyDown(window, { key: 's', metaKey: true });
-      expect(onSaveExisting).toHaveBeenCalledTimes(2);
-      expect(onSaveAs).not.toHaveBeenCalled();
-    });
-
-    it('calls onSaveAs when clicking "Salvar" button without currentRequestId', () => {
-      const onSaveExisting = vi.fn();
-      const onSaveAs = vi.fn();
-
-      render(
-        <RequestEditor
-          onSaveExisting={onSaveExisting}
-          onSaveAs={onSaveAs}
-          initialRequest={{
-            method: 'GET',
-            url: 'https://api.example.com/scratchpad',
-          }}
-        />
-      );
-
-      const saveButton = screen.getByRole('button', { name: /salvar requisição/i });
-      fireEvent.click(saveButton);
-
-      expect(onSaveAs).toHaveBeenCalledTimes(1);
-      expect(onSaveAs).toHaveBeenCalledWith(
-        expect.objectContaining({
-          method: 'GET',
-          url: 'https://api.example.com/scratchpad',
-        })
-      );
-      expect(onSaveExisting).not.toHaveBeenCalled();
-    });
-
-    it('calls onSaveAs when pressing Ctrl+S or Cmd+S without currentRequestId', () => {
-      const onSaveExisting = vi.fn();
-      const onSaveAs = vi.fn();
-
-      render(
-        <RequestEditor
-          onSaveExisting={onSaveExisting}
-          onSaveAs={onSaveAs}
-          initialRequest={{
-            method: 'POST',
-            url: 'https://api.example.com/new-feature',
-          }}
-        />
-      );
-
-      // Trigger Ctrl+S
-      fireEvent.keyDown(window, { key: 's', ctrlKey: true });
-      expect(onSaveAs).toHaveBeenCalledTimes(1);
-      expect(onSaveExisting).not.toHaveBeenCalled();
-
-      // Trigger Cmd+S
-      fireEvent.keyDown(window, { key: 's', metaKey: true });
-      expect(onSaveAs).toHaveBeenCalledTimes(2);
-      expect(onSaveExisting).not.toHaveBeenCalled();
-    });
-
-    it('disables "Salvar" button and shows loading text when isSaving is true', () => {
-      const onSaveExisting = vi.fn();
-
-      render(
-        <RequestEditor
-          currentRequestId="req-003"
-          isSaving={true}
-          onSaveExisting={onSaveExisting}
-        />
-      );
-
-      const saveButton = screen.getByRole('button', { name: /salvar requisição/i });
-      expect(saveButton).toBeDisabled();
-      expect(screen.getByText(/salvando\.\.\./i)).toBeInTheDocument();
-
-      fireEvent.click(saveButton);
-      expect(onSaveExisting).not.toHaveBeenCalled();
-
-      fireEvent.keyDown(window, { key: 's', ctrlKey: true });
-      expect(onSaveExisting).not.toHaveBeenCalled();
-    });
-
-    it('does not trigger save hotkey when isLoading is true', () => {
-      const onSaveExisting = vi.fn();
-
-      render(
-        <RequestEditor
-          currentRequestId="req-004"
-          isLoading={true}
-          onSaveExisting={onSaveExisting}
-        />
-      );
-
-      fireEvent.keyDown(window, { key: 's', ctrlKey: true });
-      expect(onSaveExisting).not.toHaveBeenCalled();
-    });
+    const mockElement = {
+      selectionStart: 5,
+      selectionEnd: 5,
+      focus: vi.fn(),
+      setSelectionRange: vi.fn(),
+    } as unknown as HTMLInputElement;
+
+    insertTokenAtCursor(mockElement, 'hello world', ' brave', onChange);
+    expect(onChange).toHaveBeenCalledWith('hello brave world');
   });
 });

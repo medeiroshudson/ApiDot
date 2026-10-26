@@ -1,16 +1,19 @@
+'use client';
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Send, Loader2, X, Sparkles, Link2, Save } from 'lucide-react';
-import { TargetSelector, ExecutionTarget } from './TargetSelector';
+import { Send, Loader2, X, Sparkles, Save, ChevronDown, Server, Cpu } from 'lucide-react';
+import { ExecutionTarget } from './TargetSelector';
 import {
   RequestAutocomplete,
   AutocompleteVariable,
-  HTTP_METHOD_BADGES,
+  CursorCoords,
   METHOD_COLORS,
 } from './RequestAutocomplete';
 import {
   DependencyLinkerModal,
   DependencyRequest,
 } from './DependencyLinkerModal';
+import { CodeEditor } from '../common/CodeEditor';
 
 export { SaveRequestModal } from './SaveRequestModal';
 export type { SaveRequestModalProps, CollectionOption, FolderOption } from './SaveRequestModal';
@@ -105,10 +108,16 @@ export function RequestEditor({
   const [isLinkerOpen, setIsLinkerOpen] = useState(false);
   const [activeArea, setActiveArea] = useState<'url' | 'headers' | 'body'>('headers');
 
+  // Split Send button state
+  const [isSendMenuOpen, setIsSendMenuOpen] = useState(false);
+  const sendMenuRef = useRef<HTMLDivElement>(null);
+
+  // Cursor coords for floating autocomplete
+  const [cursorCoords, setCursorCoords] = useState<CursorCoords | null>(null);
+  const [cursorPos, setCursorPos] = useState<number>(0);
+
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const urlInputRef = useRef<HTMLInputElement>(null);
-  const headersRef = useRef<HTMLTextAreaElement>(null);
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const isDirty = useMemo(() => {
     const initialMethod = initialRequest?.method ?? 'GET';
@@ -128,6 +137,16 @@ export function RequestEditor({
     );
   }, [method, url, headers, body, target, auth, initialRequest]);
 
+  // Primary execution target based on priority rule:
+  // If target override is Inherit (or unset): Agent if online, else Server
+  const defaultExecutionTarget: ExecutionTarget = useMemo(() => {
+    if (target && target !== 'Inherit') return target;
+    return isAgentOnline ? 'Agent' : 'Server';
+  }, [target, isAgentOnline]);
+
+  const alternateTarget: ExecutionTarget =
+    defaultExecutionTarget === 'Agent' ? 'Server' : 'Agent';
+
   const handleSave = useCallback(() => {
     if (isLoading || isSaving) return;
     const requestData: RequestData = {
@@ -144,53 +163,66 @@ export function RequestEditor({
     } else {
       onSaveAs?.(requestData);
     }
-  }, [
-    isLoading,
-    isSaving,
-    method,
-    url,
-    target,
-    headers,
-    body,
-    auth,
-    currentRequestId,
-    initialRequest,
-    onSaveExisting,
-    onSaveAs,
-  ]);
+  }, [isLoading, isSaving, method, url, target, headers, body, auth, currentRequestId, initialRequest, onSaveExisting, onSaveAs]);
 
-  const handleSaveRef = useRef(handleSave);
-  useEffect(() => {
-    handleSaveRef.current = handleSave;
-  }, [handleSave]);
-
+  // Global Ctrl+S / Cmd+S shortcut
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
-        handleSaveRef.current();
+        handleSave();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [handleSave]);
 
+  // Close split send menu on outside click or Escape
   useEffect(() => {
-    setMethod(initialRequest?.method ?? 'GET');
-    setUrl(initialRequest?.url ?? '');
-    setTarget(initialRequest?.target ?? 'Inherit');
-    setHeaders(initialRequest?.headers ?? '');
-    setBody(initialRequest?.body ?? '');
-    setAuth(initialRequest?.auth ?? { type: 'none' });
-    setUrlError(null);
+    if (!isSendMenuOpen) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      if (sendMenuRef.current && !sendMenuRef.current.contains(e.target as Node)) {
+        setIsSendMenuOpen(false);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsSendMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [isSendMenuOpen]);
+
+  // Sync initialRequest props
+  useEffect(() => {
+    if (initialRequest) {
+      if (initialRequest.method !== undefined) setMethod(initialRequest.method);
+      if (initialRequest.url !== undefined) setUrl(initialRequest.url);
+      if (initialRequest.target !== undefined) setTarget(initialRequest.target);
+      if (initialRequest.headers !== undefined) setHeaders(initialRequest.headers);
+      if (initialRequest.body !== undefined) setBody(initialRequest.body);
+      if (initialRequest.auth !== undefined) setAuth(initialRequest.auth);
+    }
   }, [initialRequest]);
 
-  const updateRequest = (updater: (prev: RequestData) => RequestData) => {
-    const current: RequestData = { method, url, target, headers, body, auth };
-    const updated = updater(current);
-    onChange?.(updated);
-  };
+  const updateRequest = useCallback(
+    (updater: (prev: RequestData) => RequestData) => {
+      const updated = updater({
+        method,
+        url,
+        target,
+        headers,
+        body,
+        auth,
+      });
+      onChange?.(updated);
+    },
+    [method, url, target, headers, body, auth, onChange]
+  );
 
   const handleMethodChange = (newMethod: string) => {
     setMethod(newMethod);
@@ -205,11 +237,6 @@ export function RequestEditor({
     updateRequest((prev) => ({ ...prev, url: newUrl }));
   };
 
-  const handleTargetChange = (newTarget: ExecutionTarget) => {
-    setTarget(newTarget);
-    updateRequest((prev) => ({ ...prev, target: newTarget }));
-  };
-
   const handleHeadersChange = (newHeaders: string) => {
     setHeaders(newHeaders);
     updateRequest((prev) => ({ ...prev, headers: newHeaders }));
@@ -222,7 +249,7 @@ export function RequestEditor({
 
   const [formatNotice, setFormatNotice] = useState<{ target: 'body' | 'headers'; message: string; isError?: boolean } | null>(null);
 
-  const handleFormatBody = () => {
+  const handleFormatJson = () => {
     if (!body.trim()) return;
     try {
       const parsed = JSON.parse(body);
@@ -262,7 +289,7 @@ export function RequestEditor({
     updateRequest((prev) => ({ ...prev, auth: newAuth }));
   };
 
-  const handleSend = () => {
+  const handleSend = (sendTarget?: ExecutionTarget) => {
     if (isLoading) return;
     const trimmedUrl = url.trim();
     if (!trimmedUrl) {
@@ -270,10 +297,13 @@ export function RequestEditor({
       return;
     }
     setUrlError(null);
+    setIsSendMenuOpen(false);
+
+    const effectiveTarget = sendTarget ?? defaultExecutionTarget;
     const requestData: RequestData = {
       method,
       url: trimmedUrl,
-      target,
+      target: effectiveTarget,
       headers,
       body,
       auth,
@@ -297,35 +327,21 @@ export function RequestEditor({
       e.preventDefault();
       const nextTab = TABS[targetIndex];
       setActiveTab(nextTab.id);
-      if (nextTab.id === 'headers' || nextTab.id === 'body') {
-        setActiveArea(nextTab.id);
-      }
       tabRefs.current[targetIndex]?.focus();
     }
   };
 
-  const handleInsertToken = (token: string) => {
-    if (activeArea === 'body') {
-      insertTokenAtCursor(bodyRef.current, body, token, handleBodyChange);
-    } else if (activeArea === 'headers') {
-      insertTokenAtCursor(headersRef.current, headers, token, handleHeadersChange);
-    } else {
-      insertTokenAtCursor(urlInputRef.current, url, token, handleUrlChange);
-    }
-    setIsLinkerOpen(false);
-  };
-
   return (
-    <div className="flex flex-col h-full bg-neutral-950 text-neutral-100">
-      {/* Title Bar / Action Bar: Request Title, Dirty State, Save Button */}
-      <div className="px-3 sm:px-4 py-2 border-b border-neutral-800 bg-neutral-900/60 flex items-center justify-between gap-3 shrink-0">
+    <div className="flex flex-col h-full bg-neutral-950 text-neutral-100 overflow-hidden">
+      {/* Title Bar: Request Name, Dirty State, Save Action */}
+      <div className="h-9 px-3 sm:px-4 border-b border-neutral-800 bg-neutral-900/60 flex items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider shrink-0">
+          <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider shrink-0">
             Requisição:
           </span>
           <span
             data-testid="request-title"
-            className="text-sm font-medium text-neutral-200 truncate"
+            className="text-xs font-medium text-neutral-200 truncate"
             title={requestName || 'Nova Requisição'}
           >
             {requestName || 'Nova Requisição'}
@@ -333,7 +349,7 @@ export function RequestEditor({
           {isDirty && (
             <span
               data-testid="dirty-indicator"
-              className="w-2 h-2 rounded-full bg-amber-400 shrink-0"
+              className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"
               title="Alterações não salvas"
               aria-label="Alterações não salvas"
             />
@@ -347,7 +363,7 @@ export function RequestEditor({
             title="Salvar (Ctrl+S / Cmd+S)"
             onClick={handleSave}
             disabled={isLoading || isSaving}
-            className="h-8 px-3 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-colors border border-neutral-700/60 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+            className="h-7 px-2.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-colors border border-neutral-700/60 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
           >
             {isSaving ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400" aria-hidden="true" />
@@ -366,16 +382,16 @@ export function RequestEditor({
         </div>
       </div>
 
-      {/* Top Bar: Method, Expanded URL, Send Button */}
-      <div className="p-3 sm:p-4 border-b border-neutral-800 bg-neutral-900/40 flex flex-col gap-2">
-        <div className="flex flex-col sm:flex-row gap-2.5 sm:items-center w-full">
+      {/* Top Bar Compact (h-9): Method, URL Input, Split Send Button */}
+      <div className="p-2.5 sm:p-3 border-b border-neutral-800 bg-neutral-900/40 flex flex-col gap-1.5 shrink-0">
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <select
               aria-label="Método HTTP"
               value={method}
               disabled={isLoading}
               onChange={(e) => handleMethodChange(e.target.value)}
-              className={`h-11 sm:h-12 px-3 sm:px-4 font-bold text-xs sm:text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 ${
+              className={`h-9 px-2.5 font-bold text-xs rounded-md border focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 ${
                 METHOD_COLORS[method] || 'text-blue-400 bg-neutral-800 border-neutral-700'
               }`}
             >
@@ -394,7 +410,10 @@ export function RequestEditor({
                 placeholder="https://api.exemplo.com/v1/recurso"
                 value={url}
                 disabled={isLoading}
-                onFocus={() => setActiveArea('url')}
+                onFocus={() => {
+                  setActiveArea('url');
+                  setCursorCoords(null);
+                }}
                 onChange={(e) => handleUrlChange(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.defaultPrevented) {
@@ -404,7 +423,7 @@ export function RequestEditor({
                 }}
                 aria-invalid={!!urlError}
                 aria-describedby={urlError ? 'url-error' : undefined}
-                className={`h-11 sm:h-12 w-full pl-3.5 pr-9 sm:px-4 text-sm sm:text-base bg-neutral-900/90 border rounded-lg text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-2 font-mono transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                className={`h-9 w-full pl-3 pr-8 text-xs sm:text-sm bg-neutral-900/90 border rounded-md text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-1 font-mono transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                   urlError
                     ? 'border-rose-500 focus:ring-rose-500 shadow-sm shadow-rose-950/40'
                     : 'border-neutral-700/80 hover:border-neutral-600 focus:border-blue-500 focus:ring-blue-500/30'
@@ -422,28 +441,99 @@ export function RequestEditor({
                   type="button"
                   aria-label="Limpar URL"
                   onClick={() => handleUrlChange('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-200 p-1 rounded-md hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-1 focus:ring-neutral-500"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-200 p-1 rounded hover:bg-neutral-800 transition-colors focus:outline-none"
                 >
-                  <X className="w-4 h-4" aria-hidden="true" />
+                  <X className="w-3.5 h-3.5" aria-hidden="true" />
                 </button>
               )}
             </div>
           </div>
 
-          <button
-            type="button"
-            aria-label="Enviar requisição"
-            onClick={handleSend}
-            disabled={isLoading}
-            className="h-11 sm:h-12 px-5 sm:px-6 rounded-lg bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-950/40 focus:outline-none focus:ring-2 focus:ring-blue-400 w-full sm:w-auto shrink-0"
-          >
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <Send className="w-4 h-4" aria-hidden="true" />
+          {/* Split Send Button: [ Enviar | ▾ ] */}
+          <div ref={sendMenuRef} className="relative inline-flex rounded-md shadow-sm h-9 shrink-0">
+            <button
+              type="button"
+              aria-label="Enviar requisição"
+              onClick={() => handleSend(defaultExecutionTarget)}
+              disabled={isLoading}
+              title={
+                defaultExecutionTarget === 'Agent'
+                  ? 'Enviar via Agent Local'
+                  : 'Enviar via Servidor Nuvem'
+              }
+              className="h-9 px-3.5 rounded-l-md bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-400"
+            >
+              {isLoading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+              ) : defaultExecutionTarget === 'Agent' ? (
+                <Cpu className="w-3.5 h-3.5 text-blue-200" aria-hidden="true" />
+              ) : (
+                <Send className="w-3.5 h-3.5" aria-hidden="true" />
+              )}
+              <span>{isLoading ? 'Enviando...' : 'Enviar'}</span>
+            </button>
+
+            <button
+              type="button"
+              aria-label="Opções de envio e alvo"
+              aria-haspopup="true"
+              aria-expanded={isSendMenuOpen}
+              onClick={() => setIsSendMenuOpen((prev) => !prev)}
+              disabled={isLoading}
+              className="h-9 px-2 rounded-r-md bg-blue-700 hover:bg-blue-600 border-l border-blue-500/40 text-white flex items-center justify-center transition-colors focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50"
+            >
+              <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+
+            {/* Dropdown for Alternative Target */}
+            {isSendMenuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full mt-1 w-56 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl shadow-black/80 py-1 z-50 text-xs animate-in fade-in duration-75"
+              >
+                <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-neutral-400 border-b border-neutral-800/80">
+                  Alvo Alternativo
+                </div>
+
+                {alternateTarget === 'Server' ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => handleSend('Server')}
+                    className="w-full text-left px-3 py-2 flex items-center gap-2 text-neutral-200 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
+                  >
+                    <Server className="w-3.5 h-3.5 text-neutral-400" />
+                    <div className="flex flex-col">
+                      <span className="font-medium">Executar no Servidor Nuvem</span>
+                      <span className="text-[10px] text-neutral-500">
+                        Disparo direto sem passar pelo Agent
+                      </span>
+                    </div>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={!isAgentOnline}
+                    onClick={() => handleSend('Agent')}
+                    className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
+                      isAgentOnline
+                        ? 'text-neutral-200 hover:text-white hover:bg-neutral-800 cursor-pointer'
+                        : 'text-neutral-500 opacity-60 cursor-not-allowed'
+                    }`}
+                  >
+                    <Cpu className={`w-3.5 h-3.5 ${isAgentOnline ? 'text-emerald-400' : 'text-neutral-500'}`} />
+                    <div className="flex flex-col">
+                      <span className="font-medium">Executar no Agent Local</span>
+                      <span className="text-[10px] text-neutral-500">
+                        {isAgentOnline ? 'Disparo em rede local / localhost' : 'Agent offline'}
+                      </span>
+                    </div>
+                  </button>
+                )}
+              </div>
             )}
-            <span>{isLoading ? 'Enviando...' : 'Enviar'}</span>
-          </button>
+          </div>
         </div>
 
         {urlError && (
@@ -453,7 +543,7 @@ export function RequestEditor({
         )}
       </div>
 
-      {/* Tabs navigation & Target Selector */}
+      {/* Tabs navigation: Headers, Body, Auth */}
       <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/20 px-3 sm:px-4">
         <div
           role="tablist"
@@ -481,7 +571,7 @@ export function RequestEditor({
                   }
                 }}
                 onKeyDown={(e) => handleTabKeyDown(e, index)}
-                className={`px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                className={`px-3 sm:px-4 py-2 text-xs font-medium border-b-2 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 ${
                   isActive
                     ? 'border-blue-500 text-white'
                     : 'border-transparent text-neutral-400 hover:text-neutral-200'
@@ -492,32 +582,11 @@ export function RequestEditor({
             );
           })}
         </div>
-
-        <div className="flex items-center gap-2 py-1.5 shrink-0">
-          <button
-            type="button"
-            aria-label="Vincular"
-            title="Vincular resposta de dependência"
-            onClick={() => setIsLinkerOpen(true)}
-            disabled={isLoading}
-            className="h-8 px-2.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-colors border border-neutral-700/60 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            <Link2 className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
-            <span>Vincular</span>
-          </button>
-
-          <span className="hidden sm:inline text-xs text-neutral-400 font-medium">Alvo:</span>
-          <TargetSelector
-            value={target}
-            isAgentOnline={isAgentOnline}
-            disabled={isLoading}
-            onChange={handleTargetChange}
-          />
-        </div>
       </div>
 
       {/* Tab Panels */}
       <div className="flex-1 p-3 sm:p-4 overflow-y-auto">
+        {/* Headers Panel */}
         <div
           role="tabpanel"
           id="panel-headers"
@@ -526,14 +595,15 @@ export function RequestEditor({
           className={activeTab === 'headers' ? 'h-full flex flex-col' : 'hidden'}
         >
           <div className="flex items-center justify-between mb-2">
-            <label htmlFor="headers-textarea" className="text-xs text-neutral-400 font-medium">
-              Cabeçalhos HTTP (JSON ou formato Chave: Valor):
-            </label>
+            <span className="text-xs text-neutral-400 font-medium">
+              Cabeçalhos HTTP (JSON estrito):
+            </span>
             <div className="flex items-center gap-2">
               {formatNotice?.target === 'headers' && (
                 <span
                   role="status"
-                  className={`text-xs font-medium animate-fade-in ${
+                  data-testid="format-notice"
+                  className={`text-xs ${
                     formatNotice.isError ? 'text-rose-400' : 'text-emerald-400'
                   }`}
                 >
@@ -548,35 +618,42 @@ export function RequestEditor({
                 className="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors border border-neutral-700/60 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <Sparkles className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
-                <span>Formatar</span>
+                <span>Formatar JSON</span>
               </button>
             </div>
           </div>
-          <div className="relative flex-1 flex flex-col">
-            <textarea
-              ref={headersRef}
-              id="headers-textarea"
-              aria-label="Cabeçalhos HTTP"
-              value={headers}
-              disabled={isLoading}
-              onFocus={() => setActiveArea('headers')}
-              onChange={(e) => handleHeadersChange(e.target.value)}
-              placeholder={`{
-  "Content-Type": "application/json",
-  "Authorization": "Bearer token"
-}`}
-              className="w-full flex-1 min-h-[160px] p-3 text-xs sm:text-sm font-mono bg-neutral-900 border border-neutral-800 rounded-md text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y disabled:opacity-50 disabled:cursor-not-allowed"
-            />
-            <RequestAutocomplete
-              inputRef={headersRef}
+
+          <div className="flex-1 relative min-h-[160px]">
+            <CodeEditor
               value={headers}
               onChange={handleHeadersChange}
-              availableRequests={availableRequests}
-              availableVariables={availableVariables}
+              onCursorChange={(coords, pos) => {
+                setActiveArea('headers');
+                setCursorCoords(coords);
+                setCursorPos(pos);
+              }}
+              language="json"
+              placeholder={`{\n  "Content-Type": "application/json",\n  "Authorization": "Bearer token"\n}`}
+              ariaLabel="Cabeçalhos HTTP"
+              testId="headers-code-editor"
+              minHeight="180px"
+              disabled={isLoading}
             />
+
+            {activeArea === 'headers' && (
+              <RequestAutocomplete
+                value={headers}
+                cursorCoords={cursorCoords}
+                cursorPos={cursorPos}
+                onChange={(val) => handleHeadersChange(val)}
+                availableRequests={availableRequests}
+                availableVariables={availableVariables}
+              />
+            )}
           </div>
         </div>
 
+        {/* Body Panel */}
         <div
           role="tabpanel"
           id="panel-body"
@@ -585,14 +662,15 @@ export function RequestEditor({
           className={activeTab === 'body' ? 'h-full flex flex-col' : 'hidden'}
         >
           <div className="flex items-center justify-between mb-2">
-            <label htmlFor="body-textarea" className="text-xs text-neutral-400 font-medium">
-              Corpo da requisição (Payload):
-            </label>
+            <span className="text-xs text-neutral-400 font-medium">
+              Corpo da Requisição (JSON estrito):
+            </span>
             <div className="flex items-center gap-2">
               {formatNotice?.target === 'body' && (
                 <span
                   role="status"
-                  className={`text-xs font-medium animate-fade-in ${
+                  data-testid="format-notice"
+                  className={`text-xs ${
                     formatNotice.isError ? 'text-rose-400' : 'text-emerald-400'
                   }`}
                 >
@@ -601,61 +679,68 @@ export function RequestEditor({
               )}
               <button
                 type="button"
-                aria-label="Formatar corpo"
-                onClick={handleFormatBody}
+                aria-label="Formatar JSON"
+                onClick={handleFormatJson}
                 disabled={isLoading || !body.trim()}
                 className="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors border border-neutral-700/60 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <Sparkles className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
-                <span>Formatar</span>
+                <span>Formatar JSON</span>
               </button>
             </div>
           </div>
-          <div className="relative flex-1 flex flex-col">
-            <textarea
-              ref={bodyRef}
-              id="body-textarea"
-              aria-label="Corpo da requisição"
-              value={body}
-              disabled={isLoading}
-              onFocus={() => setActiveArea('body')}
-              onChange={(e) => handleBodyChange(e.target.value)}
-              placeholder={`{
-  "name": "Exemplo",
-  "active": true
-}`}
-              className="w-full flex-1 min-h-[160px] p-3 text-xs sm:text-sm font-mono bg-neutral-900 border border-neutral-800 rounded-md text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y disabled:opacity-50 disabled:cursor-not-allowed"
-            />
-            <RequestAutocomplete
-              inputRef={bodyRef}
+
+          <div className="flex-1 relative min-h-[180px]">
+            <CodeEditor
               value={body}
               onChange={handleBodyChange}
-              availableRequests={availableRequests}
-              availableVariables={availableVariables}
+              onCursorChange={(coords, pos) => {
+                setActiveArea('body');
+                setCursorCoords(coords);
+                setCursorPos(pos);
+              }}
+              language="json"
+              placeholder={`{\n  "key": "value"\n}`}
+              ariaLabel="Corpo da requisição"
+              testId="body-code-editor"
+              minHeight="220px"
+              disabled={isLoading}
             />
+
+            {activeArea === 'body' && (
+              <RequestAutocomplete
+                value={body}
+                cursorCoords={cursorCoords}
+                cursorPos={cursorPos}
+                onChange={(val) => handleBodyChange(val)}
+                availableRequests={availableRequests}
+                availableVariables={availableVariables}
+              />
+            )}
           </div>
         </div>
 
+        {/* Auth Panel */}
         <div
           role="tabpanel"
           id="panel-auth"
           aria-labelledby="tab-auth"
           hidden={activeTab !== 'auth'}
-          className={activeTab === 'auth' ? 'flex flex-col gap-4 max-w-lg' : 'hidden'}
+          className={activeTab === 'auth' ? 'space-y-4' : 'hidden'}
         >
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="auth-type-select" className="text-xs text-neutral-400">
-              Tipo de autenticação:
+          <div className="space-y-1">
+            <label htmlFor="auth-type-select" className="text-xs text-neutral-400 font-medium">
+              Tipo de Autenticação:
             </label>
             <select
               id="auth-type-select"
-              aria-label="Tipo de autenticação"
+              aria-label="Tipo de Autenticação"
               value={auth.type}
               disabled={isLoading}
               onChange={(e) => handleAuthTypeChange(e.target.value as AuthConfig['type'])}
-              className="h-9 px-3 text-xs rounded-md bg-neutral-900 border border-neutral-800 text-neutral-200 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-neutral-900 border border-neutral-800 text-xs rounded-md px-3 py-1.5 text-neutral-200 outline-none focus:ring-1 focus:ring-blue-500 block w-full sm:w-64"
             >
-              <option value="none">Nenhuma (No Auth)</option>
+              <option value="none">Nenhuma Autenticação</option>
               <option value="bearer">Bearer Token</option>
               <option value="basic">Basic Auth</option>
               <option value="apikey">API Key</option>
@@ -663,88 +748,88 @@ export function RequestEditor({
           </div>
 
           {auth.type === 'bearer' && (
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="bearer-token-input" className="text-xs text-neutral-400">
+            <div className="space-y-1">
+              <label htmlFor="bearer-token-input" className="text-xs text-neutral-400 font-medium">
                 Token:
               </label>
               <input
                 id="bearer-token-input"
                 type="text"
-                aria-label="Token Bearer"
-                placeholder="eyJhbGciOi..."
+                aria-label="Bearer Token"
+                placeholder="Insira o token ou use {{variavel}}"
                 value={auth.token || ''}
                 disabled={isLoading}
                 onChange={(e) => handleAuthFieldChange('token', e.target.value)}
-                className="h-9 px-3 text-xs font-mono bg-neutral-900 border border-neutral-800 rounded-md text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full sm:w-96 bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 font-mono outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
           )}
 
           {auth.type === 'basic' && (
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="basic-user-input" className="text-xs text-neutral-400">
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label htmlFor="basic-username-input" className="text-xs text-neutral-400 font-medium">
                   Usuário:
                 </label>
                 <input
-                  id="basic-user-input"
+                  id="basic-username-input"
                   type="text"
-                  aria-label="Usuário"
-                  placeholder="admin"
+                  aria-label="Usuário Basic Auth"
+                  placeholder="Nome de usuário"
                   value={auth.username || ''}
                   disabled={isLoading}
                   onChange={(e) => handleAuthFieldChange('username', e.target.value)}
-                  className="h-9 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-md text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:w-80 bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="basic-pass-input" className="text-xs text-neutral-400">
+              <div className="space-y-1">
+                <label htmlFor="basic-password-input" className="text-xs text-neutral-400 font-medium">
                   Senha:
                 </label>
                 <input
-                  id="basic-pass-input"
+                  id="basic-password-input"
                   type="password"
-                  aria-label="Senha"
-                  placeholder="••••••••"
+                  aria-label="Senha Basic Auth"
+                  placeholder="Senha"
                   value={auth.password || ''}
                   disabled={isLoading}
                   onChange={(e) => handleAuthFieldChange('password', e.target.value)}
-                  className="h-9 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-md text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:w-80 bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
             </div>
           )}
 
           {auth.type === 'apikey' && (
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="apikey-name-input" className="text-xs text-neutral-400">
-                  Chave:
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label htmlFor="apikey-key-input" className="text-xs text-neutral-400 font-medium">
+                  Chave do Cabeçalho / Parâmetro:
                 </label>
                 <input
-                  id="apikey-name-input"
+                  id="apikey-key-input"
                   type="text"
-                  aria-label="Chave da API"
-                  placeholder="X-API-Key"
+                  aria-label="Nome da Chave API"
+                  placeholder="ex: X-API-Key"
                   value={auth.key || ''}
                   disabled={isLoading}
                   onChange={(e) => handleAuthFieldChange('key', e.target.value)}
-                  className="h-9 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-md text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:w-80 bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 font-mono outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="apikey-val-input" className="text-xs text-neutral-400">
+              <div className="space-y-1">
+                <label htmlFor="apikey-value-input" className="text-xs text-neutral-400 font-medium">
                   Valor:
                 </label>
                 <input
-                  id="apikey-val-input"
+                  id="apikey-value-input"
                   type="text"
-                  aria-label="Valor da chave"
-                  placeholder="api_key_value"
+                  aria-label="Valor da Chave API"
+                  placeholder="Insira o valor"
                   value={auth.value || ''}
                   disabled={isLoading}
                   onChange={(e) => handleAuthFieldChange('value', e.target.value)}
-                  className="h-9 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-md text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:w-80 bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 font-mono outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
             </div>
@@ -752,12 +837,21 @@ export function RequestEditor({
         </div>
       </div>
 
+      {/* Dependency Linker Modal */}
       <DependencyLinkerModal
         isOpen={isLinkerOpen}
         onClose={() => setIsLinkerOpen(false)}
-        onInsertToken={handleInsertToken}
         availableRequests={availableRequests}
-        currentRequestId={currentRequestId ?? (initialRequest as { id?: string } | undefined)?.id}
+        onInsertToken={(token) => {
+          if (activeArea === 'headers') {
+            handleHeadersChange(headers ? `${headers}\n${token}` : token);
+          } else if (activeArea === 'body') {
+            handleBodyChange(body ? `${body}\n${token}` : token);
+          } else {
+            handleUrlChange(url ? `${url}${token}` : token);
+          }
+          setIsLinkerOpen(false);
+        }}
       />
     </div>
   );
