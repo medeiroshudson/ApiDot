@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ApiDot.Core.Enums;
+using ApiDot.Core.Import;
 using ApiDot.Core.Models;
 using ApiDot.Core.Variables;
 using ApiDot.Server.Data;
@@ -34,6 +35,9 @@ builder.Services.AddSingleton<IVariableInterpolator>(sp => new VariableInterpola
 builder.Services.AddSingleton<IVariableResolver, VariableResolver>();
 builder.Services.AddSingleton<IAgentHub, AgentHub>();
 builder.Services.AddHttpClient<IServerHttpExecutor, ServerHttpExecutor>();
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<ISpecImportStrategy, OpenApiImportStrategy>();
+builder.Services.AddSingleton<ICollectionMerger, CollectionMerger>();
 
 var app = builder.Build();
 
@@ -334,6 +338,116 @@ app.MapPut("/api/collections/{id:guid}/openapi", async (
         OpenApiSpecUrl = collection.OpenApiSpecUrl,
         OpenApiSpecContent = collection.OpenApiSpecContent
     });
+});
+
+app.MapPost("/api/collections/{id:guid}/sync", async (
+    Guid id,
+    SyncCollectionRequest? request,
+    ApiDotDbContext db,
+    ISpecImportStrategy strategy,
+    ICollectionMerger merger,
+    IHttpClientFactory httpClientFactory,
+    CancellationToken cancellationToken) =>
+{
+    var collection = await db.Collections
+        .Include(c => c.Requests)
+        .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+
+    if (collection is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Collection Not Found",
+            detail: $"Collection with ID '{id}' was not found.");
+    }
+
+    string? specContent = null;
+    string? specUrl = !string.IsNullOrWhiteSpace(request?.SpecUrl) ? request.SpecUrl.Trim() : null;
+
+    if (!string.IsNullOrWhiteSpace(request?.SpecContent))
+    {
+        specContent = request.SpecContent;
+    }
+    else if (!string.IsNullOrWhiteSpace(specUrl))
+    {
+        try
+        {
+            var client = httpClientFactory.CreateClient();
+            specContent = await client.GetStringAsync(specUrl, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Failed to Fetch OpenAPI Spec",
+                detail: $"Failed to retrieve specification from URL '{specUrl}': {ex.Message}");
+        }
+    }
+    else if (!string.IsNullOrWhiteSpace(collection.OpenApiSpecUrl))
+    {
+        try
+        {
+            var client = httpClientFactory.CreateClient();
+            specContent = await client.GetStringAsync(collection.OpenApiSpecUrl, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            if (!string.IsNullOrWhiteSpace(collection.OpenApiSpecContent))
+            {
+                specContent = collection.OpenApiSpecContent;
+            }
+            else
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Failed to Fetch OpenAPI Spec",
+                    detail: $"Failed to retrieve specification from URL '{collection.OpenApiSpecUrl}': {ex.Message}");
+            }
+        }
+    }
+    else if (!string.IsNullOrWhiteSpace(collection.OpenApiSpecContent))
+    {
+        specContent = collection.OpenApiSpecContent;
+    }
+
+    if (string.IsNullOrWhiteSpace(specContent))
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Missing OpenAPI Specification",
+            detail: "No OpenAPI specification was provided in the request or found on the collection.");
+    }
+
+    if (!strategy.CanHandle(specContent))
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid OpenAPI Specification",
+            detail: "The provided OpenAPI specification is empty or invalid.");
+    }
+
+    var existingRequestIds = collection.Requests.Select(r => r.Id).ToHashSet();
+
+    var canonicalImport = await strategy.ParseAsync(specContent, cancellationToken);
+    var report = merger.Merge(collection, canonicalImport);
+
+    foreach (var req in collection.Requests)
+    {
+        if (!existingRequestIds.Contains(req.Id))
+        {
+            db.Entry(req).State = EntityState.Added;
+        }
+    }
+
+    if (!string.IsNullOrWhiteSpace(specUrl))
+    {
+        collection.OpenApiSpecUrl = specUrl;
+    }
+    collection.OpenApiSpecContent = specContent;
+
+    await db.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(report);
 });
 
 app.MapPost("/api/requests/execute", async (

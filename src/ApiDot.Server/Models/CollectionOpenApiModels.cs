@@ -11,3 +11,6 @@ public class CollectionOpenApiResponse
     public string? OpenApiSpecUrl { get; set; }
     public string? OpenApiSpecContent { get; set; }
 }
+
+public record SyncCollectionRequest(string? SpecUrl = null, string? SpecContent = null, string? Format = "openapi");
+
