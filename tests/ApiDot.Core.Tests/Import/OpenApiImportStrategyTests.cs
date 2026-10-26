@@ -310,4 +310,192 @@ public class OpenApiImportStrategyTests
         node!["username"]!.GetValue<string>().Should().Be("");
         node["role"]!.GetValue<string>().Should().Be("member");
     }
+
+    [Fact]
+    public async Task ParseAsync_ShouldHandleCyclicRef_WithoutStackOverflowException()
+    {
+        var json = """
+        {
+          "openapi": "3.0.0",
+          "info": { "title": "Cyclic API", "version": "1.0" },
+          "paths": {
+            "/nodes": {
+              "post": {
+                "operationId": "createNode",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/Node"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "components": {
+            "schemas": {
+              "Node": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "next": {
+                    "$ref": "#/components/schemas/Node"
+                  }
+                }
+              }
+            }
+          }
+        }
+        """;
+
+        var act = async () => await _strategy.ParseAsync(json);
+        await act.Should().NotThrowAsync<StackOverflowException>();
+
+        var result = await _strategy.ParseAsync(json);
+        result.Requests.Should().HaveCount(1);
+        var req = result.Requests[0];
+        req.BodyType.Should().Be(HttpBodyType.Json);
+        req.BodyContent.Should().NotBeNullOrWhiteSpace();
+
+        var node = JsonNode.Parse(req.BodyContent!);
+        node.Should().NotBeNull();
+        node!["id"]!.GetValue<string>().Should().Be("");
+    }
+
+    [Fact]
+    public async Task ParseAsync_ShouldHandleDirectCyclicRef_WithoutStackOverflowException()
+    {
+        var json = """
+        {
+          "openapi": "3.0.0",
+          "info": { "title": "Direct Cyclic API", "version": "1.0" },
+          "paths": {
+            "/loop": {
+              "post": {
+                "operationId": "loopOp",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/LoopA"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "components": {
+            "schemas": {
+              "LoopA": {
+                "$ref": "#/components/schemas/LoopB"
+              },
+              "LoopB": {
+                "$ref": "#/components/schemas/LoopA"
+              }
+            }
+          }
+        }
+        """;
+
+        var act = async () => await _strategy.ParseAsync(json);
+        await act.Should().NotThrowAsync();
+
+        var result = await _strategy.ParseAsync(json);
+        result.Requests.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task ParseAsync_ShouldNotThrow_WhenParameterInOrNameIsNotString()
+    {
+        var json = """
+        {
+          "openapi": "3.0.0",
+          "info": { "title": "Invalid Param Types API", "version": "1.0" },
+          "paths": {
+            "/search": {
+              "get": {
+                "operationId": "searchItems",
+                "parameters": [
+                  {
+                    "name": 12345,
+                    "in": "query"
+                  },
+                  {
+                    "name": "validQuery",
+                    "in": true
+                  },
+                  {
+                    "name": { "invalid": "object" },
+                    "in": ["not", "string"]
+                  },
+                  {
+                    "name": "validParam",
+                    "in": "query",
+                    "schema": { "type": "string", "default": "active" }
+                  }
+                ]
+              }
+            }
+          }
+        }
+        """;
+
+        var act = async () => await _strategy.ParseAsync(json);
+        await act.Should().NotThrowAsync<InvalidOperationException>();
+
+        var result = await _strategy.ParseAsync(json);
+        result.Requests.Should().HaveCount(1);
+        var req = result.Requests[0];
+        req.QueryParameters.Should().ContainKey("validParam").WhoseValue.Should().Be("active");
+        req.QueryParameters.Should().NotContainKey("12345");
+    }
+
+    [Fact]
+    public async Task ParseAsync_Swagger2_ShouldNotThrow_WhenSchemesContainsNonString()
+    {
+        var json = """
+        {
+          "swagger": "2.0",
+          "info": { "title": "Swagger Non-String Scheme", "version": "2.0" },
+          "host": "api.example.com",
+          "basePath": "/v1",
+          "schemes": [12345],
+          "paths": {}
+        }
+        """;
+
+        var act = async () => await _strategy.ParseAsync(json);
+        await act.Should().NotThrowAsync<InvalidOperationException>();
+
+        var result = await _strategy.ParseAsync(json);
+        result.BaseUrl.Should().Be("https://api.example.com/v1");
+    }
+
+    [Fact]
+    public async Task ParseAsync_ShouldHandleMalformedPaths_Gracefully()
+    {
+        var json = """
+        {
+          "openapi": "3.0.0",
+          "info": { "title": "Malformed Paths API", "version": "1.0" },
+          "paths": {
+            "/broken": "invalid-path-item",
+            "/empty": null,
+            "/valid": {
+              "get": {
+                "operationId": "getValid",
+                "summary": "Valid endpoint"
+              }
+            }
+          }
+        }
+        """;
+
+        var result = await _strategy.ParseAsync(json);
+        result.Requests.Should().HaveCount(1);
+        result.Requests[0].OperationId.Should().Be("getValid");
+    }
 }

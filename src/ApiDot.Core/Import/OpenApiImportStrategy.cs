@@ -6,6 +6,7 @@ namespace ApiDot.Core.Import;
 
 public class OpenApiImportStrategy : ISpecImportStrategy
 {
+    private static readonly JsonSerializerOptions IndentedOptions = new() { WriteIndented = true };
     private static readonly HashSet<string> HttpMethods = new(StringComparer.OrdinalIgnoreCase)
     {
         "get", "post", "put", "delete", "patch", "options", "head", "trace"
@@ -90,44 +91,66 @@ public class OpenApiImportStrategy : ISpecImportStrategy
             // 3. Paths & Endpoints
             if (root.TryGetProperty("paths", out var pathsEl) && pathsEl.ValueKind == JsonValueKind.Object)
             {
-                foreach (var pathProp in pathsEl.EnumerateObject())
+                try
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    var rawPath = pathProp.Name;
-                    var pathItem = pathProp.Value;
-                    if (pathItem.ValueKind != JsonValueKind.Object)
+                    foreach (var pathProp in pathsEl.EnumerateObject())
                     {
-                        continue;
-                    }
+                        cancellationToken.ThrowIfCancellationRequested();
 
-                    // Path-level parameters
-                    List<JsonElement> pathParameters = [];
-                    if (pathItem.TryGetProperty("parameters", out var commonParamsEl) && commonParamsEl.ValueKind == JsonValueKind.Array)
-                    {
-                        foreach (var p in commonParamsEl.EnumerateArray())
+                        try
                         {
-                            pathParameters.Add(p);
+                            var rawPath = pathProp.Name;
+                            var pathItem = pathProp.Value;
+                            if (pathItem.ValueKind != JsonValueKind.Object)
+                            {
+                                continue;
+                            }
+
+                            // Path-level parameters
+                            List<JsonElement> pathParameters = [];
+                            if (pathItem.TryGetProperty("parameters", out var commonParamsEl) && commonParamsEl.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var p in commonParamsEl.EnumerateArray())
+                                {
+                                    pathParameters.Add(p);
+                                }
+                            }
+
+                            foreach (var member in pathItem.EnumerateObject())
+                            {
+                                var method = member.Name.ToLowerInvariant();
+                                if (!HttpMethods.Contains(method))
+                                {
+                                    continue;
+                                }
+
+                                var opEl = member.Value;
+                                if (opEl.ValueKind != JsonValueKind.Object)
+                                {
+                                    continue;
+                                }
+
+                                var req = ParseRequest(root, rawPath, method.ToUpperInvariant(), opEl, pathParameters, result.BaseUrl);
+                                result.Requests.Add(req);
+                            }
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            throw;
+                        }
+                        catch
+                        {
+                            // Ignore unexpected malformed path item and continue
                         }
                     }
-
-                    foreach (var member in pathItem.EnumerateObject())
-                    {
-                        var method = member.Name.ToLowerInvariant();
-                        if (!HttpMethods.Contains(method))
-                        {
-                            continue;
-                        }
-
-                        var opEl = member.Value;
-                        if (opEl.ValueKind != JsonValueKind.Object)
-                        {
-                            continue;
-                        }
-
-                        var req = ParseRequest(root, rawPath, method.ToUpperInvariant(), opEl, pathParameters, result.BaseUrl);
-                        result.Requests.Add(req);
-                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // Return gracefully
                 }
             }
         }
@@ -168,7 +191,11 @@ public class OpenApiImportStrategy : ISpecImportStrategy
 
         if (root.TryGetProperty("schemes", out var schemesEl) && schemesEl.ValueKind == JsonValueKind.Array && schemesEl.GetArrayLength() > 0)
         {
-            scheme = schemesEl[0].GetString() ?? "https";
+            var firstScheme = schemesEl[0];
+            if (firstScheme.ValueKind == JsonValueKind.String)
+            {
+                scheme = firstScheme.GetString() ?? "https";
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(host))
@@ -248,8 +275,12 @@ public class OpenApiImportStrategy : ISpecImportStrategy
                 continue;
             }
 
-            var inType = paramEl.TryGetProperty("in", out var inEl) ? inEl.GetString() : null;
-            var paramName = paramEl.TryGetProperty("name", out var nameEl) ? nameEl.GetString() : null;
+            var inType = paramEl.TryGetProperty("in", out var inEl) && inEl.ValueKind == JsonValueKind.String
+                ? inEl.GetString()
+                : null;
+            var paramName = paramEl.TryGetProperty("name", out var nameEl) && nameEl.ValueKind == JsonValueKind.String
+                ? nameEl.GetString()
+                : null;
 
             if (string.IsNullOrWhiteSpace(paramName) || string.IsNullOrWhiteSpace(inType))
             {
@@ -313,7 +344,7 @@ public class OpenApiImportStrategy : ISpecImportStrategy
         var resolvedSchema = ResolveRef(root, schemaEl);
         request.BodyType = HttpBodyType.Json;
         request.BodySchemaJson = resolvedSchema.GetRawText();
-        request.BodyContent = GenerateSampleJsonFromSchema(root, resolvedSchema);
+        request.BodyContent = GenerateSampleJsonFromSchema(root, schemaEl);
     }
 
     private static string ExtractParameterDefaultOrExample(JsonElement paramEl)
@@ -352,17 +383,37 @@ public class OpenApiImportStrategy : ISpecImportStrategy
     private static string GenerateSampleJsonFromSchema(JsonElement root, JsonElement schemaEl)
     {
         var sampleNode = GenerateSampleNode(root, schemaEl, depth: 0);
-        return sampleNode?.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) ?? "{}";
+        return sampleNode?.ToJsonString(IndentedOptions) ?? "{}";
     }
 
-    private static JsonNode? GenerateSampleNode(JsonElement root, JsonElement schemaEl, int depth)
+    private static JsonNode? GenerateSampleNode(JsonElement root, JsonElement schema, int depth, HashSet<string>? visitedSchemas = null)
     {
         if (depth > 10)
         {
             return null;
         }
 
-        var resolved = ResolveRef(root, schemaEl);
+        if (schema.ValueKind == JsonValueKind.Object && schema.TryGetProperty("$ref", out var refEl) && refEl.ValueKind == JsonValueKind.String)
+        {
+            var refVal = refEl.GetString();
+            if (!string.IsNullOrEmpty(refVal))
+            {
+                if (visitedSchemas != null && visitedSchemas.Contains(refVal))
+                {
+                    return null;
+                }
+
+                visitedSchemas = visitedSchemas != null
+                    ? new HashSet<string>(visitedSchemas, StringComparer.Ordinal) { refVal }
+                    : new HashSet<string>(StringComparer.Ordinal) { refVal };
+            }
+        }
+
+        var resolved = ResolveRef(root, schema);
+        if (resolved.ValueKind != JsonValueKind.Object)
+        {
+            return JsonValue.Create("");
+        }
 
         if (resolved.TryGetProperty("example", out var exEl))
         {
@@ -403,7 +454,7 @@ public class OpenApiImportStrategy : ISpecImportStrategy
             var arr = new JsonArray();
             if (resolved.TryGetProperty("items", out var itemsEl) && itemsEl.ValueKind == JsonValueKind.Object)
             {
-                var itemNode = GenerateSampleNode(root, itemsEl, depth + 1);
+                var itemNode = GenerateSampleNode(root, itemsEl, depth + 1, visitedSchemas);
                 if (itemNode != null)
                 {
                     arr.Add(itemNode);
@@ -420,7 +471,7 @@ public class OpenApiImportStrategy : ISpecImportStrategy
             {
                 foreach (var prop in propsEl.EnumerateObject())
                 {
-                    obj[prop.Name] = GenerateSampleNode(root, prop.Value, depth + 1);
+                    obj[prop.Name] = GenerateSampleNode(root, prop.Value, depth + 1, visitedSchemas);
                 }
             }
             return obj;
@@ -429,14 +480,22 @@ public class OpenApiImportStrategy : ISpecImportStrategy
         return JsonValue.Create("");
     }
 
-    private static JsonElement ResolveRef(JsonElement root, JsonElement element)
+    private static JsonElement ResolveRef(JsonElement root, JsonElement element, HashSet<string>? visited = null)
     {
         if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty("$ref", out var refEl) && refEl.ValueKind == JsonValueKind.String)
         {
-            var refPath = refEl.GetString();
-            if (refPath != null && refPath.StartsWith("#/"))
+            var refVal = refEl.GetString();
+            if (refVal != null && refVal.StartsWith("#/"))
             {
-                var segments = refPath[2..].Split('/');
+                visited ??= new(StringComparer.Ordinal);
+                if (visited.Contains(refVal) || visited.Count > 16)
+                {
+                    return element;
+                }
+
+                visited.Add(refVal);
+
+                var segments = refVal[2..].Split('/');
                 var current = root;
                 var found = true;
                 foreach (var segment in segments)
@@ -455,7 +514,7 @@ public class OpenApiImportStrategy : ISpecImportStrategy
 
                 if (found)
                 {
-                    return ResolveRef(root, current);
+                    return ResolveRef(root, current, visited);
                 }
             }
         }

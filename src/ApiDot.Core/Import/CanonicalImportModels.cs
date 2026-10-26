@@ -35,6 +35,4 @@ public class CanonicalRequest
     public HttpBodyType BodyType { get; set; } = HttpBodyType.None;
     public string? BodyContent { get; set; }
     public string? BodySchemaJson { get; set; }
-
-    public string HeadersJson => JsonSerializer.Serialize(Headers);
 }
