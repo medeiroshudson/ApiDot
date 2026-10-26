@@ -1457,9 +1457,6 @@ app.Run();
 
 public partial class Program
 {
-    public static readonly Guid DefaultWorkspaceId = Guid.Parse("00000000-0000-0000-0000-000000000001");
-    public const string DefaultWorkspaceName = "Default Workspace";
-
     public const long MaxSpecSizeBytes = 10 * 1024 * 1024; // 10MB
 
     public static bool IsSafeSpecUrl(string? url, out Uri? validUri)
