@@ -720,6 +720,380 @@ app.MapDelete("/api/folders/{id:guid}", async (
     return Results.NoContent();
 });
 
+app.MapPost("/api/requests", async (
+    CreateRequestItemRequest? request,
+    ApiDotDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    if (request is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Request",
+            detail: "A request body is required.");
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Name))
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Request Name",
+            detail: "Request Name cannot be empty or whitespace.");
+    }
+
+    var trimmedName = request.Name.Trim();
+    if (trimmedName.Length > 200)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Request Name",
+            detail: "Request Name cannot exceed 200 characters.");
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Url))
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid URL",
+            detail: "Request URL cannot be empty or whitespace.");
+    }
+
+    var trimmedUrl = request.Url.Trim();
+    if (trimmedUrl.Length > 2048)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid URL",
+            detail: "Request URL cannot exceed 2048 characters.");
+    }
+
+    var trimmedMethod = string.IsNullOrWhiteSpace(request.Method)
+        ? "GET"
+        : request.Method.Trim().ToUpperInvariant();
+
+    if (trimmedMethod.Length > 16)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid HTTP Method",
+            detail: "HTTP Method cannot exceed 16 characters.");
+    }
+
+    var workspaceExists = await db.Workspaces.AnyAsync(w => w.Id == request.WorkspaceId, cancellationToken);
+    if (!workspaceExists)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Workspace Not Found",
+            detail: $"Workspace with ID '{request.WorkspaceId}' was not found.");
+    }
+
+    Collection? collection = null;
+    if (request.CollectionId.HasValue)
+    {
+        collection = await db.Collections
+            .FirstOrDefaultAsync(c => c.Id == request.CollectionId.Value, cancellationToken);
+
+        if (collection is null)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Collection Not Found",
+                detail: $"Collection with ID '{request.CollectionId.Value}' was not found.");
+        }
+
+        if (collection.WorkspaceId != request.WorkspaceId)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid Collection",
+                detail: $"Collection '{request.CollectionId.Value}' does not belong to Workspace '{request.WorkspaceId}'.");
+        }
+    }
+
+    Folder? folder = null;
+    if (request.FolderId.HasValue)
+    {
+        folder = await db.Folders
+            .FirstOrDefaultAsync(f => f.Id == request.FolderId.Value, cancellationToken);
+
+        if (folder is null)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Folder Not Found",
+                detail: $"Folder with ID '{request.FolderId.Value}' was not found.");
+        }
+
+        if (folder.WorkspaceId != request.WorkspaceId)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid Folder",
+                detail: $"Folder '{request.FolderId.Value}' does not belong to Workspace '{request.WorkspaceId}'.");
+        }
+
+        if (request.CollectionId.HasValue && folder.CollectionId != request.CollectionId.Value)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid Folder",
+                detail: "Folder must belong to the specified collection.");
+        }
+    }
+
+    var requestItem = new RequestItem
+    {
+        Name = trimmedName,
+        Method = trimmedMethod,
+        Url = trimmedUrl,
+        WorkspaceId = request.WorkspaceId,
+        CollectionId = request.CollectionId ?? folder?.CollectionId,
+        FolderId = request.FolderId,
+        Target = request.Target,
+        HeadersJson = string.IsNullOrWhiteSpace(request.HeadersJson) ? "{}" : request.HeadersJson,
+        BodyType = request.BodyType,
+        BodyContent = request.BodyContent
+    };
+
+    db.RequestItems.Add(requestItem);
+    await db.SaveChangesAsync(cancellationToken);
+
+    var dto = Program.ToRequestItemNodeDto(requestItem);
+    return Results.Created($"/api/requests/{requestItem.Id}", dto);
+});
+
+app.MapGet("/api/requests/{id:guid}", async (
+    Guid id,
+    ApiDotDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    var requestItem = await db.RequestItems
+        .AsNoTracking()
+        .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+
+    if (requestItem is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Request Not Found",
+            detail: $"Request with ID '{id}' was not found.");
+    }
+
+    return Results.Ok(Program.ToRequestItemNodeDto(requestItem));
+});
+
+app.MapPut("/api/requests/{id:guid}", async (
+    Guid id,
+    UpdateRequestItemRequest? request,
+    ApiDotDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    if (request is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Request",
+            detail: "A request body is required.");
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Name))
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Request Name",
+            detail: "Request Name cannot be empty or whitespace.");
+    }
+
+    var trimmedName = request.Name.Trim();
+    if (trimmedName.Length > 200)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Request Name",
+            detail: "Request Name cannot exceed 200 characters.");
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Url))
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid URL",
+            detail: "Request URL cannot be empty or whitespace.");
+    }
+
+    var trimmedUrl = request.Url.Trim();
+    if (trimmedUrl.Length > 2048)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid URL",
+            detail: "Request URL cannot exceed 2048 characters.");
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Method))
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid HTTP Method",
+            detail: "HTTP Method cannot be empty or whitespace.");
+    }
+
+    var trimmedMethod = request.Method.Trim().ToUpperInvariant();
+    if (trimmedMethod.Length > 16)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid HTTP Method",
+            detail: "HTTP Method cannot exceed 16 characters.");
+    }
+
+    var requestItem = await db.RequestItems
+        .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+
+    if (requestItem is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Request Not Found",
+            detail: $"Request with ID '{id}' was not found.");
+    }
+
+    Collection? collection = null;
+    if (request.CollectionId.HasValue)
+    {
+        collection = await db.Collections
+            .FirstOrDefaultAsync(c => c.Id == request.CollectionId.Value, cancellationToken);
+
+        if (collection is null)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Collection Not Found",
+                detail: $"Collection with ID '{request.CollectionId.Value}' was not found.");
+        }
+
+        if (collection.WorkspaceId != requestItem.WorkspaceId)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid Collection",
+                detail: $"Collection '{request.CollectionId.Value}' does not belong to Workspace '{requestItem.WorkspaceId}'.");
+        }
+    }
+
+    Folder? folder = null;
+    if (request.FolderId.HasValue)
+    {
+        folder = await db.Folders
+            .FirstOrDefaultAsync(f => f.Id == request.FolderId.Value, cancellationToken);
+
+        if (folder is null)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Folder Not Found",
+                detail: $"Folder with ID '{request.FolderId.Value}' was not found.");
+        }
+
+        if (folder.WorkspaceId != requestItem.WorkspaceId)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid Folder",
+                detail: $"Folder '{request.FolderId.Value}' does not belong to Workspace '{requestItem.WorkspaceId}'.");
+        }
+
+        if (request.CollectionId.HasValue && folder.CollectionId != request.CollectionId.Value)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid Folder",
+                detail: "Folder must belong to the specified collection.");
+        }
+    }
+
+    requestItem.Name = trimmedName;
+    requestItem.Method = trimmedMethod;
+    requestItem.Url = trimmedUrl;
+    requestItem.Target = request.Target;
+    requestItem.HeadersJson = string.IsNullOrWhiteSpace(request.HeadersJson) ? "{}" : request.HeadersJson;
+    requestItem.BodyType = request.BodyType;
+    requestItem.BodyContent = request.BodyContent;
+    requestItem.CollectionId = request.CollectionId ?? folder?.CollectionId;
+    requestItem.FolderId = request.FolderId;
+
+    await db.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(Program.ToRequestItemNodeDto(requestItem));
+});
+
+app.MapPost("/api/requests/{id:guid}/duplicate", async (
+    Guid id,
+    ApiDotDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    var existing = await db.RequestItems
+        .AsNoTracking()
+        .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+
+    if (existing is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Request Not Found",
+            detail: $"Request with ID '{id}' was not found.");
+    }
+
+    const string suffix = " (Copy)";
+    var baseName = existing.Name ?? "Request";
+    var copyName = baseName.Length + suffix.Length > 200
+        ? $"{baseName[..(200 - suffix.Length)]}{suffix}"
+        : $"{baseName}{suffix}";
+
+    var duplicate = new RequestItem
+    {
+        Name = copyName,
+        Method = existing.Method,
+        Url = existing.Url,
+        WorkspaceId = existing.WorkspaceId,
+        CollectionId = existing.CollectionId,
+        FolderId = existing.FolderId,
+        Target = existing.Target,
+        HeadersJson = existing.HeadersJson,
+        BodyType = existing.BodyType,
+        BodyContent = existing.BodyContent,
+        SchemaDefinition = existing.SchemaDefinition
+    };
+
+    db.RequestItems.Add(duplicate);
+    await db.SaveChangesAsync(cancellationToken);
+
+    return Results.Created($"/api/requests/{duplicate.Id}", Program.ToRequestItemNodeDto(duplicate));
+});
+
+app.MapDelete("/api/requests/{id:guid}", async (
+    Guid id,
+    ApiDotDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    var requestItem = await db.RequestItems
+        .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+
+    if (requestItem is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Request Not Found",
+            detail: $"Request with ID '{id}' was not found.");
+    }
+
+    db.RequestItems.Remove(requestItem);
+    await db.SaveChangesAsync(cancellationToken);
+
+    return Results.NoContent();
+});
+
 app.MapGet("/api/collections/{id:guid}/openapi", async (
     Guid id,
     ApiDotDbContext db,
@@ -1257,17 +1631,7 @@ public partial class Program
 
         var requests = requestsByFolder[folder.Id]
             .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(r => new RequestItemNodeDto(
-                r.Id,
-                r.Name,
-                r.Method,
-                r.Url,
-                r.Target,
-                r.BodyType,
-                r.HeadersJson,
-                r.BodyContent,
-                r.CollectionId,
-                r.FolderId))
+            .Select(ToRequestItemNodeDto)
             .ToList();
 
         return new FolderNodeDto(
@@ -1303,17 +1667,7 @@ public partial class Program
         var directRequests = allRequests
             .Where(r => r.CollectionId == col.Id && r.FolderId == null)
             .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(r => new RequestItemNodeDto(
-                r.Id,
-                r.Name,
-                r.Method,
-                r.Url,
-                r.Target,
-                r.BodyType,
-                r.HeadersJson,
-                r.BodyContent,
-                r.CollectionId,
-                r.FolderId))
+            .Select(ToRequestItemNodeDto)
             .ToList();
 
         return new CollectionNodeDto(
@@ -1323,5 +1677,20 @@ public partial class Program
             col.OpenApiSpecUrl,
             rootFolders,
             directRequests);
+    }
+
+    public static RequestItemNodeDto ToRequestItemNodeDto(RequestItem r)
+    {
+        return new RequestItemNodeDto(
+            r.Id,
+            r.Name,
+            r.Method,
+            r.Url,
+            r.Target,
+            r.BodyType,
+            r.HeadersJson,
+            r.BodyContent,
+            r.CollectionId,
+            r.FolderId);
     }
 }
