@@ -576,6 +576,18 @@ describe('Home Page Collection Tree & Request Lifecycle Integration', () => {
       expect(screen.getByText('Login User')).toBeInTheDocument();
       expect(screen.getByText('Ping Service')).toBeInTheDocument();
     });
+
+    // Verify unified sidebar header displays workspace switcher and quick actions
+    const switcherTrigger = screen.getByTestId('workspace-switcher-trigger');
+    const novoBtn = screen.getByRole('button', { name: /^novo$/i });
+    const reloadBtn = screen.getByRole('button', { name: /recarregar árvore/i });
+    const searchInput = screen.getByPlaceholderText(/filtrar por nome ou rota/i);
+
+    expect(switcherTrigger).toBeInTheDocument();
+    expect(switcherTrigger).toHaveTextContent('Default Workspace');
+    expect(novoBtn).toBeInTheDocument();
+    expect(reloadBtn).toBeInTheDocument();
+    expect(searchInput).toBeInTheDocument();
   });
 
   it('loads request details into RequestEditor when clicking a request node in the tree', async () => {
@@ -891,13 +903,17 @@ describe('Home Page Workspace Management & Clean State Integration', () => {
     render(<Home />);
 
     // Empty state heading and button rendered
-    expect(await screen.findByText('Nenhum workspace cadastrado')).toBeInTheDocument();
+    expect(await screen.findByText('Comece criando seu Workspace')).toBeInTheDocument();
     const createBtn = screen.getByRole('button', { name: /^criar workspace$/i });
     expect(createBtn).toBeInTheDocument();
 
     // WorkspaceSwitcher shows "Selecionar Workspace"
     const trigger = screen.getByTestId('workspace-switcher-trigger');
     expect(trigger).toHaveTextContent('Selecionar Workspace');
+
+    // Verify zero-workspace state renders cleanly without duplicate toolbars or action buttons
+    expect(screen.queryByRole('button', { name: /^novo$/i })).toBeNull();
+    expect(screen.queryByPlaceholderText(/filtrar por nome ou rota/i)).toBeNull();
 
     // No mock collections or fake default tree nodes exist
     expect(screen.queryByText('Coleção Padrão')).toBeNull();

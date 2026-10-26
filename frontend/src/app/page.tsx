@@ -35,9 +35,8 @@ import {
   fetchWorkspacesApi,
   createWorkspaceApi,
 } from '@/lib/treeApi';
-import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
 import { WorkspaceModal } from '@/components/workspace/WorkspaceModal';
-import { CheckCircle2, X, AlertCircle, Briefcase, Plus } from 'lucide-react';
+import { CheckCircle2, X, AlertCircle } from 'lucide-react';
 
 const STORAGE_KEY_ACTIVE_WORKSPACE = 'apidot_active_workspace_id';
 
@@ -759,7 +758,7 @@ export default function Home() {
     }
   };
 
-  const renderCollectionTree = (className?: string) => (
+  const renderSidebarContent = (className?: string) => (
     <CollectionTree
       className={className}
       tree={filteredTree}
@@ -807,56 +806,12 @@ export default function Home() {
         await deleteRequest(id);
       }}
       onImportOpenApi={handleImportOpenApi}
+      workspaces={workspaces}
+      activeWorkspaceId={activeWorkspaceId}
+      onSelectWorkspace={handleSelectWorkspace}
+      onCreateWorkspaceClick={() => setIsWorkspaceModalOpen(true)}
+      isWorkspacesLoading={isWorkspacesLoading}
     />
-  );
-
-  const renderSidebarContent = (className?: string) => (
-    <div className={`flex flex-col h-full overflow-hidden ${className || ''}`}>
-      {/* Workspace Switcher at the top of the sidebar */}
-      <div className="mb-3 shrink-0">
-        <WorkspaceSwitcher
-          workspaces={workspaces}
-          activeWorkspaceId={activeWorkspaceId}
-          onSelectWorkspace={handleSelectWorkspace}
-          onCreateWorkspaceClick={() => setIsWorkspaceModalOpen(true)}
-        />
-      </div>
-
-      {isWorkspacesLoading ? (
-        <div
-          data-testid="sidebar-workspaces-loading"
-          className="flex-1 flex items-center justify-center text-center p-4 text-xs text-neutral-500"
-        >
-          Carregando workspaces...
-        </div>
-      ) : workspaces.length === 0 ? (
-        <div
-          data-testid="sidebar-empty-workspace"
-          className="flex-1 flex flex-col items-center justify-center text-center p-4 border border-dashed border-neutral-800 rounded-lg bg-neutral-900/30 my-auto"
-        >
-          <div className="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-3">
-            <Briefcase className="w-5 h-5" aria-hidden="true" />
-          </div>
-          <h3 className="text-xs font-semibold text-neutral-200 mb-1">
-            Nenhum workspace cadastrado
-          </h3>
-          <p className="text-[11px] text-neutral-400 mb-4 max-w-[180px]">
-            Crie seu primeiro espaço de trabalho para começar a organizar suas requisições.
-          </p>
-          <button
-            type="button"
-            data-testid="create-workspace-empty-state-btn"
-            onClick={() => setIsWorkspaceModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors cursor-pointer shadow-sm"
-          >
-            <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Criar Workspace</span>
-          </button>
-        </div>
-      ) : (
-        renderCollectionTree('flex-1 overflow-y-auto')
-      )}
-    </div>
   );
 
   return (
