@@ -344,10 +344,11 @@ export default function Home() {
     setIsSavingRequest(true);
     try {
       const bodyContent = reqData.body || null;
-      const bodyType: HttpBodyType =
-        bodyContent && (bodyContent.trim().startsWith('{') || bodyContent.trim().startsWith('['))
-          ? 'Json'
-          : 'None';
+      const bodyType: HttpBodyType = !bodyContent
+        ? 'None'
+        : bodyContent.trim().startsWith('{') || bodyContent.trim().startsWith('[')
+        ? 'Json'
+        : 'RawText';
 
       const updated = await updateRequest(activeRequestId, {
         name: activeRequestDetails?.name || 'Requisição',
@@ -399,10 +400,11 @@ export default function Home() {
   ) => {
     const dataToSave = pendingSaveData || currentEditorData || CLEAN_SCRATCHPAD;
     const bodyContent = dataToSave.body || null;
-    const bodyType: HttpBodyType =
-      bodyContent && (bodyContent.trim().startsWith('{') || bodyContent.trim().startsWith('['))
-        ? 'Json'
-        : 'None';
+    const bodyType: HttpBodyType = !bodyContent
+      ? 'None'
+      : bodyContent.trim().startsWith('{') || bodyContent.trim().startsWith('[')
+      ? 'Json'
+      : 'RawText';
 
     const created = await createRequest({
       name,
@@ -461,6 +463,19 @@ export default function Home() {
       type: 'request',
       id: created.id,
       data: created,
+    });
+    setActiveRequestId(created.id);
+    setActiveRequestDetails({
+      id: created.id,
+      name: created.name,
+      method: created.method,
+      url: created.url,
+      target: created.target,
+      headers: created.headersJson,
+      body: created.bodyContent || '',
+      auth: { type: 'none' },
+      collectionId: created.collectionId,
+      folderId: created.folderId,
     });
     return created;
   };
@@ -672,12 +687,9 @@ export default function Home() {
       syncingId={syncingCollectionId}
       filterText={filterText}
       onFilterChange={setFilterText}
-      onSelect={handleSelectItem}
       onSelectItem={handleSelectItem}
       onSyncCollection={handleQuickSync}
-      onSync={handleQuickSync}
       onOpenCollectionSettings={handleOpenCollectionSettings}
-      onOpenSettings={handleOpenCollectionSettings}
       onReload={reloadTree}
       onCreateCollection={async (name) => {
         await createCollection({ name, workspaceId: activeWorkspaceId });
@@ -703,7 +715,6 @@ export default function Home() {
         await deleteFolder(id);
       }}
       onCreateRequest={handleCreateRequest}
-      onUpdateRequest={handleUpdateRequestName}
       onUpdateRequestName={handleUpdateRequestName}
       onDuplicateRequest={async (id) => {
         await duplicateRequest(id);
