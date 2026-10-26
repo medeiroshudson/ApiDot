@@ -26,13 +26,11 @@ export function WorkspaceSwitcher({
   const displayName = activeWorkspace ? activeWorkspace.name : 'Selecionar Workspace';
 
   const updateOpen = (openState: boolean | ((prev: boolean) => boolean)) => {
-    setIsOpen((prev) => {
-      const next = typeof openState === 'function' ? openState(prev) : openState;
-      if (next !== prev) {
-        onOpenChange?.(next);
-      }
-      return next;
-    });
+    const next = typeof openState === 'function' ? openState(isOpen) : openState;
+    if (next !== isOpen) {
+      setIsOpen(next);
+      onOpenChange?.(next);
+    }
   };
 
   // Close on click outside

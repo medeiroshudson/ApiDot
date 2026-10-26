@@ -519,7 +519,7 @@ describe('CollectionTree', () => {
 
       const switcherBtn = screen.getByRole('button', { name: /workspace: workspace pessoal/i });
       const novoBtn = screen.getByRole('button', { name: /^novo$/i });
-      const reloadBtn = screen.getByRole('button', { name: /recarregar 🔄/i });
+      const reloadBtn = screen.getByRole('button', { name: /recarregar árvore/i });
 
       expect(switcherBtn).toBeInTheDocument();
       expect(novoBtn).toBeInTheDocument();

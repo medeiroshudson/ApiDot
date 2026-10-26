@@ -906,7 +906,7 @@ export function CollectionTree({
               <button
                 type="button"
                 title="Recarregar árvore"
-                aria-label="Recarregar 🔄"
+                aria-label="Recarregar árvore"
                 disabled={isLoading}
                 onClick={() => onReload?.()}
                 className="p-1 rounded text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors disabled:opacity-40 cursor-pointer"
