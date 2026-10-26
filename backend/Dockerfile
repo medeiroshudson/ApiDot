@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS base
 WORKDIR /src
 
 # Copy solution and project files for optimal layer caching
@@ -10,6 +10,19 @@ COPY src/ApiDot.Server/ApiDot.Server.csproj src/ApiDot.Server/
 COPY src/ApiDot.Agent/ApiDot.Agent.csproj src/ApiDot.Agent/
 
 RUN dotnet restore src/ApiDot.Server/ApiDot.Server.csproj
+
+FROM base AS dev
+WORKDIR /src
+COPY src/ src/
+
+ENV ASPNETCORE_ENVIRONMENT=Development \
+    DOTNET_USE_POLLING_FILE_WATCHER=1 \
+    DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1
+
+EXPOSE 5000
+ENTRYPOINT ["dotnet", "watch", "run", "--project", "src/ApiDot.Server/ApiDot.Server.csproj", "--urls", "http://0.0.0.0:5000", "--non-interactive"]
+
+FROM base AS build
 
 # Copy source files
 COPY src/ src/

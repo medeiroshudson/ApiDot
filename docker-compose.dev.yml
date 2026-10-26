@@ -1,0 +1,54 @@
+services:
+  server:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: dev
+    ports:
+      - "5001:5000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Data Source=/app/data/apidot.db;Foreign Keys=True
+      - DOTNET_USE_POLLING_FILE_WATCHER=1
+    volumes:
+      - ./backend/data:/app/data
+    develop:
+      watch:
+        - action: sync
+          path: ./backend/src
+          target: /src/src
+          ignore:
+            - "**/bin/"
+            - "**/obj/"
+        - action: rebuild
+          path: ./backend/src/*/*.csproj
+        - action: rebuild
+          path: ./backend/Directory.Build.props*
+        - action: rebuild
+          path: ./backend/ApiDot.sln
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - API_BASE_URL=http://server:5000
+      - WATCHPACK_POLLING=true
+    depends_on:
+      - server
+    develop:
+      watch:
+        - action: sync
+          path: ./frontend
+          target: /app
+          ignore:
+            - node_modules/
+            - .next/
+        - action: rebuild
+          path: ./frontend/package.json
+        - action: rebuild
+          path: ./frontend/package-lock.json
