@@ -115,14 +115,18 @@ export function RequestEditor({
     const initialUrl = initialRequest?.url ?? '';
     const initialHeaders = initialRequest?.headers ?? '';
     const initialBody = initialRequest?.body ?? '';
+    const initialTarget = initialRequest?.target ?? 'Inherit';
+    const initialAuth = initialRequest?.auth ?? { type: 'none' };
 
     return (
       method !== initialMethod ||
       url !== initialUrl ||
       headers !== initialHeaders ||
-      body !== initialBody
+      body !== initialBody ||
+      target !== initialTarget ||
+      JSON.stringify(auth) !== JSON.stringify(initialAuth)
     );
-  }, [method, url, headers, body, initialRequest]);
+  }, [method, url, headers, body, target, auth, initialRequest]);
 
   const handleSave = useCallback(() => {
     if (isLoading || isSaving) return;

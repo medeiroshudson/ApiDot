@@ -41,31 +41,35 @@ export function SaveRequestModal({
 
   useEffect(() => {
     if (isOpen) {
-      setName(defaultName !== undefined ? defaultName : 'Nova Requisição');
-      setSelectedCollectionId(collections[0]?.id || '');
-      setSelectedFolderId('');
-      setError(null);
-      setNameError(null);
-      setIsSubmitting(false);
+      if (!wasOpenRef.current) {
+        setName(defaultName !== undefined ? defaultName : 'Nova Requisição');
+        setSelectedCollectionId(collections[0]?.id || '');
+        setSelectedFolderId('');
+        setError(null);
+        setNameError(null);
+        setIsSubmitting(false);
 
-      wasOpenRef.current = true;
-      previousActiveElementRef.current = (document.activeElement as HTMLElement) || null;
+        wasOpenRef.current = true;
+        previousActiveElementRef.current = (document.activeElement as HTMLElement) || null;
 
-      const timer = setTimeout(() => {
-        if (nameInputRef.current) {
-          nameInputRef.current.focus();
-          nameInputRef.current.select();
-        }
-      }, 50);
+        const timer = setTimeout(() => {
+          if (nameInputRef.current) {
+            nameInputRef.current.focus();
+            nameInputRef.current.select();
+          }
+        }, 50);
 
-      return () => clearTimeout(timer);
+        return () => clearTimeout(timer);
+      } else if (!selectedCollectionId && collections.length > 0) {
+        setSelectedCollectionId(collections[0].id);
+      }
     } else if (wasOpenRef.current) {
       wasOpenRef.current = false;
       if (previousActiveElementRef.current && typeof previousActiveElementRef.current.focus === 'function') {
         previousActiveElementRef.current.focus();
       }
     }
-  }, [isOpen, defaultName, collections]);
+  }, [isOpen, defaultName, collections, selectedCollectionId]);
 
   useEffect(() => {
     return () => {
