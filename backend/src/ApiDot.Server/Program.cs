@@ -466,6 +466,260 @@ app.MapDelete("/api/collections/{id:guid}", async (
     return Results.NoContent();
 });
 
+app.MapPost("/api/folders", async (
+    CreateFolderRequest? request,
+    ApiDotDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    if (request is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Request",
+            detail: "A request body is required.");
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Name))
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Folder Name",
+            detail: "Folder Name cannot be empty or whitespace.");
+    }
+
+    var trimmedName = request.Name.Trim();
+    if (trimmedName.Length > 200)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Folder Name",
+            detail: "Folder Name cannot exceed 200 characters.");
+    }
+
+    var workspaceExists = await db.Workspaces.AnyAsync(w => w.Id == request.WorkspaceId, cancellationToken);
+    if (!workspaceExists)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Workspace Not Found",
+            detail: $"Workspace with ID '{request.WorkspaceId}' was not found.");
+    }
+
+    var collection = await db.Collections
+        .FirstOrDefaultAsync(c => c.Id == request.CollectionId, cancellationToken);
+
+    if (collection is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Collection Not Found",
+            detail: $"Collection with ID '{request.CollectionId}' was not found.");
+    }
+
+    if (collection.WorkspaceId != request.WorkspaceId)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Collection",
+            detail: $"Collection '{request.CollectionId}' does not belong to Workspace '{request.WorkspaceId}'.");
+    }
+
+    if (request.ParentFolderId.HasValue)
+    {
+        var parentFolder = await db.Folders
+            .FirstOrDefaultAsync(f => f.Id == request.ParentFolderId.Value, cancellationToken);
+
+        if (parentFolder is null)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Parent Folder Not Found",
+                detail: $"Parent folder with ID '{request.ParentFolderId.Value}' was not found.");
+        }
+
+        if (parentFolder.CollectionId != request.CollectionId || parentFolder.WorkspaceId != request.WorkspaceId)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid Parent Folder",
+                detail: "Parent folder must belong to the same collection and workspace.");
+        }
+    }
+
+    var folder = new Folder
+    {
+        Name = trimmedName,
+        WorkspaceId = request.WorkspaceId,
+        CollectionId = request.CollectionId,
+        ParentFolderId = request.ParentFolderId,
+        DefaultTarget = request.DefaultTarget
+    };
+
+    db.Folders.Add(folder);
+    await db.SaveChangesAsync(cancellationToken);
+
+    var dto = new FolderNodeDto(
+        folder.Id,
+        folder.Name,
+        folder.CollectionId.GetValueOrDefault(),
+        folder.ParentFolderId,
+        folder.DefaultTarget,
+        [],
+        []);
+
+    return Results.Created($"/api/folders/{folder.Id}", dto);
+});
+
+app.MapPut("/api/folders/{id:guid}", async (
+    Guid id,
+    UpdateFolderRequest? request,
+    ApiDotDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    if (request is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Request",
+            detail: "A request body is required.");
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Name))
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Folder Name",
+            detail: "Folder Name cannot be empty or whitespace.");
+    }
+
+    var trimmedName = request.Name.Trim();
+    if (trimmedName.Length > 200)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Folder Name",
+            detail: "Folder Name cannot exceed 200 characters.");
+    }
+
+    var folder = await db.Folders
+        .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
+
+    if (folder is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Folder Not Found",
+            detail: $"Folder with ID '{id}' was not found.");
+    }
+
+    if (request.ParentFolderId.HasValue)
+    {
+        if (request.ParentFolderId.Value == id)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid Parent Folder",
+                detail: "A folder cannot be its own parent or descendant.");
+        }
+
+        var parentFolder = await db.Folders
+            .FirstOrDefaultAsync(f => f.Id == request.ParentFolderId.Value, cancellationToken);
+
+        if (parentFolder is null)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Parent Folder Not Found",
+                detail: $"Parent folder with ID '{request.ParentFolderId.Value}' was not found.");
+        }
+
+        if (parentFolder.CollectionId != folder.CollectionId || parentFolder.WorkspaceId != folder.WorkspaceId)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid Parent Folder",
+                detail: "Parent folder must belong to the same collection and workspace.");
+        }
+
+        var collectionFolders = await db.Folders
+            .AsNoTracking()
+            .Where(f => f.CollectionId == folder.CollectionId)
+            .ToListAsync(cancellationToken);
+
+        var folderMap = collectionFolders.ToDictionary(f => f.Id);
+
+        Guid? currentParentId = parentFolder.ParentFolderId;
+        var visited = new HashSet<Guid> { request.ParentFolderId.Value };
+
+        while (currentParentId.HasValue)
+        {
+            if (currentParentId.Value == id)
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Invalid Parent Folder",
+                    detail: "A folder cannot be its own parent or descendant.");
+            }
+
+            if (!visited.Add(currentParentId.Value))
+            {
+                break;
+            }
+
+            if (folderMap.TryGetValue(currentParentId.Value, out var ancestor))
+            {
+                currentParentId = ancestor.ParentFolderId;
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
+
+    folder.Name = trimmedName;
+    folder.ParentFolderId = request.ParentFolderId;
+    folder.DefaultTarget = request.DefaultTarget;
+
+    await db.SaveChangesAsync(cancellationToken);
+
+    var allFolders = await db.Folders
+        .AsNoTracking()
+        .Where(f => f.CollectionId == folder.CollectionId)
+        .ToListAsync(cancellationToken);
+
+    var allRequests = await db.RequestItems
+        .AsNoTracking()
+        .Where(r => r.CollectionId == folder.CollectionId)
+        .ToListAsync(cancellationToken);
+
+    var dto = Program.BuildFolderNodeDto(folder, allFolders, allRequests);
+
+    return Results.Ok(dto);
+});
+
+app.MapDelete("/api/folders/{id:guid}", async (
+    Guid id,
+    ApiDotDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    var folder = await db.Folders
+        .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
+
+    if (folder is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Folder Not Found",
+            detail: $"Folder with ID '{id}' was not found.");
+    }
+
+    db.Folders.Remove(folder);
+    await db.SaveChangesAsync(cancellationToken);
+
+    return Results.NoContent();
+});
+
 app.MapGet("/api/collections/{id:guid}/openapi", async (
     Guid id,
     ApiDotDbContext db,
@@ -962,6 +1216,70 @@ public partial class Program
         }
     }
 
+    public static FolderNodeDto BuildFolderNodeDto(
+        Folder folder,
+        IReadOnlyList<Folder> allFolders,
+        IReadOnlyList<RequestItem> allRequests)
+    {
+        var foldersByParent = allFolders
+            .Where(f => f.ParentFolderId.HasValue)
+            .ToLookup(f => f.ParentFolderId!.Value);
+
+        var requestsByFolder = allRequests
+            .Where(r => r.FolderId.HasValue)
+            .ToLookup(r => r.FolderId!.Value);
+
+        return BuildFolderNodeInternal(folder, foldersByParent, requestsByFolder, new HashSet<Guid>());
+    }
+
+    private static FolderNodeDto BuildFolderNodeInternal(
+        Folder folder,
+        ILookup<Guid, Folder> foldersByParent,
+        ILookup<Guid, RequestItem> requestsByFolder,
+        HashSet<Guid> visited)
+    {
+        if (!visited.Add(folder.Id))
+        {
+            return new FolderNodeDto(
+                folder.Id,
+                folder.Name,
+                folder.CollectionId.GetValueOrDefault(),
+                folder.ParentFolderId,
+                folder.DefaultTarget,
+                [],
+                []);
+        }
+
+        var subFolders = foldersByParent[folder.Id]
+            .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(f => BuildFolderNodeInternal(f, foldersByParent, requestsByFolder, visited))
+            .ToList();
+
+        var requests = requestsByFolder[folder.Id]
+            .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(r => new RequestItemNodeDto(
+                r.Id,
+                r.Name,
+                r.Method,
+                r.Url,
+                r.Target,
+                r.BodyType,
+                r.HeadersJson,
+                r.BodyContent,
+                r.CollectionId,
+                r.FolderId))
+            .ToList();
+
+        return new FolderNodeDto(
+            folder.Id,
+            folder.Name,
+            folder.CollectionId.GetValueOrDefault(),
+            folder.ParentFolderId,
+            folder.DefaultTarget,
+            subFolders,
+            requests);
+    }
+
     public static CollectionNodeDto BuildCollectionNodeDto(
         Collection col,
         IReadOnlyList<Folder> allFolders,
@@ -975,55 +1293,11 @@ public partial class Program
             .Where(r => r.FolderId.HasValue)
             .ToLookup(r => r.FolderId!.Value);
 
-        FolderNodeDto BuildFolderNode(Folder folder, HashSet<Guid> visited)
-        {
-            if (!visited.Add(folder.Id))
-            {
-                return new FolderNodeDto(
-                    folder.Id,
-                    folder.Name,
-                    folder.CollectionId.GetValueOrDefault(),
-                    folder.ParentFolderId,
-                    folder.DefaultTarget,
-                    [],
-                    []);
-            }
-
-            var subFolders = foldersByParent[folder.Id]
-                .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(f => BuildFolderNode(f, visited))
-                .ToList();
-
-            var requests = requestsByFolder[folder.Id]
-                .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(r => new RequestItemNodeDto(
-                    r.Id,
-                    r.Name,
-                    r.Method,
-                    r.Url,
-                    r.Target,
-                    r.BodyType,
-                    r.HeadersJson,
-                    r.BodyContent,
-                    r.CollectionId,
-                    r.FolderId))
-                .ToList();
-
-            return new FolderNodeDto(
-                folder.Id,
-                folder.Name,
-                folder.CollectionId.GetValueOrDefault(),
-                folder.ParentFolderId,
-                folder.DefaultTarget,
-                subFolders,
-                requests);
-        }
-
         var visitedRoot = new HashSet<Guid>();
         var rootFolders = allFolders
             .Where(f => f.ParentFolderId == null && f.CollectionId == col.Id)
             .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(f => BuildFolderNode(f, visitedRoot))
+            .Select(f => BuildFolderNodeInternal(f, foldersByParent, requestsByFolder, visitedRoot))
             .ToList();
 
         var directRequests = allRequests
