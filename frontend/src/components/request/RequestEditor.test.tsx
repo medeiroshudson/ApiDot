@@ -68,6 +68,12 @@ describe('RequestEditor', () => {
     // Switch to Body tab
     fireEvent.click(bodyTab);
     expect(screen.getByTestId('body-empty-placeholder')).toBeInTheDocument();
+
+    const radios = screen.getAllByRole('radio');
+    expect(radios[0]).toHaveTextContent(/nenhum/i);
+    expect(radios[1]).toHaveTextContent(/texto/i);
+    expect(radios[2]).toHaveTextContent(/json/i);
+
     fireEvent.click(screen.getByRole('radio', { name: /json/i }));
     expect(screen.getByTestId('body-code-editor')).toBeDefined();
 

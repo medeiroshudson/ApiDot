@@ -711,19 +711,6 @@ export function RequestEditor({
                 <button
                   type="button"
                   role="radio"
-                  aria-checked={bodyFormat === 'json'}
-                  onClick={() => setBodyFormat('json')}
-                  className={`px-2 py-0.5 rounded transition-colors ${
-                    bodyFormat === 'json'
-                      ? 'bg-neutral-800 text-white font-medium shadow-sm'
-                      : 'text-neutral-400 hover:text-neutral-200'
-                  }`}
-                >
-                  JSON
-                </button>
-                <button
-                  type="button"
-                  role="radio"
                   aria-checked={bodyFormat === 'text'}
                   onClick={() => setBodyFormat('text')}
                   className={`px-2 py-0.5 rounded transition-colors ${
@@ -733,6 +720,19 @@ export function RequestEditor({
                   }`}
                 >
                   Texto
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={bodyFormat === 'json'}
+                  onClick={() => setBodyFormat('json')}
+                  className={`px-2 py-0.5 rounded transition-colors ${
+                    bodyFormat === 'json'
+                      ? 'bg-neutral-800 text-white font-medium shadow-sm'
+                      : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  JSON
                 </button>
               </div>
             </div>

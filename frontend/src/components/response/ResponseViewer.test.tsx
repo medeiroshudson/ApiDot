@@ -164,8 +164,8 @@ describe('ResponseViewer', () => {
     });
   });
 
-  describe('JSON Pretty Printing', () => {
-    it('pretty prints valid JSON payload in Pretty tab with semantic syntax highlighting', () => {
+  describe('JSON Pretty Printing and CodeEditor Standardization', () => {
+    it('pretty prints valid JSON payload in Pretty tab with CodeEditor', () => {
       const rawJson = '{"key":"value","num":42,"active":true}';
       const response: ResponseData = {
         statusCode: 200,
@@ -174,15 +174,12 @@ describe('ResponseViewer', () => {
         body: rawJson,
       };
 
-      const { container } = render(<ResponseViewer response={response} />);
+      render(<ResponseViewer response={response} />);
       const prettyCode = screen.getByTestId('response-pretty-content');
-      expect(prettyCode.textContent).toContain('{\n  "key": "value",\n  "num": 42,\n  "active": true\n}');
-
-      // Verify SyntaxHighlighter tokens are present
-      expect(prettyCode.querySelector('.text-sky-400')).toHaveTextContent('"key"');
-      expect(prettyCode.querySelector('.text-emerald-400')).toHaveTextContent('"value"');
-      expect(prettyCode.querySelector('.text-amber-400')).toHaveTextContent('42');
-      expect(prettyCode.querySelector('.text-purple-400')).toHaveTextContent('true');
+      expect(prettyCode.querySelector('.cm-editor')).toBeInTheDocument();
+      expect(prettyCode.textContent).toContain('"key": "value"');
+      expect(prettyCode.textContent).toContain('"num": 42');
+      expect(prettyCode.textContent).toContain('"active": true');
     });
 
     it('falls back to raw text if body is invalid JSON', () => {
@@ -196,7 +193,8 @@ describe('ResponseViewer', () => {
 
       render(<ResponseViewer response={response} />);
       const prettyCode = screen.getByTestId('response-pretty-content');
-      expect(prettyCode.textContent).toBe('Not a JSON object');
+      expect(prettyCode.querySelector('.cm-editor')).toBeInTheDocument();
+      expect(prettyCode.textContent).toContain('Not a JSON object');
     });
   });
 

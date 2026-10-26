@@ -50,9 +50,10 @@ const apiDotTheme = EditorView.theme(
         'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
       borderRadius: '0.375rem',
       border: '1px solid #262626',
-      height: '100%',
+      height: '100% !important',
       display: 'flex',
       flexDirection: 'column',
+      overflow: 'hidden',
     },
     '&.cm-focused': {
       outline: 'none',
@@ -60,10 +61,11 @@ const apiDotTheme = EditorView.theme(
       boxShadow: '0 0 0 1px rgba(59, 130, 246, 0.4)',
     },
     '.cm-scroller': {
-      overflow: 'auto',
+      overflow: 'auto !important',
       fontFamily: 'inherit',
-      flex: '1 1 auto',
-      minHeight: '0',
+      flex: '1 1 0%',
+      height: '100% !important',
+      minHeight: '0 !important',
     },
     '.cm-content': {
       padding: '8px 4px',
@@ -206,7 +208,7 @@ export function CodeEditor({
   return (
     <div
       data-testid={testId}
-      className={`relative w-full h-full flex flex-col flex-1 min-h-0 ${className}`}
+      className={`relative w-full h-full flex flex-col flex-1 min-h-0 overflow-hidden ${className}`}
       aria-label={ariaLabel}
     >
       <CodeMirror
@@ -217,6 +219,7 @@ export function CodeEditor({
         extensions={extensions}
         placeholder={placeholder}
         height="100%"
+        style={{ height: '100%', flex: '1 1 0%', minHeight: 0 }}
         minHeight={minHeight}
         maxHeight={maxHeight}
         readOnly={readOnly || disabled}

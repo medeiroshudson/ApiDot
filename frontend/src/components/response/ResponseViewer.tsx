@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Copy, Check, Clock, Server, FileCode, Layers, Loader2 } from 'lucide-react';
 import { TimingWaterfall, TimingBreakdown } from './TimingWaterfall';
-import { SyntaxHighlighter } from '../common/syntax/SyntaxHighlighter';
+import { CodeEditor } from '../common/CodeEditor';
 
 export interface ResponseData {
   statusCode: number;
@@ -79,15 +79,30 @@ export function ResponseViewer({
     [response?.sizeBytes, response?.body]
   );
 
+  const isPrettyJson = useMemo(() => {
+    if (!response?.body) return false;
+    const trimmed = response.body.trim();
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return false;
+    try {
+      JSON.parse(trimmed);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [response?.body]);
+
   const prettyBody = useMemo(() => {
     if (activeTab !== 'pretty' || !response?.body) return '';
+    if (!isPrettyJson) {
+      return response.body;
+    }
     try {
       const parsed = JSON.parse(response.body);
       return JSON.stringify(parsed, null, 2);
     } catch {
       return response.body;
     }
-  }, [activeTab, response?.body]);
+  }, [activeTab, response?.body, isPrettyJson]);
 
   const normalizedHeaders = useMemo((): [string, string][] => {
     if (!response?.headers) return [];
@@ -316,7 +331,7 @@ export function ResponseViewer({
       </div>
 
       {/* Tab Panels */}
-      <div className="flex-1 overflow-auto p-3 sm:p-4">
+      <div className="flex-1 overflow-hidden p-3 sm:p-4 flex flex-col min-h-0">
         {/* Pretty tab panel */}
         <div
           role="tabpanel"
@@ -324,15 +339,18 @@ export function ResponseViewer({
           aria-labelledby="response-tab-pretty"
           tabIndex={0}
           hidden={activeTab !== 'pretty'}
-          className={activeTab === 'pretty' ? 'h-full flex flex-col focus:outline-none' : 'hidden'}
+          className={activeTab === 'pretty' ? 'flex-1 h-full min-h-0 flex flex-col focus:outline-none overflow-hidden' : 'hidden'}
         >
           {activeTab === 'pretty' && (
             response.body ? (
-              <SyntaxHighlighter
-                code={prettyBody}
-                language="json"
-                data-testid="response-pretty-content"
-                className="flex-1"
+              <CodeEditor
+                value={prettyBody}
+                language={isPrettyJson ? 'json' : 'text'}
+                readOnly
+                ariaLabel="Corpo da resposta formatado"
+                testId="response-pretty-content"
+                minHeight="100%"
+                className="flex-1 h-full"
               />
             ) : (
               <div className="text-xs text-neutral-500 italic p-2">Corpo vazio</div>
@@ -347,16 +365,19 @@ export function ResponseViewer({
           aria-labelledby="response-tab-raw"
           tabIndex={0}
           hidden={activeTab !== 'raw'}
-          className={activeTab === 'raw' ? 'h-full flex flex-col focus:outline-none' : 'hidden'}
+          className={activeTab === 'raw' ? 'flex-1 h-full min-h-0 flex flex-col focus:outline-none overflow-hidden' : 'hidden'}
         >
           {activeTab === 'raw' && (
             response.body ? (
-              <pre
-                data-testid="response-raw-content"
-                className="flex-1 font-mono text-xs text-neutral-300 whitespace-pre-wrap break-all select-text"
-              >
-                {response.body}
-              </pre>
+              <CodeEditor
+                value={response.body}
+                language="text"
+                readOnly
+                ariaLabel="Corpo da resposta bruto"
+                testId="response-raw-content"
+                minHeight="100%"
+                className="flex-1 h-full"
+              />
             ) : (
               <div className="text-xs text-neutral-500 italic p-2">Corpo vazio</div>
             )
