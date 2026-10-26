@@ -24,8 +24,11 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app
 
 # Non-root user for security
-RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin apidot
+RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin apidot && \
+    mkdir -p /app/data && \
+    chown -R apidot:apidot /app
 COPY --from=build --chown=apidot:apidot /app/publish/ ./
+RUN chown -R apidot:apidot /app
 
 ENV ASPNETCORE_URLS=http://+:5000 \
     DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
