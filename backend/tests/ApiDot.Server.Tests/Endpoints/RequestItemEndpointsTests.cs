@@ -178,12 +178,24 @@ public class RequestItemEndpointsTests : IClassFixture<WebApplicationFactory<Pro
     }
 
     [Fact]
-    public async Task Create_RequestItem_Returns_400_When_Url_Empty_Or_Whitespace()
+    public async Task Create_RequestItem_Allows_Empty_Url_For_Drafts()
     {
         var client = _factory.CreateClient();
-        var payload = new CreateRequestItemRequest("Req", "GET", "   ", Guid.NewGuid(), null, null);
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
+        db.Database.EnsureCreated();
+
+        var ws = new Workspace { Name = "WS Draft Test" };
+        db.Workspaces.Add(ws);
+        await db.SaveChangesAsync();
+
+        var payload = new CreateRequestItemRequest("Draft Req", "GET", "   ", ws.Id, null, null);
         var res = await client.PostAsJsonAsync("/api/requests", payload);
-        res.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        res.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var created = await res.Content.ReadFromJsonAsync<RequestItemNodeDto>();
+        created.Should().NotBeNull();
+        created!.Url.Should().BeEmpty();
     }
 
     [Fact]
@@ -447,9 +459,19 @@ public class RequestItemEndpointsTests : IClassFixture<WebApplicationFactory<Pro
     }
 
     [Fact]
-    public async Task Update_RequestItem_Returns_400_When_Url_Empty_Or_Whitespace()
+    public async Task Update_RequestItem_Allows_Empty_Url_For_Drafts()
     {
         var client = _factory.CreateClient();
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
+        db.Database.EnsureCreated();
+
+        var ws = new Workspace { Name = "WS Update Draft" };
+        var req = new RequestItem { Name = "Initial", Url = "https://api.test", Workspace = ws };
+        db.Workspaces.Add(ws);
+        db.RequestItems.Add(req);
+        await db.SaveChangesAsync();
+
         var updateReq = new UpdateRequestItemRequest(
             "Valid Name",
             "GET",
@@ -461,8 +483,12 @@ public class RequestItemEndpointsTests : IClassFixture<WebApplicationFactory<Pro
             null,
             null);
 
-        var res = await client.PutAsJsonAsync($"/api/requests/{Guid.NewGuid()}", updateReq);
-        res.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var res = await client.PutAsJsonAsync($"/api/requests/{req.Id}", updateReq);
+        res.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var updated = await res.Content.ReadFromJsonAsync<RequestItemNodeDto>();
+        updated.Should().NotBeNull();
+        updated!.Url.Should().BeEmpty();
     }
 
     [Fact]

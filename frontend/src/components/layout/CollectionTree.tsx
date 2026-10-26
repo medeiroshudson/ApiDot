@@ -44,6 +44,7 @@ export interface CollectionTreeProps {
   filterText?: string;
   onFilterChange?: (text: string) => void;
   onSelect?: (item: ActiveTreeItem) => void;
+  onSelectItem?: (item: ActiveTreeItem) => void;
   onStartCreate?: (type: 'collection' | 'folder' | 'request', parentId: string | null) => void;
   onCreateCollection?: (name: string) => Promise<unknown> | void;
   onCreateFolder?: (name: string, collectionId: string, parentFolderId?: string | null) => Promise<unknown> | void;
@@ -51,6 +52,7 @@ export interface CollectionTreeProps {
   onUpdateCollection?: (id: string, name: string) => Promise<unknown> | void;
   onUpdateFolder?: (id: string, name: string) => Promise<unknown> | void;
   onUpdateRequest?: (id: string, name: string) => Promise<unknown> | void;
+  onUpdateRequestName?: (id: string, name: string) => Promise<unknown> | void;
   onDeleteCollection?: (id: string) => Promise<unknown> | void;
   onDeleteFolder?: (id: string) => Promise<unknown> | void;
   onDeleteRequest?: (id: string) => Promise<unknown> | void;
@@ -60,6 +62,7 @@ export interface CollectionTreeProps {
   onSyncCollection?: (collection: CollectionNodeDto) => void;
   onSync?: (collection: CollectionNodeDto) => void;
   onOpenCollectionSettings?: (collection: CollectionNodeDto) => void;
+  onOpenSettings?: (collection: CollectionNodeDto) => void;
   className?: string;
 }
 
@@ -138,6 +141,7 @@ export function CollectionTree({
   filterText,
   onFilterChange,
   onSelect,
+  onSelectItem,
   onStartCreate,
   onCreateCollection,
   onCreateFolder,
@@ -145,6 +149,7 @@ export function CollectionTree({
   onUpdateCollection,
   onUpdateFolder,
   onUpdateRequest,
+  onUpdateRequestName,
   onDeleteCollection,
   onDeleteFolder,
   onDeleteRequest,
@@ -154,6 +159,7 @@ export function CollectionTree({
   onSyncCollection,
   onSync,
   onOpenCollectionSettings,
+  onOpenSettings,
   className = '',
 }: CollectionTreeProps) {
   const treeContainerRef = useRef<HTMLDivElement>(null);
@@ -205,7 +211,8 @@ export function CollectionTree({
     id: string,
     data: CollectionNodeDto | FolderNodeDto | RequestItemNodeDto
   ) => {
-    onSelect?.({ type, id, data });
+    const item: ActiveTreeItem = { type, id, data };
+    (onSelectItem ?? onSelect)?.(item);
   };
 
   const handleStartCreate = (
@@ -310,7 +317,7 @@ export function CollectionTree({
     } else if (type === 'folder') {
       await onUpdateFolder?.(id, trimmed);
     } else if (type === 'request') {
-      await onUpdateRequest?.(id, trimmed);
+      await (onUpdateRequestName ?? onUpdateRequest)?.(id, trimmed);
     }
   };
 
@@ -401,19 +408,20 @@ export function CollectionTree({
                 label: 'Sincronizar OpenAPI',
                 icon: <RefreshCw className="w-4 h-4 text-emerald-400" />,
                 onClick: () => {
-                  onSyncCollection?.(col);
-                  onSync?.(col);
+                  (onSyncCollection ?? onSync)?.(col);
                 },
               },
             ]
           : []),
-        ...(onOpenCollectionSettings
+        ...(onOpenCollectionSettings || onOpenSettings
           ? [
               {
                 id: 'col-settings',
                 label: 'Configurações',
                 icon: <Settings className="w-4 h-4 text-zinc-400" />,
-                onClick: () => onOpenCollectionSettings(col),
+                onClick: () => {
+                  (onOpenCollectionSettings ?? onOpenSettings)?.(col);
+                },
               },
             ]
           : []),
@@ -732,7 +740,18 @@ export function CollectionTree({
                 onCancel={handleCancelRename}
               />
             ) : (
-              <span className="truncate text-xs font-medium">{col.name}</span>
+              <button
+                type="button"
+                role="button"
+                aria-current={isSelected ? 'page' : undefined}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSelect('collection', col.id, col);
+                }}
+                className="truncate text-xs font-medium text-left bg-transparent border-none p-0 cursor-pointer text-inherit hover:underline"
+              >
+                {col.name}
+              </button>
             )}
           </div>
 
@@ -747,8 +766,7 @@ export function CollectionTree({
                   disabled={isSyncing}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onSyncCollection?.(col);
-                    onSync?.(col);
+                    (onSyncCollection ?? onSync)?.(col);
                   }}
                   className="p-1 rounded text-neutral-400 hover:text-white hover:bg-neutral-700/60 transition-colors disabled:opacity-50 cursor-pointer"
                 >
@@ -759,14 +777,14 @@ export function CollectionTree({
                 </button>
               )}
 
-              {onOpenCollectionSettings && (
+              {(onOpenCollectionSettings || onOpenSettings) && (
                 <button
                   type="button"
                   title={`Configurações da coleção ${col.name}`}
                   aria-label={`Configurações da coleção ${col.name}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onOpenCollectionSettings(col);
+                    (onOpenCollectionSettings ?? onOpenSettings)?.(col);
                   }}
                   className="p-1 rounded text-neutral-400 hover:text-white hover:bg-neutral-700/60 transition-colors cursor-pointer"
                 >

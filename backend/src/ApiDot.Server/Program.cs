@@ -750,15 +750,7 @@ app.MapPost("/api/requests", async (
             detail: "Request Name cannot exceed 200 characters.");
     }
 
-    if (string.IsNullOrWhiteSpace(request.Url))
-    {
-        return Results.Problem(
-            statusCode: StatusCodes.Status400BadRequest,
-            title: "Invalid URL",
-            detail: "Request URL cannot be empty or whitespace.");
-    }
-
-    var trimmedUrl = request.Url.Trim();
+    var trimmedUrl = (request.Url ?? string.Empty).Trim();
     if (trimmedUrl.Length > 2048)
     {
         return Results.Problem(
@@ -914,15 +906,7 @@ app.MapPut("/api/requests/{id:guid}", async (
             detail: "Request Name cannot exceed 200 characters.");
     }
 
-    if (string.IsNullOrWhiteSpace(request.Url))
-    {
-        return Results.Problem(
-            statusCode: StatusCodes.Status400BadRequest,
-            title: "Invalid URL",
-            detail: "Request URL cannot be empty or whitespace.");
-    }
-
-    var trimmedUrl = request.Url.Trim();
+    var trimmedUrl = (request.Url ?? string.Empty).Trim();
     if (trimmedUrl.Length > 2048)
     {
         return Results.Problem(

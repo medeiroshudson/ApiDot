@@ -495,7 +495,14 @@ export default function Home() {
         existing && 'body' in existing
           ? (existing as { body: string }).body || null
           : (existing as RequestItemNodeDto | null)?.bodyContent || null,
-      bodyType: 'None',
+      bodyType:
+        (existing as RequestItemNodeDto | null)?.bodyType ||
+        (existing && 'body' in existing && (existing as { body: string }).body
+          ? (existing as { body: string }).body.trim().startsWith('{') ||
+            (existing as { body: string }).body.trim().startsWith('[')
+            ? 'Json'
+            : 'RawText'
+          : 'None'),
       collectionId: existing?.collectionId || null,
       folderId: existing?.folderId || null,
     });

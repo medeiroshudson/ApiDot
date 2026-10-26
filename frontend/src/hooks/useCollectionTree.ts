@@ -31,8 +31,41 @@ export interface ActiveTreeItem {
   data?: CollectionNodeDto | FolderNodeDto | RequestItemNodeDto | unknown;
 }
 
+export const DEFAULT_WORKSPACE_TREE: WorkspaceTreeDto = {
+  workspaceId: '00000000-0000-0000-0000-000000000001',
+  workspaceName: 'Default Workspace',
+  collections: [
+    {
+      id: '00000000-0000-0000-0000-000000000001',
+      name: 'Coleção Padrão',
+      defaultTarget: 'Inherit',
+      openApiSpecUrl: '',
+      folders: [
+        {
+          id: 'auth-folder',
+          name: 'Autenticação',
+          collectionId: '00000000-0000-0000-0000-000000000001',
+          parentFolderId: null,
+          defaultTarget: 'Inherit',
+          subFolders: [],
+          requests: [],
+        },
+      ],
+      requests: [],
+    },
+    {
+      id: '00000000-0000-0000-0000-000000000002',
+      name: 'Minha API',
+      defaultTarget: 'Inherit',
+      openApiSpecUrl: '',
+      folders: [],
+      requests: [],
+    },
+  ],
+};
+
 export function filterTree(tree: WorkspaceTreeDto | null, filterText: string): WorkspaceTreeDto | null {
-  if (!tree) return null;
+  if (!tree || !Array.isArray(tree.collections)) return null;
   const term = filterText.trim().toLowerCase();
   if (!term) return tree;
 
@@ -124,8 +157,33 @@ export interface UseCollectionTreeResult {
   deleteRequest: (id: string) => Promise<void>;
 }
 
-export function useCollectionTree(workspaceId: string): UseCollectionTreeResult {
-  const [tree, setTree] = useState<WorkspaceTreeDto | null>(null);
+function folderContainsItem(folders: FolderNodeDto[], type: string, id: string): boolean {
+  for (const f of folders) {
+    if (type === 'folder' && f.id === id) return true;
+    for (const r of f.requests) {
+      if (type === 'request' && r.id === id) return true;
+    }
+    if (folderContainsItem(f.subFolders, type, id)) return true;
+  }
+  return false;
+}
+
+function itemExistsInCollections(collections: CollectionNodeDto[], type: string, id: string): boolean {
+  for (const c of collections) {
+    if (type === 'collection' && c.id === id) return true;
+    for (const r of c.requests) {
+      if (type === 'request' && r.id === id) return true;
+    }
+    if (folderContainsItem(c.folders, type, id)) return true;
+  }
+  return false;
+}
+
+export function useCollectionTree(
+  workspaceId: string,
+  initialTree: WorkspaceTreeDto | null = null
+): UseCollectionTreeResult {
+  const [tree, setTree] = useState<WorkspaceTreeDto | null>(initialTree);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [filterText, setFilterText] = useState<string>('');
@@ -142,7 +200,13 @@ export function useCollectionTree(workspaceId: string): UseCollectionTreeResult 
     setError(null);
     try {
       const data = await fetchWorkspaceTree(workspaceId);
-      setTree(data);
+      if (data && Array.isArray(data.collections)) {
+        setTree(data);
+        setActiveItem((current) => {
+          if (!current) return null;
+          return itemExistsInCollections(data.collections, current.type, current.id) ? current : null;
+        });
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Falha ao carregar árvore de coleções';
       setError(msg);
