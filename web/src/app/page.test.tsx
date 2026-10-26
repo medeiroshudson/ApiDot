@@ -1,4 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import React from 'react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import Home from './page';
 import { resolveVariables, interpolateVariables } from '@/lib/variables';
 import { VariableItem } from '@/components/environment/VariableGrid';
 import { EnvironmentGroup } from '@/components/environment/EnvironmentModal';
@@ -151,5 +154,114 @@ describe('page variable resolution and interpolation helpers', () => {
         interpolateVariables('{{$request["auth-req"].response.body.nonExistent}}', {}, mockRequests)
       ).toBe('{{$request["auth-req"].response.body.nonExistent}}');
     });
+  });
+});
+
+describe('Home Page Collection Sync and Settings Integration', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('opens collection settings modal when settings button is clicked on collection nav', async () => {
+    render(<Home />);
+
+    const settingsBtns = screen.getAllByRole('button', {
+      name: /configurações da coleção|configurações/i,
+    });
+    expect(settingsBtns.length).toBeGreaterThan(0);
+    fireEvent.click(settingsBtns[0]);
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByText(/configurações da coleção & sincronização/i)).toBeInTheDocument();
+  });
+
+  it('displays audit summary banner after successful synchronization in settings modal', async () => {
+    const mockSyncReport = {
+      addedRequests: 4,
+      updatedRequests: 1,
+      fieldsAdded: 2,
+      fieldsRemoved: 0,
+      fieldsPreserved: 3,
+    };
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => mockSyncReport,
+    } as any);
+
+    render(<Home />);
+
+    const settingsBtns = screen.getAllByRole('button', {
+      name: /configurações da coleção|configurações/i,
+    });
+    fireEvent.click(settingsBtns[0]);
+
+    const dialog = screen.getByRole('dialog');
+    const syncBtn = within(dialog).getByRole('button', { name: /sincronizar coleção/i });
+    fireEvent.click(syncBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('audit-summary-banner')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/4 requisições adicionadas/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 atualizadas/i)).toBeInTheDocument();
+  });
+
+  it('dismisses audit summary banner when close button is clicked', async () => {
+    const mockSyncReport = {
+      addedRequests: 2,
+      updatedRequests: 0,
+      fieldsAdded: 1,
+      fieldsRemoved: 1,
+      fieldsPreserved: 5,
+    };
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => mockSyncReport,
+    } as any);
+
+    render(<Home />);
+
+    const syncBtns = screen.getAllByRole('button', {
+      name: /sincronizar coleção|sincronizar/i,
+    });
+    fireEvent.click(syncBtns[0]);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('audit-summary-banner')).toBeInTheDocument();
+    });
+
+    const closeBtn = screen.getByRole('button', { name: /fechar notificação de auditoria/i });
+    fireEvent.click(closeBtn);
+
+    expect(screen.queryByTestId('audit-summary-banner')).toBeNull();
+  });
+
+  it('triggers quick sync on collection nav item and shows audit banner', async () => {
+    const mockSyncReport = {
+      addedRequests: 2,
+      updatedRequests: 0,
+      fieldsAdded: 1,
+      fieldsRemoved: 1,
+      fieldsPreserved: 5,
+    };
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => mockSyncReport,
+    } as any);
+
+    render(<Home />);
+
+    const syncBtns = screen.getAllByRole('button', {
+      name: /sincronizar coleção|sincronizar/i,
+    });
+    fireEvent.click(syncBtns[0]);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('audit-summary-banner')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/2 requisições adicionadas/i)).toBeInTheDocument();
   });
 });

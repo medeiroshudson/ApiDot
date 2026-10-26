@@ -3,13 +3,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { MobileDrawer } from '@/components/layout/MobileDrawer';
-import { CollectionsNav } from '@/components/layout/CollectionsNav';
+import { CollectionsNav, NavItem } from '@/components/layout/CollectionsNav';
 import { RequestEditor, RequestData } from '@/components/request/RequestEditor';
 import { ResponseViewer, ResponseData } from '@/components/response/ResponseViewer';
 import { EnvironmentModal, EnvironmentGroup } from '@/components/environment/EnvironmentModal';
 import { VariableItem } from '@/components/environment/VariableGrid';
 import { DependencyRequest, resolveVariables, interpolateVariables } from '@/lib/variables';
 import { AutocompleteVariable } from '@/components/request/RequestAutocomplete';
+import {
+  CollectionSettingsModal,
+  SyncReport,
+} from '@/components/collection/CollectionSettingsModal';
+import { CheckCircle2, X } from 'lucide-react';
 
 const DEFAULT_ENVIRONMENTS: EnvironmentGroup[] = [
   { name: 'Development', variables: [] },
@@ -34,6 +39,17 @@ const DEFAULT_REQUESTS: DependencyRequest[] = [
   },
 ];
 
+const DEFAULT_COLLECTIONS: NavItem[] = [
+  {
+    id: 'default-collection',
+    name: 'Coleção Padrão',
+    icon: 'collection',
+    openApiSpecUrl: '',
+    openApiSpecContent: '',
+  },
+  { id: 'auth-folder', name: 'Autenticação', icon: 'folder', isNested: true },
+];
+
 export default function Home() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isAgentOnline, setIsAgentOnline] = useState(false);
@@ -49,6 +65,17 @@ export default function Home() {
   const [globals, setGlobals] = useState<VariableItem[]>([]);
   const [collectionVariables, setCollectionVariables] = useState<VariableItem[]>([]);
   const [requestHistory, setRequestHistory] = useState<DependencyRequest[]>(DEFAULT_REQUESTS);
+
+  // Collections & Sync State
+  const [collections, setCollections] = useState<NavItem[]>(DEFAULT_COLLECTIONS);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string>('default-collection');
+  const [syncingCollectionId, setSyncingCollectionId] = useState<string | null>(null);
+  const [isCollectionSettingsOpen, setIsCollectionSettingsOpen] = useState(false);
+  const [editingCollection, setEditingCollection] = useState<NavItem | null>(null);
+  const [auditBanner, setAuditBanner] = useState<{
+    collectionName: string;
+    report: SyncReport;
+  } | null>(null);
 
   const availableVariables = useMemo<AutocompleteVariable[]>(() => {
     const list: AutocompleteVariable[] = [];
@@ -86,6 +113,73 @@ export default function Home() {
     if (activeEnvironment && !updated.some((e) => e.name === activeEnvironment)) {
       setActiveEnvironment(null);
     }
+  };
+
+  const handleOpenCollectionSettings = (item: NavItem) => {
+    setEditingCollection(item);
+    setIsCollectionSettingsOpen(true);
+  };
+
+  const handleQuickSync = async (item: NavItem) => {
+    setSyncingCollectionId(item.id);
+    try {
+      const res = await fetch(`/api/collections/${item.id}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          specUrl: item.openApiSpecUrl || undefined,
+          specContent: item.openApiSpecContent || undefined,
+        }),
+      });
+
+      if (res.ok) {
+        const report: SyncReport = await res.json();
+        setAuditBanner({
+          collectionName: item.name,
+          report,
+        });
+      } else {
+        // If not yet configured or failed, open settings modal so user can configure
+        setEditingCollection(item);
+        setIsCollectionSettingsOpen(true);
+      }
+    } catch {
+      setEditingCollection(item);
+      setIsCollectionSettingsOpen(true);
+    } finally {
+      setSyncingCollectionId(null);
+    }
+  };
+
+  const handleSyncSuccess = (report: SyncReport) => {
+    setAuditBanner({
+      collectionName: editingCollection?.name || 'Coleção',
+      report,
+    });
+  };
+
+  const handleSaveCollectionSpec = async (data: { specUrl?: string; specContent?: string }) => {
+    if (!editingCollection) return;
+    try {
+      await fetch(`/api/collections/${editingCollection.id}/openapi`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          openApiSpecUrl: data.specUrl,
+          openApiSpecContent: data.specContent,
+        }),
+      });
+    } catch {
+      // Ignore if local preview
+    }
+
+    setCollections((prev) =>
+      prev.map((c) =>
+        c.id === editingCollection.id
+          ? { ...c, openApiSpecUrl: data.specUrl, openApiSpecContent: data.specContent }
+          : c
+      )
+    );
   };
 
   const handleSend = async (request: RequestData) => {
@@ -228,6 +322,35 @@ export default function Home() {
         onOpenEnvironmentSettings={() => setIsEnvModalOpen(true)}
       />
 
+      {/* Audit Summary Banner */}
+      {auditBanner && (
+        <div
+          role="status"
+          data-testid="audit-summary-banner"
+          className="bg-emerald-950/90 border-b border-emerald-800 px-4 py-2 flex items-center justify-between text-xs text-emerald-200 shrink-0"
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>
+              <strong>Sincronização de &ldquo;{auditBanner.collectionName}&rdquo;:</strong>{' '}
+              {auditBanner.report.addedRequests} requisições adicionadas,{' '}
+              {auditBanner.report.updatedRequests} atualizadas |{' '}
+              {auditBanner.report.fieldsAdded} campos adicionados,{' '}
+              {auditBanner.report.fieldsRemoved} removidos,{' '}
+              {auditBanner.report.fieldsPreserved} preservados intactos.
+            </span>
+          </div>
+          <button
+            type="button"
+            aria-label="Fechar notificação de auditoria"
+            onClick={() => setAuditBanner(null)}
+            className="p-1 rounded text-emerald-400 hover:text-white hover:bg-emerald-900/60 transition-colors cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       <EnvironmentModal
         isOpen={isEnvModalOpen}
         onClose={() => setIsEnvModalOpen(false)}
@@ -241,9 +364,24 @@ export default function Home() {
         onSelectActiveEnvironment={setActiveEnvironment}
       />
 
+      <CollectionSettingsModal
+        isOpen={isCollectionSettingsOpen}
+        onClose={() => setIsCollectionSettingsOpen(false)}
+        collection={editingCollection}
+        onSave={handleSaveCollectionSpec}
+        onSyncSuccess={handleSyncSuccess}
+      />
+
       {/* Mobile Drawer */}
       <MobileDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)}>
-        <CollectionsNav />
+        <CollectionsNav
+          items={collections}
+          selectedId={selectedCollectionId}
+          syncingId={syncingCollectionId}
+          onSelect={(item) => setSelectedCollectionId(item.id)}
+          onSync={handleQuickSync}
+          onOpenSettings={handleOpenCollectionSettings}
+        />
       </MobileDrawer>
 
       <div className="flex flex-1 overflow-hidden">
@@ -254,7 +392,15 @@ export default function Home() {
               Coleções & Pastas
             </span>
           </div>
-          <CollectionsNav className="flex-1 overflow-y-auto" />
+          <CollectionsNav
+            className="flex-1 overflow-y-auto"
+            items={collections}
+            selectedId={selectedCollectionId}
+            syncingId={syncingCollectionId}
+            onSelect={(item) => setSelectedCollectionId(item.id)}
+            onSync={handleQuickSync}
+            onOpenSettings={handleOpenCollectionSettings}
+          />
         </aside>
 
         {/* Main Workspace Area (Request & Response panels) */}
