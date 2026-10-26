@@ -1,0 +1,12 @@
+**/.git
+**/.github
+**/bin
+**/obj
+**/node_modules
+**/.next
+**/test-results
+**/playwright-report
+**/screenshots
+**/.vs
+**/.vscode
+**/*.tsbuildinfo
