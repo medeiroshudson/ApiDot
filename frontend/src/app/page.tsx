@@ -354,27 +354,45 @@ export default function Home() {
     reloadTree();
   };
 
-  const handleSaveCollectionSpec = async (data: { specUrl?: string; specContent?: string }) => {
+  const handleSaveCollectionSettings = async (data: {
+    name?: string;
+    defaultTarget?: ExecutionTarget;
+    specUrl?: string;
+    specContent?: string;
+  }) => {
     if (!editingCollection) return;
-    const res = await fetch(`/api/collections/${editingCollection.id}/openapi`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        openApiSpecUrl: data.specUrl,
-        openApiSpecContent: data.specContent,
-      }),
-    });
 
-    if (!res.ok) {
-      let errDetail = 'Falha ao salvar configurações da coleção.';
-      try {
-        const json = await res.json();
-        errDetail = json.detail || json.title || json.message || errDetail;
-      } catch {
-        const text = await res.text();
-        if (text) errDetail = text;
+    if (
+      (data.name && data.name !== editingCollection.name) ||
+      (data.defaultTarget && data.defaultTarget !== editingCollection.defaultTarget)
+    ) {
+      await updateCollection(editingCollection.id, {
+        name: data.name || editingCollection.name,
+        defaultTarget: data.defaultTarget || editingCollection.defaultTarget,
+      });
+    }
+
+    if (data.specUrl !== undefined || data.specContent !== undefined) {
+      const res = await fetch(`/api/collections/${editingCollection.id}/openapi`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          openApiSpecUrl: data.specUrl,
+          openApiSpecContent: data.specContent,
+        }),
+      });
+
+      if (!res.ok) {
+        let errDetail = 'Falha ao salvar configurações da coleção.';
+        try {
+          const json = await res.json();
+          errDetail = json.detail || json.title || json.message || errDetail;
+        } catch {
+          const text = await res.text();
+          if (text) errDetail = text;
+        }
+        throw new Error(errDetail);
       }
-      throw new Error(errDetail);
     }
 
     await reloadTree();
@@ -898,7 +916,8 @@ export default function Home() {
         isOpen={isCollectionSettingsOpen}
         onClose={() => setIsCollectionSettingsOpen(false)}
         collection={editingCollection}
-        onSave={handleSaveCollectionSpec}
+        onSave={handleSaveCollectionSettings}
+        isAgentOnline={isAgentOnline}
         onSyncSuccess={handleSyncSuccess}
       />
 

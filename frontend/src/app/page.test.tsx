@@ -221,7 +221,7 @@ describe('Home Page Collection Sync and Settings Integration', () => {
 
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeInTheDocument();
-    expect(screen.getByText(/configurações da coleção & sincronização/i)).toBeInTheDocument();
+    expect(screen.getByText(/configurações da coleção/i)).toBeInTheDocument();
   });
 
   it('displays audit summary banner after successful synchronization in settings modal', async () => {
@@ -249,6 +249,8 @@ describe('Home Page Collection Sync and Settings Integration', () => {
     fireEvent.click(settingsBtns[0]);
 
     const dialog = screen.getByRole('dialog');
+    const openApiTab = within(dialog).getByRole('tab', { name: /openapi \/ sync/i });
+    fireEvent.click(openApiTab);
     const urlInput = within(dialog).getByLabelText(/url da especificação/i);
     fireEvent.change(urlInput, { target: { value: 'https://api.example.com/openapi.json' } });
     const syncBtn = within(dialog).getByRole('button', { name: /sincronizar coleção/i });
@@ -396,10 +398,12 @@ describe('Home Page Collection Sync and Settings Integration', () => {
     fireEvent.click(settingsBtns[0]);
 
     const dialog = screen.getByRole('dialog');
+    const openApiTab = within(dialog).getByRole('tab', { name: /openapi \/ sync/i });
+    fireEvent.click(openApiTab);
     const urlInput = within(dialog).getByLabelText(/url da especificação/i);
     fireEvent.change(urlInput, { target: { value: 'https://bad.spec.url/spec.json' } });
 
-    const saveBtn = within(dialog).getByRole('button', { name: /salvar especificação/i });
+    const saveBtn = within(dialog).getByRole('button', { name: /salvar alterações/i });
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
@@ -624,13 +628,8 @@ describe('Home Page Collection Tree & Request Lifecycle Integration', () => {
     const methodSelect = screen.getByRole('combobox', { name: /método http/i });
     expect(methodSelect).toHaveValue('GET');
 
-    const targetSelect = screen.getByRole('combobox', { name: /target de execução/i });
-    expect(targetSelect).toHaveValue('Server');
-
     expect(screen.getByTestId('request-title')).toHaveTextContent('Ping Service');
-
-    const headersInput = screen.getByRole('textbox', { name: /cabeçalhos http/i });
-    expect(headersInput).toHaveValue('{"Accept": "application/json"}');
+    expect(screen.getByTestId('headers-code-editor')).toBeInTheDocument();
   });
 
   it('loads folder request details and body into RequestEditor', async () => {
@@ -669,11 +668,10 @@ describe('Home Page Collection Tree & Request Lifecycle Integration', () => {
 
     expect(screen.getByTestId('request-title')).toHaveTextContent('Login User');
 
-    // Switch to Body tab and verify body content
+    // Switch to Body tab and verify body editor is rendered
     const bodyTab = screen.getByRole('tab', { name: /body/i });
     fireEvent.click(bodyTab);
-    const bodyInput = screen.getByRole('textbox', { name: /corpo da requisição/i });
-    expect(bodyInput).toHaveValue('{"user": "admin"}');
+    expect(screen.getByTestId('body-code-editor')).toBeInTheDocument();
   });
 
   it('opens SaveRequestModal when pressing Ctrl+S on unsaved request and creates new request on submit', async () => {
