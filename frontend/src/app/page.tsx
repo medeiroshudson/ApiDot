@@ -113,6 +113,7 @@ function findRequestInTree(
 export default function Home() {
   const [workspaces, setWorkspaces] = useState<WorkspaceDto[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+  const [isWorkspacesLoading, setIsWorkspacesLoading] = useState(true);
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isAgentOnline, setIsAgentOnline] = useState(false);
@@ -158,7 +159,10 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    refreshWorkspaces();
+    setIsWorkspacesLoading(true);
+    refreshWorkspaces().finally(() => {
+      setIsWorkspacesLoading(false);
+    });
   }, [refreshWorkspaces]);
 
   const handleSelectWorkspace = useCallback((id: string) => {
@@ -818,7 +822,14 @@ export default function Home() {
         />
       </div>
 
-      {workspaces.length === 0 ? (
+      {isWorkspacesLoading ? (
+        <div
+          data-testid="sidebar-workspaces-loading"
+          className="flex-1 flex items-center justify-center text-center p-4 text-xs text-neutral-500"
+        >
+          Carregando workspaces...
+        </div>
+      ) : workspaces.length === 0 ? (
         <div
           data-testid="sidebar-empty-workspace"
           className="flex-1 flex flex-col items-center justify-center text-center p-4 border border-dashed border-neutral-800 rounded-lg bg-neutral-900/30 my-auto"

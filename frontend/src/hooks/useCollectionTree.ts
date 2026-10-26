@@ -159,6 +159,8 @@ export function useCollectionTree(
   const reload = useCallback(async (): Promise<void> => {
     if (!workspaceId) {
       setTree(null);
+      setActiveItem(null);
+      setError(null);
       setIsLoading(false);
       return;
     }
