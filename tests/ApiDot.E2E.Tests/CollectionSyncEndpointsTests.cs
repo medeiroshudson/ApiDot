@@ -374,6 +374,205 @@ public class CollectionSyncEndpointsTests : IClassFixture<WebApplicationFactory<
         response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
     }
 
+    [Theory]
+    [InlineData("http://localhost/spec")]
+    [InlineData("http://localhost:8080/openapi.json")]
+    [InlineData("http://127.0.0.1/spec")]
+    [InlineData("http://127.0.0.1:5000/spec")]
+    [InlineData("http://[::1]/spec")]
+    [InlineData("http://169.254.169.254/latest/meta-data")]
+    [InlineData("http://169.254.1.1/spec")]
+    [InlineData("ftp://example.com/spec")]
+    public async Task PostSync_WhenSpecUrlIsSsrfOrInvalid_Returns_400_BadRequest_WithProblemDetails(string ssrfUrl)
+    {
+        var col = await SeedCollectionAsync();
+        var request = new SyncCollectionRequest(SpecUrl: ssrfUrl);
+
+        var response = await _client.PostAsJsonAsync($"/api/collections/{col.Id}/sync", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().Contain("A URL fornecida para a especificação é inválida ou inacessível.");
+    }
+
+    [Fact]
+    public async Task PostSync_WhenCollectionStoredSpecUrlIsSsrf_Returns_400_BadRequest_ProblemDetails()
+    {
+        var col = await SeedCollectionAsync(specUrl: "http://169.254.169.254/latest/meta-data");
+        var request = new SyncCollectionRequest();
+
+        var response = await _client.PostAsJsonAsync($"/api/collections/{col.Id}/sync", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().Contain("A URL fornecida para a especificação é inválida ou inacessível.");
+    }
+
+    [Fact]
+    public async Task PostSync_WhenSpecUrlExceedsMaxLength_Returns_400_BadRequest()
+    {
+        var col = await SeedCollectionAsync();
+        var longUrl = "https://example.com/" + new string('a', 2050);
+        var request = new SyncCollectionRequest(SpecUrl: longUrl);
+
+        var response = await _client.PostAsJsonAsync($"/api/collections/{col.Id}/sync", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().Contain("A URL fornecida para a especificação é inválida ou inacessível.");
+    }
+
+    [Fact]
+    public async Task PostSync_CleanSaveChangesAsync_PersistsAddedRequestsWithoutConcurrencyIssues()
+    {
+        var col = await SeedCollectionAsync();
+
+        // 1st sync with 2 endpoints
+        var specV1 = """
+        {
+          "openapi": "3.0.0",
+          "info": { "title": "Test API", "version": "1.0.0" },
+          "paths": {
+            "/users": {
+              "get": {
+                "operationId": "getUsers",
+                "responses": { "200": { "description": "OK" } }
+              }
+            },
+            "/products": {
+              "get": {
+                "operationId": "getProducts",
+                "responses": { "200": { "description": "OK" } }
+              }
+            }
+          }
+        }
+        """;
+
+        var response1 = await _client.PostAsJsonAsync($"/api/collections/{col.Id}/sync", new SyncCollectionRequest(SpecContent: specV1));
+        response1.StatusCode.Should().Be(HttpStatusCode.OK);
+        var report1 = await response1.Content.ReadFromJsonAsync<SyncReport>();
+        report1!.AddedRequests.Should().Be(2);
+
+        // 2nd sync updating existing endpoints and adding 1 new endpoint
+        var specV2 = """
+        {
+          "openapi": "3.0.0",
+          "info": { "title": "Test API", "version": "2.0.0" },
+          "paths": {
+            "/users": {
+              "get": {
+                "operationId": "getUsersV2",
+                "responses": { "200": { "description": "OK" } }
+              }
+            },
+            "/products": {
+              "get": {
+                "operationId": "getProductsV2",
+                "responses": { "200": { "description": "OK" } }
+              }
+            },
+            "/orders": {
+              "post": {
+                "operationId": "createOrder",
+                "responses": { "201": { "description": "Created" } }
+              }
+            }
+          }
+        }
+        """;
+
+        var response2 = await _client.PostAsJsonAsync($"/api/collections/{col.Id}/sync", new SyncCollectionRequest(SpecContent: specV2));
+        response2.StatusCode.Should().Be(HttpStatusCode.OK);
+        var report2 = await response2.Content.ReadFromJsonAsync<SyncReport>();
+        report2!.AddedRequests.Should().Be(1);
+        report2.UpdatedRequests.Should().Be(2);
+
+        // Verify in database that all 3 requests are persisted cleanly
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
+        var dbCol = await db.Collections.Include(c => c.Requests).FirstOrDefaultAsync(c => c.Id == col.Id);
+        dbCol.Should().NotBeNull();
+        dbCol!.Requests.Should().HaveCount(3);
+        dbCol.Requests.Select(r => r.Url).Should().BeEquivalentTo(new[] { "/users", "/products", "/orders" });
+    }
+
+    [Fact]
+    public async Task PostSync_WhenRemoteSpecExceeds10MB_Returns_400_BadRequest()
+    {
+        var oversizedSpec = new string('A', (int)(Program.MaxSpecSizeBytes + 1024));
+        var testResponse = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(oversizedSpec, System.Text.Encoding.UTF8, "application/json")
+        };
+        var handler = new TestHttpMessageHandler(testResponse);
+
+        var client = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
+            {
+                var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IHttpClientFactory));
+                if (descriptor != null)
+                {
+                    services.Remove(descriptor);
+                }
+                services.AddSingleton<IHttpClientFactory>(new MockHttpClientFactory(handler));
+            });
+        }).CreateClient();
+
+        var col = await SeedCollectionAsync();
+        var request = new SyncCollectionRequest(SpecUrl: "https://example.com/oversized.json");
+
+        var response = await client.PostAsJsonAsync($"/api/collections/{col.Id}/sync", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().Contain("10MB");
+    }
+
+    [Fact]
+    public async Task PostSync_WhenRemoteUrlFails_DoesNotFallBackToStaleData_Returns_400_BadRequest()
+    {
+        var staleSpec = """
+        {
+          "openapi": "3.0.0",
+          "info": { "title": "Stale API", "version": "1.0.0" },
+          "paths": {
+            "/old": {
+              "get": { "responses": { "200": { "description": "OK" } } }
+            }
+          }
+        }
+        """;
+
+        var handler = new TestHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
+
+        var client = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
+            {
+                var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IHttpClientFactory));
+                if (descriptor != null)
+                {
+                    services.Remove(descriptor);
+                }
+                services.AddSingleton<IHttpClientFactory>(new MockHttpClientFactory(handler));
+            });
+        }).CreateClient();
+
+        var col = await SeedCollectionAsync(specUrl: "https://example.com/failing.json", specContent: staleSpec);
+        var request = new SyncCollectionRequest();
+
+        var response = await client.PostAsJsonAsync($"/api/collections/{col.Id}/sync", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
+    }
+
     private class MockHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);

@@ -1,3 +1,5 @@
+using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ApiDot.Core.Enums;
@@ -36,6 +38,7 @@ builder.Services.AddSingleton<IVariableResolver, VariableResolver>();
 builder.Services.AddSingleton<IAgentHub, AgentHub>();
 builder.Services.AddHttpClient<IServerHttpExecutor, ServerHttpExecutor>();
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("SpecFetcher", c => c.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddSingleton<ISpecImportStrategy, OpenApiImportStrategy>();
 builder.Services.AddSingleton<ICollectionMerger, CollectionMerger>();
 
@@ -367,43 +370,58 @@ app.MapPost("/api/collections/{id:guid}/sync", async (
     if (!string.IsNullOrWhiteSpace(request?.SpecContent))
     {
         specContent = request.SpecContent;
+        if (!string.IsNullOrWhiteSpace(specUrl))
+        {
+            if (!IsSafeSpecUrl(specUrl, out _))
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Invalid Spec URL",
+                    detail: "A URL fornecida para a especificação é inválida ou inacessível.");
+            }
+        }
     }
     else if (!string.IsNullOrWhiteSpace(specUrl))
     {
-        try
+        if (!IsSafeSpecUrl(specUrl, out var validUri))
         {
-            var client = httpClientFactory.CreateClient();
-            specContent = await client.GetStringAsync(specUrl, cancellationToken);
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid Spec URL",
+                detail: "A URL fornecida para a especificação é inválida ou inacessível.");
         }
-        catch (Exception ex)
+
+        var fetchResult = await FetchSpecFromUrlAsync(httpClientFactory, validUri!, cancellationToken);
+        if (!fetchResult.Success)
         {
             return Results.Problem(
                 statusCode: StatusCodes.Status400BadRequest,
                 title: "Failed to Fetch OpenAPI Spec",
-                detail: $"Failed to retrieve specification from URL '{specUrl}': {ex.Message}");
+                detail: fetchResult.ErrorMessage ?? "Falha ao obter a especificação da URL fornecida.");
         }
+
+        specContent = fetchResult.Content;
     }
     else if (!string.IsNullOrWhiteSpace(collection.OpenApiSpecUrl))
     {
-        try
+        if (!IsSafeSpecUrl(collection.OpenApiSpecUrl, out var validUri))
         {
-            var client = httpClientFactory.CreateClient();
-            specContent = await client.GetStringAsync(collection.OpenApiSpecUrl, cancellationToken);
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid Spec URL",
+                detail: "A URL fornecida para a especificação é inválida ou inacessível.");
         }
-        catch (Exception ex)
+
+        var fetchResult = await FetchSpecFromUrlAsync(httpClientFactory, validUri!, cancellationToken);
+        if (!fetchResult.Success)
         {
-            if (!string.IsNullOrWhiteSpace(collection.OpenApiSpecContent))
-            {
-                specContent = collection.OpenApiSpecContent;
-            }
-            else
-            {
-                return Results.Problem(
-                    statusCode: StatusCodes.Status400BadRequest,
-                    title: "Failed to Fetch OpenAPI Spec",
-                    detail: $"Failed to retrieve specification from URL '{collection.OpenApiSpecUrl}': {ex.Message}");
-            }
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Failed to Fetch OpenAPI Spec",
+                detail: fetchResult.ErrorMessage ?? "Falha ao obter a especificação da URL fornecida.");
         }
+
+        specContent = fetchResult.Content;
     }
     else if (!string.IsNullOrWhiteSpace(collection.OpenApiSpecContent))
     {
@@ -426,17 +444,12 @@ app.MapPost("/api/collections/{id:guid}/sync", async (
             detail: "The provided OpenAPI specification is empty or invalid.");
     }
 
-    var existingRequestIds = collection.Requests.Select(r => r.Id).ToHashSet();
-
     var canonicalImport = await strategy.ParseAsync(specContent, cancellationToken);
-    var report = merger.Merge(collection, canonicalImport);
+    var mergeResult = merger.Merge(collection, canonicalImport);
 
-    foreach (var req in collection.Requests)
+    if (mergeResult.AddedRequests.Count > 0)
     {
-        if (!existingRequestIds.Contains(req.Id))
-        {
-            db.Entry(req).State = EntityState.Added;
-        }
+        db.RequestItems.AddRange(mergeResult.AddedRequests);
     }
 
     if (!string.IsNullOrWhiteSpace(specUrl))
@@ -447,7 +460,7 @@ app.MapPost("/api/collections/{id:guid}/sync", async (
 
     await db.SaveChangesAsync(cancellationToken);
 
-    return Results.Ok(report);
+    return Results.Ok(mergeResult.Report);
 });
 
 app.MapPost("/api/requests/execute", async (
@@ -603,4 +616,152 @@ app.MapPost("/api/requests/execute", async (
 
 app.Run();
 
-public partial class Program { }
+public partial class Program
+{
+    public const long MaxSpecSizeBytes = 10 * 1024 * 1024; // 10MB
+
+    public static bool IsSafeSpecUrl(string? url, out Uri? validUri)
+    {
+        validUri = null;
+        if (string.IsNullOrWhiteSpace(url) || url.Length > 2048)
+        {
+            return false;
+        }
+
+        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+        {
+            return false;
+        }
+
+        if (uri.IsLoopback)
+        {
+            return false;
+        }
+
+        var host = uri.DnsSafeHost;
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            return false;
+        }
+
+        if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) ||
+            host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(host, "metadata.google.internal", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var cleanHost = host.Trim('[', ']');
+
+        if (IPAddress.TryParse(cleanHost, out var ip))
+        {
+            if (IPAddress.IsLoopback(ip))
+            {
+                return false;
+            }
+
+            if (ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal)
+            {
+                return false;
+            }
+
+            if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+            {
+                var bytes = ip.GetAddressBytes();
+                if (bytes[0] == 127)
+                {
+                    return false;
+                }
+                if (bytes[0] == 169 && bytes[1] == 254)
+                {
+                    return false;
+                }
+                if (bytes[0] == 0)
+                {
+                    return false;
+                }
+            }
+            else if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+            {
+                if (ip.Equals(IPAddress.IPv6Loopback) || ip.Equals(IPAddress.IPv6Any))
+                {
+                    return false;
+                }
+
+                if (ip.IsIPv4MappedToIPv6)
+                {
+                    var v4 = ip.MapToIPv4();
+                    var bytes = v4.GetAddressBytes();
+                    if (bytes[0] == 127 || (bytes[0] == 169 && bytes[1] == 254) || bytes[0] == 0)
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+        else
+        {
+            if (host.StartsWith("169.254.", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        validUri = uri;
+        return true;
+    }
+
+    public static async Task<(bool Success, string? Content, string? ErrorMessage)> FetchSpecFromUrlAsync(
+        IHttpClientFactory httpClientFactory,
+        Uri uri,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var client = httpClientFactory.CreateClient("SpecFetcher");
+            using var response = await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return (false, null, "Falha ao obter a especificação da URL fornecida.");
+            }
+
+            if (response.Content.Headers.ContentLength.HasValue &&
+                response.Content.Headers.ContentLength.Value > MaxSpecSizeBytes)
+            {
+                return (false, null, "A especificação excede o tamanho máximo permitido de 10MB.");
+            }
+
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var ms = new MemoryStream();
+            var buffer = new byte[81920];
+            long totalBytes = 0;
+            int bytesRead;
+
+            while ((bytesRead = await stream.ReadAsync(buffer, cancellationToken)) > 0)
+            {
+                totalBytes += bytesRead;
+                if (totalBytes > MaxSpecSizeBytes)
+                {
+                    return (false, null, "A especificação excede o tamanho máximo permitido de 10MB.");
+                }
+                ms.Write(buffer, 0, bytesRead);
+            }
+
+            var content = Encoding.UTF8.GetString(ms.ToArray());
+            return (true, content, null);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return (false, null, "Falha ao obter a especificação da URL fornecida.");
+        }
+    }
+}

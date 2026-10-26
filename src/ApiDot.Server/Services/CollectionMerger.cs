@@ -12,12 +12,13 @@ public class CollectionMerger : ICollectionMerger
     private const int MaxRecursionDepth = 32;
     private static readonly JsonSerializerOptions IndentedOptions = new() { WriteIndented = true };
 
-    public SyncReport Merge(Collection collection, CanonicalCollectionImport imported)
+    public MergeResult Merge(Collection collection, CanonicalCollectionImport imported)
     {
         ArgumentNullException.ThrowIfNull(collection);
         ArgumentNullException.ThrowIfNull(imported);
 
         var report = new SyncReport();
+        var addedRequests = new List<RequestItem>();
         var matchedExistingIds = new HashSet<Guid>();
         var initialExisting = collection.Requests.ToList();
 
@@ -110,10 +111,11 @@ public class CollectionMerger : ICollectionMerger
 
                 matchedExistingIds.Add(newRequest.Id);
                 collection.Requests.Add(newRequest);
+                addedRequests.Add(newRequest);
             }
         }
 
-        return report;
+        return new MergeResult(report, addedRequests);
     }
 
     private static void MergeRequest(RequestItem existing, CanonicalRequest canonicalReq, SyncReport report)

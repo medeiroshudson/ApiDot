@@ -52,11 +52,12 @@ public class CollectionMergerTests
         };
 
         // Act
-        var report = _merger.Merge(collection, imported);
+        var result = _merger.Merge(collection, imported);
 
         // Assert
-        report.UpdatedRequests.Should().Be(1);
-        report.AddedRequests.Should().Be(0);
+        result.Report.UpdatedRequests.Should().Be(1);
+        result.Report.AddedRequests.Should().Be(0);
+        result.AddedRequests.Should().BeEmpty();
         collection.Requests.Should().HaveCount(1);
     }
 
@@ -98,11 +99,13 @@ public class CollectionMergerTests
         };
 
         // Act
-        var report = _merger.Merge(collection, imported);
+        var result = _merger.Merge(collection, imported);
 
         // Assert
-        report.AddedRequests.Should().Be(1);
-        report.UpdatedRequests.Should().Be(0);
+        result.Report.AddedRequests.Should().Be(1);
+        result.Report.UpdatedRequests.Should().Be(0);
+        result.AddedRequests.Should().HaveCount(1);
+        result.AddedRequests[0].Method.Should().Be("POST");
         collection.Requests.Should().HaveCount(2);
     }
 
@@ -145,9 +148,10 @@ public class CollectionMergerTests
         };
 
         // Act
-        var report = _merger.Merge(collection, imported);
+        var (report, addedRequests) = _merger.Merge(collection, imported);
 
         // Assert
+        addedRequests.Should().BeEmpty();
         report.FieldsAdded.Should().Be(1);
         report.FieldsRemoved.Should().Be(1);
         report.FieldsPreserved.Should().Be(1);
@@ -205,9 +209,10 @@ public class CollectionMergerTests
         };
 
         // Act
-        var report = _merger.Merge(collection, imported);
+        var (report, addedRequests) = _merger.Merge(collection, imported);
 
         // Assert
+        addedRequests.Should().BeEmpty();
         report.FieldsAdded.Should().Be(1);
         report.FieldsRemoved.Should().Be(1);
         report.FieldsPreserved.Should().Be(1);
@@ -265,7 +270,7 @@ public class CollectionMergerTests
         };
 
         // Act
-        var report = _merger.Merge(collection, imported);
+        var (report, _) = _merger.Merge(collection, imported);
 
         // Assert
         var req = collection.Requests.First();
@@ -315,7 +320,7 @@ public class CollectionMergerTests
         };
 
         // Act
-        var report = _merger.Merge(collection, imported);
+        var (report, _) = _merger.Merge(collection, imported);
 
         // Assert
         var req = collection.Requests.First();
@@ -357,11 +362,13 @@ public class CollectionMergerTests
         };
 
         // Act
-        var report = _merger.Merge(collection, imported);
+        var result = _merger.Merge(collection, imported);
 
         // Assert
-        report.AddedRequests.Should().Be(1);
-        report.UpdatedRequests.Should().Be(0);
+        result.Report.AddedRequests.Should().Be(1);
+        result.Report.UpdatedRequests.Should().Be(0);
+        result.AddedRequests.Should().HaveCount(1);
+        result.AddedRequests[0].Name.Should().Be("Get Status");
         collection.Requests.Should().HaveCount(1);
 
         var created = collection.Requests.First();
@@ -414,7 +421,7 @@ public class CollectionMergerTests
         };
 
         // Act
-        var report = _merger.Merge(collection, imported);
+        var (report, _) = _merger.Merge(collection, imported);
 
         // Assert
         var req = collection.Requests.First();
@@ -487,14 +494,16 @@ public class CollectionMergerTests
         };
 
         // Act
-        var report = _merger.Merge(collection, imported);
+        var result = _merger.Merge(collection, imported);
 
         // Assert
-        report.AddedRequests.Should().Be(1);
-        report.UpdatedRequests.Should().Be(2);
-        report.FieldsAdded.Should().Be(1);    // price
-        report.FieldsRemoved.Should().Be(1);  // sku
-        report.FieldsPreserved.Should().Be(1);// title
+        result.Report.AddedRequests.Should().Be(1);
+        result.Report.UpdatedRequests.Should().Be(2);
+        result.Report.FieldsAdded.Should().Be(1);    // price
+        result.Report.FieldsRemoved.Should().Be(1);  // sku
+        result.Report.FieldsPreserved.Should().Be(1);// title
+        result.AddedRequests.Should().HaveCount(1);
+        result.AddedRequests[0].Name.Should().Be("Delete Product");
     }
 
     [Fact]
@@ -546,11 +555,12 @@ public class CollectionMergerTests
         };
 
         // Act
-        var report = _merger.Merge(collection, imported);
+        var result = _merger.Merge(collection, imported);
 
         // Assert
-        report.UpdatedRequests.Should().Be(1);
-        report.AddedRequests.Should().Be(0);
+        result.Report.UpdatedRequests.Should().Be(1);
+        result.Report.AddedRequests.Should().Be(0);
+        result.AddedRequests.Should().BeEmpty();
         collection.Requests.Should().HaveCount(1);
     }
 
@@ -593,7 +603,7 @@ public class CollectionMergerTests
         };
 
         // Act
-        var report = _merger.Merge(collection, imported);
+        var (report, _) = _merger.Merge(collection, imported);
 
         // Assert
         report.FieldsPreserved.Should().Be(1); // network.ip
@@ -800,7 +810,7 @@ public class CollectionMergerTests
         };
 
         // Act
-        var report = _merger.Merge(collection, imported);
+        var (report, _) = _merger.Merge(collection, imported);
 
         // Assert
         var req = collection.Requests.First();
@@ -843,11 +853,12 @@ public class CollectionMergerTests
         };
 
         // Act
-        var report = _merger.Merge(collection, imported);
+        var result = _merger.Merge(collection, imported);
 
         // Assert
-        report.AddedRequests.Should().Be(2);
-        report.UpdatedRequests.Should().Be(0);
+        result.Report.AddedRequests.Should().Be(2);
+        result.Report.UpdatedRequests.Should().Be(0);
+        result.AddedRequests.Should().HaveCount(2);
         collection.Requests.Should().HaveCount(2);
     }
 
@@ -905,12 +916,69 @@ public class CollectionMergerTests
         };
 
         // Act
-        var report = _merger.Merge(collection, imported);
+        var result = _merger.Merge(collection, imported);
 
         // Assert
-        report.UpdatedRequests.Should().Be(2);
-        report.AddedRequests.Should().Be(0);
+        result.Report.UpdatedRequests.Should().Be(2);
+        result.Report.AddedRequests.Should().Be(0);
+        result.AddedRequests.Should().BeEmpty();
         collection.Requests.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void Merge_ShouldReturnMergeResultWithReportAndAddedRequestsList()
+    {
+        // Arrange
+        var collection = new Collection
+        {
+            Name = "Test Collection",
+            WorkspaceId = Guid.NewGuid(),
+            Requests =
+            [
+                new RequestItem
+                {
+                    Name = "Existing Request",
+                    Method = "GET",
+                    Url = "/users",
+                    HeadersJson = "{}"
+                }
+            ]
+        };
+
+        var imported = new CanonicalCollectionImport
+        {
+            Name = "Imported Spec",
+            Requests =
+            [
+                new CanonicalRequest
+                {
+                    Name = "Existing Request",
+                    Method = "GET",
+                    Path = "/users",
+                    Url = "/users"
+                },
+                new CanonicalRequest
+                {
+                    Name = "New Request",
+                    Method = "POST",
+                    Path = "/orders",
+                    Url = "/orders"
+                }
+            ]
+        };
+
+        // Act
+        var result = _merger.Merge(collection, imported);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Report.Should().NotBeNull();
+        result.Report.UpdatedRequests.Should().Be(1);
+        result.Report.AddedRequests.Should().Be(1);
+        result.AddedRequests.Should().HaveCount(1);
+        result.AddedRequests[0].Name.Should().Be("New Request");
+        result.AddedRequests[0].Method.Should().Be("POST");
+        result.AddedRequests[0].Url.Should().Be("/orders");
     }
 
     private static string BuildNestedJsonObject(int depth, string leafKey, string leafValue)
