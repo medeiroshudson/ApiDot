@@ -320,21 +320,16 @@ export function ParamsTab({
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto p-4 space-y-6 text-neutral-200">
       {/* 1. Path Parameters Section */}
       <div className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Route className="w-4 h-4 text-blue-400" aria-hidden="true" />
-            <h3 className="text-xs font-semibold text-neutral-200 uppercase tracking-wider">
-              Parâmetros de Rota (Path Parameters)
-            </h3>
-            {pathParamNames.length > 0 && (
-              <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.2 rounded font-mono">
-                {pathParamNames.length}
-              </span>
-            )}
-          </div>
-          <span className="text-[11px] text-neutral-500">
-            Valores substituídos em segmentos <code className="text-neutral-400">:param</code> da URL
-          </span>
+        <div className="flex items-center gap-2">
+          <Route className="w-4 h-4 text-blue-400" aria-hidden="true" />
+          <h3 className="text-xs font-semibold text-neutral-200 uppercase tracking-wider">
+            Parâmetros de Rota
+          </h3>
+          {pathParamNames.length > 0 && (
+            <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.2 rounded font-mono">
+              {pathParamNames.length}
+            </span>
+          )}
         </div>
 
         {pathParamNames.length === 0 ? (
@@ -384,21 +379,16 @@ export function ParamsTab({
 
       {/* 2. Query Parameters Section */}
       <div className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <HelpCircle className="w-4 h-4 text-emerald-400" aria-hidden="true" />
-            <h3 className="text-xs font-semibold text-neutral-200 uppercase tracking-wider">
-              Parâmetros de Consulta (Query Parameters)
-            </h3>
-            {queryRows.length > 0 && (
-              <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.2 rounded font-mono">
-                {queryRows.length}
-              </span>
-            )}
-          </div>
-          <span className="text-[11px] text-neutral-500">
-            Sincronização bidirecional com a query string da URL
-          </span>
+        <div className="flex items-center gap-2">
+          <HelpCircle className="w-4 h-4 text-emerald-400" aria-hidden="true" />
+          <h3 className="text-xs font-semibold text-neutral-200 uppercase tracking-wider">
+            Parâmetros de Consulta
+          </h3>
+          {queryRows.length > 0 && (
+            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.2 rounded font-mono">
+              {queryRows.length}
+            </span>
+          )}
         </div>
 
         <div className="border border-neutral-800 rounded-lg overflow-hidden bg-neutral-900/30">
