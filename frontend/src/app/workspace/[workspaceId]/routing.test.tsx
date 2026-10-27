@@ -81,7 +81,7 @@ describe('Workspace Routing Pages', () => {
 
     vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
       const url = String(input);
-      if (url.includes('/api/workspaces/ws-test/tree')) {
+      if (url.includes('/tree')) {
         return Promise.resolve({
           ok: true,
           status: 200,
@@ -125,10 +125,11 @@ describe('Workspace Routing Pages', () => {
         </WorkspaceProvider>
       );
 
-      // On mount, activeRequestId should be cleared to null
+      // On mount, activeRequestId should be cleared to null and currentEditorData reset to null
       await waitFor(() => {
         expect(useRequestStore.getState().activeRequestId).toBeNull();
         expect(useRequestStore.getState().activeRequestDetails).toBeNull();
+        expect(useRequestStore.getState().currentEditorData).toBeNull();
       });
 
       expect(screen.getByRole('main')).toBeInTheDocument();
@@ -217,6 +218,23 @@ describe('Workspace Routing Pages', () => {
 
       // Also verify syncError notice was set
       expect(useLayoutStore.getState().syncError).toContain('req-non-existent');
+    });
+
+    it('encodes workspaceId in fallback redirect URL', async () => {
+      vi.mocked(useParams).mockReturnValue({
+        workspaceId: 'ws special&chars',
+        requestId: 'req-missing',
+      });
+
+      render(
+        <WorkspaceProvider workspaceId="ws special&chars">
+          <RequestPage />
+        </WorkspaceProvider>
+      );
+
+      await waitFor(() => {
+        expect(mockReplace).toHaveBeenCalledWith('/workspace/ws%20special%26chars');
+      });
     });
 
     it('does not redirect while tree is still loading', async () => {

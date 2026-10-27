@@ -48,7 +48,6 @@ export function WorkspaceEditorPane({
   const isSavingRequest = useRequestStore((s) => s.isSavingRequest);
   const isLoading = useRequestStore((s) => s.isLoading);
   const isAgentOnline = useRequestStore((s) => s.isAgentOnline);
-  const responsesByRequestId = useRequestStore((s) => s.responsesByRequestId);
   const requestHistory = useRequestStore((s) => s.requestHistory);
   const setCurrentEditorData = useRequestStore((s) => s.setCurrentEditorData);
   const setIsLoading = useRequestStore((s) => s.setIsLoading);
@@ -63,16 +62,14 @@ export function WorkspaceEditorPane({
     return requestId ? requestId : getScratchpadKey(workspaceId);
   }, [requestId, workspaceId]);
 
-  // Read response isolated to the current targetKey
-  const response = useMemo<ResponseData | null>(() => {
-    return responsesByRequestId[targetKey] ?? null;
-  }, [responsesByRequestId, targetKey]);
+  // Read response isolated to the current targetKey using fine-grained selector
+  const response = useRequestStore((s) => s.responsesByRequestId[targetKey] ?? null);
 
   useEffect(() => {
-    if (!responsesByRequestId[targetKey]) {
+    if (!useRequestStore.getState().responsesByRequestId[targetKey]) {
       loadResponseForRequest(targetKey).catch(() => {});
     }
-  }, [targetKey, responsesByRequestId, loadResponseForRequest]);
+  }, [targetKey, loadResponseForRequest]);
 
   useEffect(() => {
     const checkDesktop = () => {
@@ -131,9 +128,16 @@ export function WorkspaceEditorPane({
         const resolvedUrl = interpolateVariables(request.url, activeVariables, requestHistory);
 
         let parsedHeaders: Record<string, string> = {};
-        if (request.headers.trim()) {
+        if (request.headers && typeof request.headers === 'string' && request.headers.trim()) {
           try {
-            parsedHeaders = JSON.parse(request.headers);
+            const parsed = JSON.parse(request.headers);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+              Object.entries(parsed).forEach(([k, v]) => {
+                if (k && v !== undefined && v !== null) {
+                  parsedHeaders[k] = String(v);
+                }
+              });
+            }
           } catch {
             request.headers.split('\n').forEach((line) => {
               const idx = line.indexOf(':');
@@ -148,8 +152,48 @@ export function WorkspaceEditorPane({
 
         const interpolatedHeaders: Record<string, string> = {};
         Object.entries(parsedHeaders).forEach(([k, v]) => {
-          interpolatedHeaders[k] = interpolateVariables(v, activeVariables, requestHistory);
+          interpolatedHeaders[k] = interpolateVariables(String(v ?? ''), activeVariables, requestHistory);
         });
+
+        // Inject credentials from request.auth into headers if configured
+        if (request.auth) {
+          if (request.auth.type === 'bearer' && request.auth.token) {
+            const interpolatedToken = interpolateVariables(
+              request.auth.token,
+              activeVariables,
+              requestHistory
+            );
+            interpolatedHeaders['Authorization'] = `Bearer ${interpolatedToken}`;
+          } else if (request.auth.type === 'basic') {
+            const username = interpolateVariables(
+              request.auth.username || '',
+              activeVariables,
+              requestHistory
+            );
+            const password = interpolateVariables(
+              request.auth.password || '',
+              activeVariables,
+              requestHistory
+            );
+            const credentials =
+              typeof btoa !== 'undefined'
+                ? btoa(`${username}:${password}`)
+                : Buffer.from(`${username}:${password}`).toString('base64');
+            interpolatedHeaders['Authorization'] = `Basic ${credentials}`;
+          } else if (request.auth.type === 'apikey' && request.auth.key) {
+            const apiKey = interpolateVariables(
+              request.auth.key,
+              activeVariables,
+              requestHistory
+            );
+            const apiVal = interpolateVariables(
+              request.auth.value || '',
+              activeVariables,
+              requestHistory
+            );
+            interpolatedHeaders[apiKey] = apiVal;
+          }
+        }
 
         const interpolatedBody = request.body
           ? interpolateVariables(request.body, activeVariables, requestHistory)

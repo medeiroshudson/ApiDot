@@ -402,4 +402,187 @@ describe('WorkspaceEditorPane', () => {
       expect(stored?.body).toBe(rawJson);
     });
   });
+
+  it('injects Bearer auth into headers on send', async () => {
+    let capturedHeaders: Record<string, string> = {};
+    vi.spyOn(global, 'fetch').mockImplementation((input: any, init: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/ws-1/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockTree,
+        } as any);
+      }
+      if (url.includes('/api/requests/execute')) {
+        const parsed = JSON.parse(init.body);
+        capturedHeaders = parsed.headers;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => ({ statusCode: 200 }),
+        } as any);
+      }
+      return Promise.resolve({ ok: true } as any);
+    });
+
+    useRequestStore.getState().setCurrentEditorData({
+      method: 'GET',
+      url: 'https://api.example.com/secure',
+      target: 'Inherit',
+      headers: '{"Accept": "application/json"}',
+      body: '',
+      auth: { type: 'bearer', token: 'secret-token-123' },
+    });
+
+    await renderEditorPane('ws-1', null);
+
+    const sendButton = screen.getByRole('button', { name: /Enviar requisição/i });
+    await act(async () => {
+      fireEvent.click(sendButton);
+    });
+
+    await waitFor(() => {
+      expect(capturedHeaders['Authorization']).toBe('Bearer secret-token-123');
+      expect(capturedHeaders['Accept']).toBe('application/json');
+    });
+  });
+
+  it('injects Basic auth credentials into headers on send', async () => {
+    let capturedHeaders: Record<string, string> = {};
+    vi.spyOn(global, 'fetch').mockImplementation((input: any, init: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/ws-1/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockTree,
+        } as any);
+      }
+      if (url.includes('/api/requests/execute')) {
+        const parsed = JSON.parse(init.body);
+        capturedHeaders = parsed.headers;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => ({ statusCode: 200 }),
+        } as any);
+      }
+      return Promise.resolve({ ok: true } as any);
+    });
+
+    useRequestStore.getState().setCurrentEditorData({
+      method: 'GET',
+      url: 'https://api.example.com/basic',
+      target: 'Inherit',
+      headers: '',
+      body: '',
+      auth: { type: 'basic', username: 'admin', password: 'password123' },
+    });
+
+    await renderEditorPane('ws-1', null);
+
+    const sendButton = screen.getByRole('button', { name: /Enviar requisição/i });
+    await act(async () => {
+      fireEvent.click(sendButton);
+    });
+
+    const expectedB64 = btoa('admin:password123');
+    await waitFor(() => {
+      expect(capturedHeaders['Authorization']).toBe(`Basic ${expectedB64}`);
+    });
+  });
+
+  it('injects ApiKey into headers on send', async () => {
+    let capturedHeaders: Record<string, string> = {};
+    vi.spyOn(global, 'fetch').mockImplementation((input: any, init: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/ws-1/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockTree,
+        } as any);
+      }
+      if (url.includes('/api/requests/execute')) {
+        const parsed = JSON.parse(init.body);
+        capturedHeaders = parsed.headers;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => ({ statusCode: 200 }),
+        } as any);
+      }
+      return Promise.resolve({ ok: true } as any);
+    });
+
+    useRequestStore.getState().setCurrentEditorData({
+      method: 'GET',
+      url: 'https://api.example.com/apikey',
+      target: 'Inherit',
+      headers: '',
+      body: '',
+      auth: { type: 'apikey', key: 'X-API-KEY', value: 'key-val-456' },
+    });
+
+    await renderEditorPane('ws-1', null);
+
+    const sendButton = screen.getByRole('button', { name: /Enviar requisição/i });
+    await act(async () => {
+      fireEvent.click(sendButton);
+    });
+
+    await waitFor(() => {
+      expect(capturedHeaders['X-API-KEY']).toBe('key-val-456');
+    });
+  });
+
+  it('guards against non-object or non-string values in parsed headers', async () => {
+    let capturedHeaders: Record<string, string> = {};
+    vi.spyOn(global, 'fetch').mockImplementation((input: any, init: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/ws-1/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockTree,
+        } as any);
+      }
+      if (url.includes('/api/requests/execute')) {
+        const parsed = JSON.parse(init.body);
+        capturedHeaders = parsed.headers;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => ({ statusCode: 200 }),
+        } as any);
+      }
+      return Promise.resolve({ ok: true } as any);
+    });
+
+    useRequestStore.getState().setCurrentEditorData({
+      method: 'GET',
+      url: 'https://api.example.com/defensive',
+      target: 'Inherit',
+      headers: '{"x-num": 123, "x-bool": true}',
+      body: '',
+      auth: { type: 'none' },
+    });
+
+    await renderEditorPane('ws-1', null);
+
+    const sendButton = screen.getByRole('button', { name: /Enviar requisição/i });
+    await act(async () => {
+      fireEvent.click(sendButton);
+    });
+
+    await waitFor(() => {
+      expect(capturedHeaders['x-num']).toBe('123');
+      expect(capturedHeaders['x-bool']).toBe('true');
+    });
+  });
 });

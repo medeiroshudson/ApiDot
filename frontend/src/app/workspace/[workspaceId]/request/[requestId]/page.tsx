@@ -83,7 +83,7 @@ export default function RequestPage({ params: propsParams }: RequestPageProps): 
         if (!redirectedRef.current) {
           redirectedRef.current = true;
           setSyncError(`Requisição "${requestId}" não encontrada.`);
-          router.replace(`/workspace/${workspaceId}`);
+          router.replace(`/workspace/${encodeURIComponent(workspaceId)}`);
         }
       }
     }

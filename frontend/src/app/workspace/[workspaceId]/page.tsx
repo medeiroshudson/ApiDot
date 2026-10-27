@@ -22,16 +22,18 @@ export default function WorkspacePage({ params: propsParams }: WorkspacePageProp
   const workspaceId = Array.isArray(rawId) ? rawId[0] : (typeof rawId === 'string' ? rawId : '');
 
   const setActiveRequest = useRequestStore((s) => s.setActiveRequest);
+  const setCurrentEditorData = useRequestStore((s) => s.setCurrentEditorData);
   const { setActiveItem } = useWorkspaceContext();
 
   useEffect(() => {
     if (workspaceId) {
       if (useRequestStore.getState().activeRequestId !== null) {
         setActiveRequest(null, null, workspaceId);
+        setCurrentEditorData(null);
       }
       setActiveItem((current) => (current === null ? current : null));
     }
-  }, [workspaceId, setActiveRequest, setActiveItem]);
+  }, [workspaceId, setActiveRequest, setCurrentEditorData, setActiveItem]);
 
   return <WorkspaceEditorPane workspaceId={workspaceId} requestId={null} />;
 }
