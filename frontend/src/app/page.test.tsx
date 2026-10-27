@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Home from './page';
 import { resolveVariables, interpolateVariables } from '@/lib/variables';
 import { VariableItem } from '@/components/environment/VariableGrid';
@@ -1386,6 +1386,394 @@ describe('Home Page OpenAPI Import Modal & Global "+ Novo" Trigger Integration',
     fireEvent.click(importOption);
 
     expect(screen.getByRole('dialog', { name: /importar especificação openapi/i })).toBeInTheDocument();
+  });
+});
+
+describe('Home Page cURL Import & Export Integration', () => {
+  const originalClipboard = navigator.clipboard;
+  let writeTextMock: ReturnType<typeof vi.fn>;
+
+  const mockCurlTree: WorkspaceTreeDto = {
+    workspaceId: '00000000-0000-0000-0000-000000000001',
+    workspaceName: 'cURL Workspace',
+    collections: [
+      {
+        id: 'col-curl',
+        name: 'cURL Test Collection',
+        defaultTarget: 'Inherit',
+        openApiSpecUrl: null,
+        folders: [
+          {
+            id: 'fold-curl',
+            name: 'cURL Folder',
+            collectionId: 'col-curl',
+            parentFolderId: null,
+            defaultTarget: 'Inherit',
+            subFolders: [],
+            requests: [
+              {
+                id: 'req-folder-child',
+                name: 'Folder Request',
+                method: 'GET',
+                url: 'https://api.example.com/folder/item',
+                target: 'Inherit',
+                bodyType: 'None',
+                headersJson: '{"Accept": "application/json"}',
+                bodyContent: null,
+                collectionId: 'col-curl',
+                folderId: 'fold-curl',
+              },
+            ],
+          },
+        ],
+        requests: [
+          {
+            id: 'req-active-test',
+            name: 'Active Test Request',
+            method: 'GET',
+            url: 'https://api.example.com/items/ping',
+            target: 'Inherit',
+            bodyType: 'None',
+            headersJson: '{"Accept": "application/json"}',
+            bodyContent: null,
+            collectionId: 'col-curl',
+            folderId: null,
+          },
+        ],
+      },
+    ],
+  };
+
+  const mockCurlWorkspace = {
+    id: '00000000-0000-0000-0000-000000000001',
+    name: 'cURL Workspace',
+    createdAtUtc: '2026-10-26T00:00:00Z',
+  };
+
+  beforeEach(() => {
+    writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: writeTextMock,
+      },
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+    Object.assign(navigator, { clipboard: originalClipboard });
+  });
+
+  it('opens CurlImportModal when right-clicking a collection or folder and clicking "Importar cURL"', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/') && url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockCurlTree,
+        } as any);
+      }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [mockCurlWorkspace],
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(screen.getByText('cURL Test Collection')).toBeInTheDocument();
+      expect(screen.getByText('cURL Folder')).toBeInTheDocument();
+    });
+
+    // Right-click collection and select "Importar cURL"
+    fireEvent.contextMenu(screen.getByText('cURL Test Collection'));
+    const colImportOption = screen.getByText('Importar cURL');
+    expect(colImportOption).toBeInTheDocument();
+    fireEvent.click(colImportOption);
+
+    // CurlImportModal is open with destination showing collection name
+    const modal = screen.getByRole('dialog', { name: /importar requisição via curl/i });
+    expect(modal).toBeInTheDocument();
+    expect(within(modal).getByText('cURL Test Collection')).toBeInTheDocument();
+
+    // Close modal
+    const closeBtn = within(modal).getByRole('button', { name: /fechar/i });
+    fireEvent.click(closeBtn);
+    expect(screen.queryByRole('dialog', { name: /importar requisição via curl/i })).toBeNull();
+
+    // Right-click folder and select "Importar cURL"
+    fireEvent.contextMenu(screen.getByText('cURL Folder'));
+    const folderImportOption = screen.getByText('Importar cURL');
+    expect(folderImportOption).toBeInTheDocument();
+    fireEvent.click(folderImportOption);
+
+    // CurlImportModal is open with destination showing folder name
+    const folderModal = screen.getByRole('dialog', { name: /importar requisição via curl/i });
+    expect(folderModal).toBeInTheDocument();
+    expect(within(folderModal).getByText('cURL Folder')).toBeInTheDocument();
+  });
+
+  it('submits a cURL command, calls createRequest, reloads tree, sets imported request active, and closes modal', async () => {
+    let postCalled = false;
+    let postPayload: any = null;
+    let treeFetchCount = 0;
+
+    const importedRequest = {
+      id: 'req-imported-999',
+      name: 'Created Orders',
+      method: 'POST',
+      url: 'https://api.example.com/v1/orders',
+      target: 'Inherit',
+      bodyType: 'Json',
+      headersJson: '{"Content-Type": "application/json"}',
+      bodyContent: '{"qty": 5}',
+      collectionId: 'col-curl',
+      folderId: null,
+    };
+
+    vi.spyOn(global, 'fetch').mockImplementation((input: any, init?: any) => {
+      const url = String(input);
+      if (url.includes('/api/requests') && init?.method === 'POST') {
+        postCalled = true;
+        postPayload = JSON.parse(init.body);
+        return Promise.resolve({
+          ok: true,
+          status: 201,
+          json: async () => importedRequest,
+        } as any);
+      }
+      if (url.includes('/api/workspaces/') && url.includes('/tree')) {
+        treeFetchCount++;
+        const currentTree = treeFetchCount > 1
+          ? {
+              ...mockCurlTree,
+              collections: [
+                {
+                  ...mockCurlTree.collections[0],
+                  requests: [...mockCurlTree.collections[0].requests, importedRequest],
+                },
+              ],
+            }
+          : mockCurlTree;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => currentTree,
+        } as any);
+      }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [mockCurlWorkspace],
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(screen.getByText('cURL Test Collection')).toBeInTheDocument();
+    });
+
+    // Open import modal on collection
+    fireEvent.contextMenu(screen.getByText('cURL Test Collection'));
+    fireEvent.click(screen.getByText('Importar cURL'));
+
+    const modal = screen.getByRole('dialog', { name: /importar requisição via curl/i });
+    expect(modal).toBeInTheDocument();
+
+    // Paste cURL command
+    const textarea = within(modal).getByRole('textbox', { name: /comando curl/i });
+    fireEvent.change(textarea, {
+      target: {
+        value: `curl -X POST https://api.example.com/v1/orders \\\n  -H "Content-Type: application/json" \\\n  -d '{"qty": 5}'`,
+      },
+    });
+
+    // Preview card rendered
+    expect(await within(modal).findByTestId('curl-preview-card')).toBeInTheDocument();
+
+    // Custom request name
+    const nameInput = within(modal).getByRole('textbox', { name: /nome da requisição/i });
+    fireEvent.change(nameInput, { target: { value: 'Created Orders' } });
+
+    // Click Import
+    const submitBtn = within(modal).getByRole('button', { name: /importar requisição/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(postCalled).toBe(true);
+      expect(postPayload).toEqual(
+        expect.objectContaining({
+          workspaceId: '00000000-0000-0000-0000-000000000001',
+          name: 'Created Orders',
+          method: 'POST',
+          url: 'https://api.example.com/v1/orders',
+          collectionId: 'col-curl',
+          bodyType: 'Json',
+          bodyContent: '{"qty": 5}',
+        })
+      );
+    });
+
+    // Modal closed
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /importar requisição via curl/i })).toBeNull();
+    });
+
+    // Imported request is loaded into editor and active in UI
+    expect(screen.getByTestId('request-title')).toHaveTextContent('Created Orders');
+    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    expect(urlInput).toHaveValue('https://api.example.com/v1/orders');
+  });
+
+  it('right-clicking an active request item in tree to "Copiar cURL" uses active editor data with interpolated variables', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/') && url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockCurlTree,
+        } as any);
+      }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [mockCurlWorkspace],
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Active Test Request')).toBeInTheDocument();
+      expect(screen.getByText('Folder Request')).toBeInTheDocument();
+    });
+
+    // Click request to make it active in editor
+    fireEvent.click(screen.getByText('Active Test Request'));
+
+    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    expect(urlInput).toHaveValue('https://api.example.com/items/ping');
+
+    // Modify URL in editor with dynamic variable without saving (disagreeing edits)
+    fireEvent.change(urlInput, {
+      target: { value: 'https://api.example.com/items/ping-v2/{{$guid}}' },
+    });
+
+    // Right-click the active request item in the tree and select "Copiar cURL"
+    fireEvent.contextMenu(screen.getAllByText('Active Test Request')[0]);
+    const contextMenu1 = screen.getByRole('menu');
+    const copyCurlOption = within(contextMenu1).getByText('Copiar cURL');
+    expect(copyCurlOption).toBeInTheDocument();
+    fireEvent.click(copyCurlOption);
+
+    await waitFor(() => {
+      expect(writeTextMock).toHaveBeenCalledTimes(1);
+    });
+
+    const copiedCommand = writeTextMock.mock.calls[0][0];
+    expect(copiedCommand).toContain('https://api.example.com/items/ping-v2/');
+    // Confirms {{$guid}} was interpolated into a valid UUID
+    expect(copiedCommand).toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    // Confirms it did NOT use the unedited tree node URL
+    expect(copiedCommand).not.toBe(`curl -X GET 'https://api.example.com/items/ping'`);
+
+    // Now right-click an inactive request in the tree ("Folder Request")
+    writeTextMock.mockClear();
+    fireEvent.contextMenu(screen.getAllByText('Folder Request')[0]);
+    const contextMenu2 = screen.getByRole('menu');
+    fireEvent.click(within(contextMenu2).getByText('Copiar cURL'));
+
+    await waitFor(() => {
+      expect(writeTextMock).toHaveBeenCalledTimes(1);
+    });
+
+    const inactiveCopied = writeTextMock.mock.calls[0][0];
+    expect(inactiveCopied).toContain('https://api.example.com/folder/item');
+  });
+
+  it('passes executedCurl to ResponseViewer after handleSend and enables "Copiar cURL" button', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+      const url = String(input);
+      if (url.includes('/api/requests/execute')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: {
+            get: (h: string) => (h.toLowerCase() === 'content-type' ? 'application/json' : null),
+            forEach: () => {},
+          },
+          json: async () => ({
+            statusCode: 200,
+            statusText: 'OK',
+            headers: { 'content-type': 'application/json' },
+            body: btoa('{"status":"healthy"}'),
+          }),
+        } as any);
+      }
+      if (url.includes('/api/workspaces/') && url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockCurlTree,
+        } as any);
+      }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [mockCurlWorkspace],
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(screen.getByText('cURL Test Collection')).toBeInTheDocument();
+    });
+
+    // Set URL and click "Enviar"
+    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    fireEvent.change(urlInput, { target: { value: 'https://api.example.com/health/check' } });
+
+    const sendBtn = screen.getByRole('button', { name: /enviar requisição|enviar/i });
+    fireEvent.click(sendBtn);
+
+    // Wait for response to render
+    await waitFor(() => {
+      expect(screen.getByTestId('status-badge')).toHaveTextContent(/200/);
+    });
+
+    // In ResponseViewer, "Copiar cURL" button is present and enabled with executedCurl
+    const copyExecutedCurlBtn = screen.getByRole('button', { name: /copiar curl da requisição/i });
+    expect(copyExecutedCurlBtn).not.toBeDisabled();
+
+    // Click "Copiar cURL"
+    fireEvent.click(copyExecutedCurlBtn);
+
+    await waitFor(() => {
+      expect(writeTextMock).toHaveBeenCalledTimes(1);
+    });
+
+    const copiedCurl = writeTextMock.mock.calls[0][0];
+    expect(copiedCurl).toContain(`curl -X GET 'https://api.example.com/health/check'`);
   });
 });
 
