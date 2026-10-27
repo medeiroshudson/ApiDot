@@ -56,7 +56,6 @@ export function GlobalSettingsModal({
   const [commandCopied, setCommandCopied] = useState(false);
 
   const [instructionsDevice, setInstructionsDevice] = useState<AgentDeviceDto | null>(null);
-  const [instructionsCopied, setInstructionsCopied] = useState(false);
 
   const [actionInProgressId, setActionInProgressId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -150,6 +149,10 @@ export function GlobalSettingsModal({
       }
 
       if (e.key === 'Tab') {
+        if (oneTimeTokenData || instructionsDevice || isCreateDialogOpen) {
+          return;
+        }
+
         if (!modalContentRef.current) return;
         const focusableElements = Array.from(
           modalContentRef.current.querySelectorAll<HTMLElement>(
