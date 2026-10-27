@@ -689,7 +689,7 @@ describe('Home Page Collection Tree & Request Lifecycle Integration', () => {
     expect(screen.getByTestId('request-title')).toHaveTextContent('Login User');
 
     // Switch to Body tab and verify body editor is rendered
-    const bodyTab = screen.getByRole('tab', { name: /body/i });
+    const bodyTab = screen.getByRole('tab', { name: /corpo/i });
     fireEvent.click(bodyTab);
     expect(screen.getByTestId('body-code-editor')).toBeInTheDocument();
   });

@@ -15,6 +15,7 @@ import {
   DependencyRequest,
 } from './DependencyLinkerModal';
 import { CodeEditor } from '../common/CodeEditor';
+import { ParamsTab } from './ParamsTab';
 
 export { SaveRequestModal } from './SaveRequestModal';
 export type { SaveRequestModalProps, CollectionOption, FolderOption } from './SaveRequestModal';
@@ -37,10 +38,13 @@ export interface RequestData {
   headers: string;
   body: string;
   auth: AuthConfig;
+  pathParams?: Record<string, string>;
+  schemaDefinition?: string;
 }
 
 export interface RequestEditorProps {
   initialRequest?: Partial<RequestData> & { id?: string };
+  initialTab?: TabType;
   currentRequestId?: string;
   requestName?: string;
   onSaveExisting?: (request: RequestData) => Promise<void> | void;
@@ -54,13 +58,32 @@ export interface RequestEditorProps {
   availableVariables?: AutocompleteVariable[];
 }
 
-export const TABS = [
-  { id: 'headers', label: 'Headers' },
-  { id: 'body', label: 'Body' },
-  { id: 'auth', label: 'Auth' },
-] as const;
+export type TabType = 'specification' | 'params' | 'headers' | 'body' | 'auth';
 
-export type TabType = (typeof TABS)[number]['id'];
+export const TABS: { id: TabType; label: string }[] = [
+  { id: 'specification', label: 'Especificação' },
+  { id: 'params', label: 'Parâmetros' },
+  { id: 'headers', label: 'Cabeçalhos' },
+  { id: 'body', label: 'Corpo' },
+  { id: 'auth', label: 'Autenticação' },
+];
+
+export function resolvePathParams(
+  url: string,
+  pathParams?: Record<string, string>
+): string {
+  if (!url || !pathParams) return url;
+  return url.replace(/:([a-zA-Z0-9_]+)/g, (match, paramName) => {
+    if (
+      paramName in pathParams &&
+      pathParams[paramName] !== undefined &&
+      pathParams[paramName] !== ''
+    ) {
+      return pathParams[paramName];
+    }
+    return match;
+  });
+}
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
 
@@ -86,6 +109,7 @@ export function insertTokenAtCursor(
 
 export function RequestEditor({
   initialRequest,
+  initialTab,
   currentRequestId,
   requestName,
   onSaveExisting,
@@ -103,6 +127,9 @@ export function RequestEditor({
   const [target, setTarget] = useState<ExecutionTarget>(initialRequest?.target || 'Inherit');
   const [headers, setHeaders] = useState(initialRequest?.headers || '');
   const [body, setBody] = useState(initialRequest?.body || '');
+  const [pathParams, setPathParams] = useState<Record<string, string>>(
+    initialRequest?.pathParams || {}
+  );
   const [bodyFormat, setBodyFormat] = useState<BodyFormat>(() => {
     if (!initialRequest?.body) return 'none';
     if (initialRequest.body.trim().startsWith('{') || initialRequest.body.trim().startsWith('[')) return 'json';
@@ -111,7 +138,7 @@ export function RequestEditor({
   const [auth, setAuth] = useState<AuthConfig>(
     initialRequest?.auth || { type: 'none' }
   );
-  const [activeTab, setActiveTab] = useState<TabType>('headers');
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab ?? 'params');
   const [urlError, setUrlError] = useState<string | null>(null);
   const [isLinkerOpen, setIsLinkerOpen] = useState(false);
   const [activeArea, setActiveArea] = useState<'url' | 'headers' | 'body'>('headers');
@@ -137,6 +164,7 @@ export function RequestEditor({
     const initialBody = initialRequest?.body ?? '';
     const initialTarget = initialRequest?.target ?? 'Inherit';
     const initialAuth = initialRequest?.auth ?? { type: 'none' };
+    const initialPathParams = initialRequest?.pathParams ?? {};
 
     return (
       method !== initialMethod ||
@@ -144,9 +172,10 @@ export function RequestEditor({
       headers !== initialHeaders ||
       body !== initialBody ||
       target !== initialTarget ||
-      JSON.stringify(auth) !== JSON.stringify(initialAuth)
+      JSON.stringify(auth) !== JSON.stringify(initialAuth) ||
+      JSON.stringify(pathParams) !== JSON.stringify(initialPathParams)
     );
-  }, [method, url, headers, body, target, auth, initialRequest]);
+  }, [method, url, headers, body, target, auth, pathParams, initialRequest]);
 
   // Primary execution target based on priority rule:
   const defaultExecutionTarget: ExecutionTarget = useMemo(() => {
@@ -166,6 +195,7 @@ export function RequestEditor({
       headers,
       body: bodyFormat === 'none' ? '' : body,
       auth,
+      pathParams,
     };
     const effectiveId = currentRequestId ?? (initialRequest as { id?: string } | undefined)?.id;
     if (effectiveId) {
@@ -173,7 +203,7 @@ export function RequestEditor({
     } else {
       onSaveAs?.(requestData);
     }
-  }, [isLoading, isSaving, method, url, target, headers, body, bodyFormat, auth, currentRequestId, initialRequest, onSaveExisting, onSaveAs]);
+  }, [isLoading, isSaving, method, url, target, headers, body, bodyFormat, auth, pathParams, currentRequestId, initialRequest, onSaveExisting, onSaveAs]);
 
   // Global Ctrl+S / Cmd+S shortcut
   useEffect(() => {
@@ -225,6 +255,7 @@ export function RequestEditor({
         }
       }
       if (initialRequest.auth !== undefined) setAuth(initialRequest.auth);
+      if (initialRequest.pathParams !== undefined) setPathParams(initialRequest.pathParams);
     }
   }, [initialRequest]);
 
@@ -237,11 +268,17 @@ export function RequestEditor({
         headers,
         body: bodyFormat === 'none' ? '' : body,
         auth,
+        pathParams,
       });
       onChange?.(updated);
     },
-    [method, url, target, headers, body, bodyFormat, auth, onChange]
+    [method, url, target, headers, body, bodyFormat, auth, pathParams, onChange]
   );
+
+  const handlePathParamsChange = (newPathParams: Record<string, string>) => {
+    setPathParams(newPathParams);
+    updateRequest((prev) => ({ ...prev, pathParams: newPathParams }));
+  };
 
   const handleMethodChange = (newMethod: string) => {
     setMethod(newMethod);
@@ -319,13 +356,15 @@ export function RequestEditor({
     setIsSendMenuOpen(false);
 
     const effectiveTarget = sendTarget ?? defaultExecutionTarget;
+    const resolvedUrl = resolvePathParams(trimmedUrl, pathParams);
     const requestData: RequestData = {
       method,
-      url: trimmedUrl,
+      url: resolvedUrl,
       target: effectiveTarget,
       headers,
       body: bodyFormat === 'none' ? '' : body,
       auth,
+      pathParams,
     };
     onSend?.(requestData);
   };
@@ -605,6 +644,36 @@ export function RequestEditor({
 
       {/* Tab Panels - filling 100% available vertical height */}
       <div className="flex-1 p-3 sm:p-4 flex flex-col min-h-0 overflow-hidden">
+        {/* Specification Panel */}
+        <div
+          role="tabpanel"
+          id="panel-specification"
+          aria-labelledby="tab-specification"
+          hidden={activeTab !== 'specification'}
+          className={activeTab === 'specification' ? 'flex-1 h-full flex flex-col min-h-0' : 'hidden'}
+        >
+          <div data-testid="specification-panel" className="p-4 text-xs text-neutral-400">
+            Especificação OpenAPI da requisição
+          </div>
+        </div>
+
+        {/* Params Panel */}
+        <div
+          role="tabpanel"
+          id="panel-params"
+          aria-labelledby="tab-params"
+          hidden={activeTab !== 'params'}
+          className={activeTab === 'params' ? 'flex-1 h-full flex flex-col min-h-0' : 'hidden'}
+        >
+          <ParamsTab
+            url={url}
+            onUrlChange={handleUrlChange}
+            pathParams={pathParams}
+            onPathParamsChange={handlePathParamsChange}
+            disabled={isLoading}
+          />
+        </div>
+
         {/* Headers Panel */}
         <div
           role="tabpanel"

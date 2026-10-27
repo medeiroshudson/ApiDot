@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { RequestEditor, insertTokenAtCursor } from './RequestEditor';
+import { RequestEditor, insertTokenAtCursor, resolvePathParams } from './RequestEditor';
 
 describe('RequestEditor', () => {
   it('renders all key elements: method selector, URL input, and split send button', () => {
@@ -51,21 +51,29 @@ describe('RequestEditor', () => {
     );
   });
 
-  it('switches between Headers, Body, and Auth tabs', () => {
+  it('switches between Specification, Params, Headers, Body, and Auth tabs', () => {
     render(<RequestEditor />);
 
-    const headersTab = screen.getByRole('tab', { name: /headers/i });
-    const bodyTab = screen.getByRole('tab', { name: /body/i });
-    const authTab = screen.getByRole('tab', { name: /auth/i });
+    const specTab = screen.getByRole('tab', { name: /especificação/i });
+    const paramsTab = screen.getByRole('tab', { name: /parâmetros/i });
+    const headersTab = screen.getByRole('tab', { name: /cabeçalhos|headers/i });
+    const bodyTab = screen.getByRole('tab', { name: /corpo|body/i });
+    const authTab = screen.getByRole('tab', { name: /autenticação|auth/i });
 
+    expect(specTab).toBeDefined();
+    expect(paramsTab).toBeDefined();
     expect(headersTab).toBeDefined();
     expect(bodyTab).toBeDefined();
     expect(authTab).toBeDefined();
 
-    // Default tab is Headers
+    // Default tab is Parâmetros
+    expect(document.getElementById('panel-params')).not.toHaveAttribute('hidden');
+
+    // Switch to Cabeçalhos tab
+    fireEvent.click(headersTab);
     expect(screen.getByTestId('headers-code-editor')).toBeDefined();
 
-    // Switch to Body tab
+    // Switch to Corpo tab
     fireEvent.click(bodyTab);
     expect(screen.getByTestId('body-empty-placeholder')).toBeInTheDocument();
 
@@ -77,53 +85,69 @@ describe('RequestEditor', () => {
     fireEvent.click(screen.getByRole('radio', { name: /json/i }));
     expect(screen.getByTestId('body-code-editor')).toBeDefined();
 
-    // Switch to Auth tab
+    // Switch to Autenticação tab
     fireEvent.click(authTab);
     expect(screen.getByRole('combobox', { name: /tipo de autenticação/i })).toBeDefined();
+
+    // Switch to Especificação tab
+    fireEvent.click(specTab);
+    expect(screen.getByTestId('specification-panel')).toBeInTheDocument();
   });
 
   it('navigates tabs using ArrowRight and ArrowLeft with roving tabIndex', () => {
     render(<RequestEditor />);
 
-    const headersTab = screen.getByRole('tab', { name: /headers/i });
-    const bodyTab = screen.getByRole('tab', { name: /body/i });
-    const authTab = screen.getByRole('tab', { name: /auth/i });
+    const specTab = screen.getByRole('tab', { name: /especificação/i });
+    const paramsTab = screen.getByRole('tab', { name: /parâmetros/i });
+    const headersTab = screen.getByRole('tab', { name: /cabeçalhos|headers/i });
+    const bodyTab = screen.getByRole('tab', { name: /corpo|body/i });
+    const authTab = screen.getByRole('tab', { name: /autenticação|auth/i });
 
-    expect(headersTab).toHaveAttribute('tabindex', '0');
-    expect(bodyTab).toHaveAttribute('tabindex', '-1');
-    expect(authTab).toHaveAttribute('tabindex', '-1');
+    // Params is active by default (index 1)
+    expect(paramsTab).toHaveAttribute('tabindex', '0');
+    expect(specTab).toHaveAttribute('tabindex', '-1');
+    expect(headersTab).toHaveAttribute('tabindex', '-1');
+
+    fireEvent.keyDown(paramsTab, { key: 'ArrowRight' });
+    expect(headersTab).toHaveAttribute('aria-selected', 'true');
 
     fireEvent.keyDown(headersTab, { key: 'ArrowRight' });
     expect(bodyTab).toHaveAttribute('aria-selected', 'true');
 
     fireEvent.keyDown(bodyTab, { key: 'ArrowRight' });
     expect(authTab).toHaveAttribute('aria-selected', 'true');
+
+    fireEvent.keyDown(authTab, { key: 'ArrowLeft' });
+    expect(bodyTab).toHaveAttribute('aria-selected', 'true');
   });
 
   it('renders all tab panels in DOM with hidden attribute matching active tab', () => {
     render(<RequestEditor />);
 
+    const specPanel = document.getElementById('panel-specification');
+    const paramsPanel = document.getElementById('panel-params');
     const headersPanel = document.getElementById('panel-headers');
     const bodyPanel = document.getElementById('panel-body');
     const authPanel = document.getElementById('panel-auth');
 
-    expect(headersPanel).not.toHaveAttribute('hidden');
+    expect(specPanel).toHaveAttribute('hidden');
+    expect(paramsPanel).not.toHaveAttribute('hidden');
+    expect(headersPanel).toHaveAttribute('hidden');
     expect(bodyPanel).toHaveAttribute('hidden');
     expect(authPanel).toHaveAttribute('hidden');
 
-    const bodyTab = screen.getByRole('tab', { name: /body/i });
-    fireEvent.click(bodyTab);
+    const headersTab = screen.getByRole('tab', { name: /cabeçalhos|headers/i });
+    fireEvent.click(headersTab);
 
-    expect(headersPanel).toHaveAttribute('hidden');
-    expect(bodyPanel).not.toHaveAttribute('hidden');
-    expect(authPanel).toHaveAttribute('hidden');
+    expect(paramsPanel).toHaveAttribute('hidden');
+    expect(headersPanel).not.toHaveAttribute('hidden');
   });
 
   it('supports basic auth and api key configuration', () => {
     const onSend = vi.fn();
     render(<RequestEditor onSend={onSend} initialRequest={{ url: 'https://api.example.com' }} />);
 
-    const authTab = screen.getByRole('tab', { name: /auth/i });
+    const authTab = screen.getByRole('tab', { name: /autenticação|auth/i });
     fireEvent.click(authTab);
 
     const authTypeSelect = screen.getByRole('combobox', { name: /tipo de autenticação/i });
@@ -220,7 +244,7 @@ describe('RequestEditor', () => {
   it('formats unformatted JSON in the body when clicking the format button', () => {
     render(<RequestEditor initialRequest={{ body: '{"name":"api","age":30}' }} />);
 
-    const bodyTab = screen.getByRole('tab', { name: /body/i });
+    const bodyTab = screen.getByRole('tab', { name: /corpo|body/i });
     fireEvent.click(bodyTab);
 
     const formatBtn = screen.getByRole('button', { name: /formatar json/i });
@@ -270,5 +294,58 @@ describe('RequestEditor', () => {
 
     insertTokenAtCursor(mockElement, 'hello world', ' brave', onChange);
     expect(onChange).toHaveBeenCalledWith('hello brave world');
+  });
+
+  it('resolves :param path parameters when sending the request', () => {
+    const onSend = vi.fn();
+    render(
+      <RequestEditor
+        onSend={onSend}
+        initialRequest={{
+          method: 'GET',
+          url: 'https://api.com/pets/:petId',
+        }}
+      />
+    );
+
+    // Path param input should be rendered by ParamsTab
+    const pathParamInput = screen.getByPlaceholderText('Valor para :petId');
+    fireEvent.change(pathParamInput, { target: { value: '42' } });
+
+    const sendBtn = screen.getByRole('button', { name: /enviar requisição/i });
+    fireEvent.click(sendBtn);
+
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'https://api.com/pets/42',
+        pathParams: expect.objectContaining({ petId: '42' }),
+      })
+    );
+  });
+
+  it('synchronizes URL when ParamsTab emits query changes', () => {
+    render(
+      <RequestEditor
+        initialRequest={{
+          method: 'GET',
+          url: 'https://api.com/pets',
+        }}
+      />
+    );
+
+    const addQueryKey = screen.getByPlaceholderText(/Novo parâmetro/i);
+    fireEvent.change(addQueryKey, { target: { value: 'limit' } });
+    fireEvent.blur(addQueryKey);
+
+    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    expect(urlInput).toHaveValue('https://api.com/pets?limit=');
+  });
+
+  it('resolvePathParams helper resolves multiple parameters and preserves unmatched tokens', () => {
+    const resolved = resolvePathParams(
+      'https://api.com/v1/:storeId/items/:itemId/details/:missing',
+      { storeId: '10', itemId: '20' }
+    );
+    expect(resolved).toBe('https://api.com/v1/10/items/20/details/:missing');
   });
 });
