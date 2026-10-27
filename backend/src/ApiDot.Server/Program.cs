@@ -67,6 +67,7 @@ app.MapGet("/health", () => Results.Ok(new
 }));
 
 app.MapAgentDeviceEndpoints();
+app.MapInstallScriptEndpoints();
 
 app.MapMethods("/ws/agent", new[] { "GET" }, async (
     HttpContext context,
