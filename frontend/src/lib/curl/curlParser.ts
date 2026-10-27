@@ -124,11 +124,15 @@ export function tokenizeShellArgs(command: string): string[] {
 }
 
 function encodeBase64(str: string): string {
-  if (typeof btoa === 'function') {
-    return btoa(str);
-  }
-  if (typeof Buffer !== 'undefined') {
-    return Buffer.from(str, 'utf-8').toString('base64');
+  try {
+    if (typeof Buffer !== 'undefined') {
+      return Buffer.from(str, 'utf-8').toString('base64');
+    }
+    if (typeof btoa === 'function') {
+      return btoa(unescape(encodeURIComponent(str)));
+    }
+  } catch {
+    return '';
   }
   return '';
 }
@@ -136,7 +140,7 @@ function encodeBase64(str: string): string {
 function decodeBase64(b64: string): string {
   try {
     if (typeof atob === 'function') {
-      return atob(b64);
+      return decodeURIComponent(escape(atob(b64)));
     }
     if (typeof Buffer !== 'undefined') {
       return Buffer.from(b64, 'base64').toString('utf-8');
@@ -170,7 +174,11 @@ export function suggestRequestName(url: string, _method?: string): string {
       const prev = segments[segments.length - 2];
       return `${formatSuggestion(prev)} ${last}`;
     }
-    return formatSuggestion(decodeURIComponent(last));
+    try {
+      return formatSuggestion(decodeURIComponent(last));
+    } catch {
+      return formatSuggestion(last);
+    }
   }
 
   const host = slashIdx !== -1 ? withoutProto.slice(0, slashIdx) : withoutProto;
@@ -187,12 +195,10 @@ const BOOLEAN_FLAGS = new Set([
   '-k',
   '--insecure',
   '-s',
-  '-s',
   '--silent',
   '--show-error',
   '-v',
   '--verbose',
-  '-l',
   '-l',
   '--location',
   '--location-trusted',
@@ -239,12 +245,13 @@ const ARG_FLAGS_TO_SKIP = new Set([
 ]);
 
 export function parseCurl(curlCommand: string): CurlParseResult {
-  if (!curlCommand || !curlCommand.trim()) {
-    return {
-      success: false,
-      error: 'Comando cURL vazio.',
-    };
-  }
+  try {
+    if (!curlCommand || !curlCommand.trim()) {
+      return {
+        success: false,
+        error: 'Comando cURL vazio.',
+      };
+    }
 
   const tokens = tokenizeShellArgs(curlCommand);
   if (tokens.length === 0) {
@@ -509,4 +516,10 @@ export function parseCurl(curlCommand: string): CurlParseResult {
     success: true,
     request,
   };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: `Erro ao processar cURL: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
 }

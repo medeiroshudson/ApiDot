@@ -261,5 +261,19 @@ describe('curlParser', () => {
       expect(res.success).toBe(false);
       expect(res.error).toBeDefined();
     });
+
+    it('safely handles malformed percent encoding without throwing', () => {
+      const res = parseCurl("curl 'https://api.example.com/search?discount=10%'");
+      expect(res.success).toBe(true);
+      expect(res.request?.name).toBeDefined();
+    });
+
+    it('safely handles UTF-8 basic auth credentials without throwing', () => {
+      const res = parseCurl('curl -u "usuário:senha€" https://api.example.com');
+      expect(res.success).toBe(true);
+      expect(res.request?.auth.type).toBe('basic');
+      expect(res.request?.auth.username).toBe('usuário');
+      expect(res.request?.auth.password).toBe('senha€');
+    });
   });
 });
