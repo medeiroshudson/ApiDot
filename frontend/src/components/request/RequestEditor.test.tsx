@@ -348,4 +348,84 @@ describe('RequestEditor', () => {
     );
     expect(resolved).toBe('https://api.com/v1/10/items/20/details/:missing');
   });
+
+  it('switches to body tab and sets body format to json when generating body example from SpecificationTab', () => {
+    const initialSchema = JSON.stringify({
+      summary: 'Buscar Pet',
+      body: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', example: 'Rex' },
+        },
+      },
+    });
+
+    render(
+      <RequestEditor
+        initialRequest={{
+          method: 'POST',
+          url: 'https://api.com/pets',
+          schemaDefinition: initialSchema,
+        }}
+      />
+    );
+
+    // Switch to Especificação tab
+    const specTab = screen.getByRole('tab', { name: /especificação/i });
+    fireEvent.click(specTab);
+
+    expect(screen.getByText('Buscar Pet')).toBeInTheDocument();
+    expect(screen.getByText('name')).toBeInTheDocument();
+
+    // Click "Gerar Exemplo no Corpo"
+    const generateBtn = screen.getByRole('button', { name: /Gerar Exemplo no Corpo/i });
+    fireEvent.click(generateBtn);
+
+    // Should switch to Corpo tab and have JSON body
+    expect(document.getElementById('panel-body')).not.toHaveAttribute('hidden');
+    expect(screen.getByTestId('body-code-editor')).toBeInTheDocument();
+    expect(screen.getByTestId('dirty-indicator')).toBeInTheDocument();
+  });
+
+  it('preserves and passes schemaDefinition during save and send', () => {
+    const onSaveExisting = vi.fn();
+    const onSend = vi.fn();
+    const testSchema = JSON.stringify({
+      summary: 'Operação Teste',
+      body: { type: 'object', properties: {} },
+    });
+
+    render(
+      <RequestEditor
+        currentRequestId="req-999"
+        onSaveExisting={onSaveExisting}
+        onSend={onSend}
+        initialRequest={{
+          method: 'GET',
+          url: 'https://api.com/items',
+          schemaDefinition: testSchema,
+        }}
+      />
+    );
+
+    // Save request
+    const saveBtn = screen.getByRole('button', { name: /salvar requisição/i });
+    fireEvent.click(saveBtn);
+
+    expect(onSaveExisting).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schemaDefinition: testSchema,
+      })
+    );
+
+    // Send request
+    const sendBtn = screen.getByRole('button', { name: /enviar requisição/i });
+    fireEvent.click(sendBtn);
+
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schemaDefinition: testSchema,
+      })
+    );
+  });
 });

@@ -235,6 +235,7 @@ export default function Home() {
     auth: RequestData['auth'];
     collectionId?: string | null;
     folderId?: string | null;
+    schemaDefinition?: string | null;
   } | null>(null);
   const [currentEditorData, setCurrentEditorData] = useState<RequestData | null>(null);
   const [isSavingRequest, setIsSavingRequest] = useState(false);
@@ -430,6 +431,7 @@ export default function Home() {
             auth: { type: 'none' },
             collectionId: req.collectionId,
             folderId: req.folderId,
+            schemaDefinition: req.schemaDefinition,
           });
         }
       } else if (item.type === 'collection') {
@@ -463,6 +465,7 @@ export default function Home() {
         bodyContent,
         collectionId: activeRequestDetails?.collectionId || null,
         folderId: activeRequestDetails?.folderId || null,
+        schemaDefinition: reqData.schemaDefinition || null,
       });
 
       setActiveRequestDetails({
@@ -476,6 +479,7 @@ export default function Home() {
         auth: reqData.auth,
         collectionId: updated.collectionId,
         folderId: updated.folderId,
+        schemaDefinition: updated.schemaDefinition,
       });
     } finally {
       setIsSavingRequest(false);
@@ -521,6 +525,7 @@ export default function Home() {
       headersJson: dataToSave.headers || '{}',
       bodyType,
       bodyContent,
+      schemaDefinition: dataToSave.schemaDefinition || null,
     });
 
     setActiveItem({
@@ -540,6 +545,7 @@ export default function Home() {
       auth: dataToSave.auth || { type: 'none' },
       collectionId: created.collectionId,
       folderId: created.folderId,
+      schemaDefinition: created.schemaDefinition,
     });
     setIsSaveModalOpen(false);
     setPendingSaveData(null);
@@ -670,6 +676,7 @@ export default function Home() {
         headers: activeRequestDetails.headers,
         body: activeRequestDetails.body,
         auth: activeRequestDetails.auth,
+        schemaDefinition: activeRequestDetails.schemaDefinition || undefined,
       };
     }
     return CLEAN_SCRATCHPAD;

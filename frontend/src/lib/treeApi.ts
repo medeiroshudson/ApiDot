@@ -12,6 +12,7 @@ export interface RequestItemNodeDto {
   bodyContent?: string | null;
   collectionId?: string | null;
   folderId?: string | null;
+  schemaDefinition?: string | null;
 }
 
 export interface FolderNodeDto {
@@ -101,6 +102,7 @@ export interface CreateRequestItemRequest {
   headersJson?: string;
   bodyType?: HttpBodyType;
   bodyContent?: string | null;
+  schemaDefinition?: string | null;
 }
 
 export interface UpdateRequestItemRequest {
@@ -113,6 +115,7 @@ export interface UpdateRequestItemRequest {
   bodyContent?: string | null;
   collectionId?: string | null;
   folderId?: string | null;
+  schemaDefinition?: string | null;
 }
 
 async function handleResponse<T>(res: Response): Promise<T> {

@@ -16,6 +16,7 @@ import {
 } from './DependencyLinkerModal';
 import { CodeEditor } from '../common/CodeEditor';
 import { ParamsTab } from './ParamsTab';
+import { SpecificationTab } from './SpecificationTab';
 
 export { SaveRequestModal } from './SaveRequestModal';
 export type { SaveRequestModalProps, CollectionOption, FolderOption } from './SaveRequestModal';
@@ -130,6 +131,9 @@ export function RequestEditor({
   const [pathParams, setPathParams] = useState<Record<string, string>>(
     initialRequest?.pathParams || {}
   );
+  const [schemaDefinition, setSchemaDefinition] = useState<string>(
+    initialRequest?.schemaDefinition || ''
+  );
   const [bodyFormat, setBodyFormat] = useState<BodyFormat>(() => {
     if (!initialRequest?.body) return 'none';
     if (initialRequest.body.trim().startsWith('{') || initialRequest.body.trim().startsWith('[')) return 'json';
@@ -165,6 +169,7 @@ export function RequestEditor({
     const initialTarget = initialRequest?.target ?? 'Inherit';
     const initialAuth = initialRequest?.auth ?? { type: 'none' };
     const initialPathParams = initialRequest?.pathParams ?? {};
+    const initialSchemaDefinition = initialRequest?.schemaDefinition ?? '';
 
     return (
       method !== initialMethod ||
@@ -172,10 +177,11 @@ export function RequestEditor({
       headers !== initialHeaders ||
       body !== initialBody ||
       target !== initialTarget ||
+      schemaDefinition !== initialSchemaDefinition ||
       JSON.stringify(auth) !== JSON.stringify(initialAuth) ||
       JSON.stringify(pathParams) !== JSON.stringify(initialPathParams)
     );
-  }, [method, url, headers, body, target, auth, pathParams, initialRequest]);
+  }, [method, url, headers, body, target, auth, pathParams, schemaDefinition, initialRequest]);
 
   // Primary execution target based on priority rule:
   const defaultExecutionTarget: ExecutionTarget = useMemo(() => {
@@ -196,6 +202,7 @@ export function RequestEditor({
       body: bodyFormat === 'none' ? '' : body,
       auth,
       pathParams,
+      schemaDefinition,
     };
     const effectiveId = currentRequestId ?? (initialRequest as { id?: string } | undefined)?.id;
     if (effectiveId) {
@@ -203,7 +210,7 @@ export function RequestEditor({
     } else {
       onSaveAs?.(requestData);
     }
-  }, [isLoading, isSaving, method, url, target, headers, body, bodyFormat, auth, pathParams, currentRequestId, initialRequest, onSaveExisting, onSaveAs]);
+  }, [isLoading, isSaving, method, url, target, headers, body, bodyFormat, auth, pathParams, schemaDefinition, currentRequestId, initialRequest, onSaveExisting, onSaveAs]);
 
   // Global Ctrl+S / Cmd+S shortcut
   useEffect(() => {
@@ -256,6 +263,7 @@ export function RequestEditor({
       }
       if (initialRequest.auth !== undefined) setAuth(initialRequest.auth);
       if (initialRequest.pathParams !== undefined) setPathParams(initialRequest.pathParams);
+      if (initialRequest.schemaDefinition !== undefined) setSchemaDefinition(initialRequest.schemaDefinition);
     }
   }, [initialRequest]);
 
@@ -269,16 +277,39 @@ export function RequestEditor({
         body: bodyFormat === 'none' ? '' : body,
         auth,
         pathParams,
+        schemaDefinition,
       });
       onChange?.(updated);
     },
-    [method, url, target, headers, body, bodyFormat, auth, pathParams, onChange]
+    [method, url, target, headers, body, bodyFormat, auth, pathParams, schemaDefinition, onChange]
   );
 
   const handlePathParamsChange = (newPathParams: Record<string, string>) => {
     setPathParams(newPathParams);
     updateRequest((prev) => ({ ...prev, pathParams: newPathParams }));
   };
+
+  const handleSchemaDefinitionChange = useCallback(
+    (newSchemaJson: string) => {
+      setSchemaDefinition(newSchemaJson);
+      updateRequest((prev) => ({ ...prev, schemaDefinition: newSchemaJson }));
+    },
+    [updateRequest]
+  );
+
+  const handleGenerateBodyExample = useCallback(
+    (exampleJson: string) => {
+      setBody(exampleJson);
+      setBodyFormat('json');
+      setActiveTab('body');
+      setActiveArea('body');
+      updateRequest((prev) => ({
+        ...prev,
+        body: exampleJson,
+      }));
+    },
+    [updateRequest]
+  );
 
   const handleMethodChange = (newMethod: string) => {
     setMethod(newMethod);
@@ -365,6 +396,7 @@ export function RequestEditor({
       body: bodyFormat === 'none' ? '' : body,
       auth,
       pathParams,
+      schemaDefinition,
     };
     onSend?.(requestData);
   };
@@ -652,8 +684,14 @@ export function RequestEditor({
           hidden={activeTab !== 'specification'}
           className={activeTab === 'specification' ? 'flex-1 h-full flex flex-col min-h-0' : 'hidden'}
         >
-          <div data-testid="specification-panel" className="p-4 text-xs text-neutral-400">
-            Especificação OpenAPI da requisição
+          <div data-testid="specification-panel" className="flex-1 h-full flex flex-col min-h-0">
+            <SpecificationTab
+              schemaDefinition={schemaDefinition}
+              onChange={handleSchemaDefinitionChange}
+              onUpdateSchema={handleSchemaDefinitionChange}
+              onGenerateBodyExample={handleGenerateBodyExample}
+              disabled={isLoading}
+            />
           </div>
         </div>
 
