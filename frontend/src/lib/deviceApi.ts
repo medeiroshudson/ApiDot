@@ -36,19 +36,20 @@ async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let message = `Request failed with status ${res.status}`;
     try {
-      const data = await res.json();
-      if (data && typeof data === 'object') {
-        message = data.detail || data.title || data.message || message;
+      if (typeof res.json === 'function') {
+        const data = await res.json().catch(() => null);
+        if (data && typeof data === 'object') {
+          message = data.detail || data.title || data.message || message;
+        }
       }
-    } catch {
-      try {
-        const text = await res.text();
+      if (message === `Request failed with status ${res.status}` && typeof res.text === 'function') {
+        const text = await res.text().catch(() => null);
         if (text) {
           message = text;
         }
-      } catch {
-        // fallback
       }
+    } catch {
+      // fallback
     }
     throw new Error(message);
   }

@@ -13,6 +13,7 @@ import { generateCurlCommand } from '@/lib/curl/curlGenerator';
 import { useLayoutStore } from '@/stores/useLayoutStore';
 import { useRequestStore, CLEAN_SCRATCHPAD, getScratchpadKey } from '@/stores/useRequestStore';
 import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
+import { useDeviceStore } from '@/stores/useDeviceStore';
 import { useWorkspaceContext, findRequestInTree } from '@/context/WorkspaceContext';
 
 export interface WorkspaceEditorPaneProps {
@@ -212,9 +213,15 @@ export function WorkspaceEditorPane({
         });
         setExecutedCurl(executedCurlCmd);
 
+        const activeDeviceId = useDeviceStore.getState().activeDeviceId;
+        const executionHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (activeDeviceId && activeDeviceId.trim()) {
+          executionHeaders['X-Device-Id'] = activeDeviceId.trim();
+        }
+
         const res = await fetch('/api/requests/execute', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: executionHeaders,
           body: JSON.stringify({
             workspaceId: workspaceId || undefined,
             method: request.method,

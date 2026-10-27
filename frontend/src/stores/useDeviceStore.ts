@@ -55,7 +55,7 @@ export interface DeviceState {
 
   setDevices: (devices: AgentDeviceDto[]) => void;
   setActiveDeviceId: (id: string | null) => void;
-  fetchDevices: () => Promise<AgentDeviceDto[]>;
+  fetchDevices: (options?: { silent?: boolean }) => Promise<AgentDeviceDto[]>;
   createDevice: (name: string) => Promise<CreateAgentDeviceResponse>;
   revokeDevice: (id: string) => Promise<AgentDeviceDto>;
   regenerateToken: (id: string) => Promise<RegenerateDeviceTokenResponse>;
@@ -85,26 +85,20 @@ export const useDeviceStore = create<DeviceState>()((set, get) => ({
     set({ activeDeviceId: cleanId });
   },
 
-  fetchDevices: async (): Promise<AgentDeviceDto[]> => {
-    set({ isLoading: true, error: null });
+  fetchDevices: async (options?: { silent?: boolean }): Promise<AgentDeviceDto[]> => {
+    if (!options?.silent) {
+      set({ isLoading: true, error: null });
+    }
     try {
       const list = await fetchDevicesApi();
       const validList = Array.isArray(list) ? list : [];
 
-      let activeId = get().activeDeviceId;
-      if (!activeId) {
-        const stored = getStoredDeviceId();
-        if (stored) {
-          activeId = stored;
-        }
-      }
-
-      set({
+      set((state) => ({
         devices: validList,
-        activeDeviceId: activeId,
+        activeDeviceId: state.activeDeviceId ?? getStoredDeviceId(),
         isLoading: false,
         error: null,
-      });
+      }));
       return validList;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Falha ao buscar dispositivos';
@@ -168,7 +162,7 @@ export const useDeviceStore = create<DeviceState>()((set, get) => ({
     void get().fetchDevices();
 
     pollingIntervalId = setInterval(() => {
-      void get().fetchDevices();
+      void get().fetchDevices({ silent: true });
     }, intervalMs);
   },
 
