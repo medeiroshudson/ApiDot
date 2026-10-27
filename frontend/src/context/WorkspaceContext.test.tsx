@@ -449,5 +449,32 @@ describe('WorkspaceContext', () => {
       expect(findRequestInTree(mockTreeData, 'non-existent')).toBeNull();
       expect(findRequestInTree(null, 'req-root')).toBeNull();
     });
+
+    it('handles defensive fallback with undefined collections, folders, and requests', () => {
+      const sparseTree: any = {
+        workspaceId: 'ws-sparse',
+        workspaceName: 'Sparse Workspace',
+        collections: [
+          {
+            id: 'col-sparse',
+            name: 'Sparse Col',
+            folders: [
+              {
+                id: 'fold-sparse',
+                name: 'Sparse Folder',
+              },
+            ],
+          },
+        ],
+      };
+      expect(findRequestInTree(sparseTree, 'missing-req')).toBeNull();
+
+      const nullCollectionsTree: any = {
+        workspaceId: 'ws-null-cols',
+        workspaceName: 'Null Cols',
+        collections: null,
+      };
+      expect(findRequestInTree(nullCollectionsTree, 'req-1')).toBeNull();
+    });
   });
 });

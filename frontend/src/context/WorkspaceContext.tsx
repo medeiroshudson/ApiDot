@@ -22,21 +22,24 @@ export function findRequestInTree(
   requestId: string
 ): RequestItemNodeDto | null {
   if (!tree) return null;
-  for (const c of tree.collections) {
-    for (const req of c.requests) {
+  const collections = tree.collections ?? [];
+  for (const c of collections) {
+    const requests = c.requests ?? [];
+    for (const req of requests) {
       if (req.id === requestId) return req;
     }
     const searchFolders = (folders: FolderNodeDto[]): RequestItemNodeDto | null => {
       for (const f of folders) {
-        for (const req of f.requests) {
+        const fRequests = f.requests ?? [];
+        for (const req of fRequests) {
           if (req.id === requestId) return req;
         }
-        const sub = searchFolders(f.subFolders);
+        const sub = searchFolders(f.subFolders ?? []);
         if (sub) return sub;
       }
       return null;
     };
-    const found = searchFolders(c.folders);
+    const found = searchFolders(c.folders ?? []);
     if (found) return found;
   }
   return null;
@@ -282,11 +285,11 @@ export function WorkspaceProvider({
 
   const deleteRequest = useCallback(
     async (id: string) => {
+      await treeDeleteRequest(id);
       if (activeRequestId === id) {
         resetScratchpad(workspaceId);
         router.push(`/workspace/${workspaceId}`);
       }
-      await treeDeleteRequest(id);
     },
     [activeRequestId, resetScratchpad, workspaceId, router, treeDeleteRequest]
   );

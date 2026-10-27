@@ -257,4 +257,17 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('Ambientes e Variáveis')).toBeInTheDocument();
   });
+
+  it('calls fetchWorkspaces with current workspaceId on mount', async () => {
+    const fetchSpy = vi.spyOn(useWorkspaceStore.getState(), 'fetchWorkspaces');
+    render(
+      <WorkspaceShell workspaceId="ws-test">
+        <div>Child Area</div>
+      </WorkspaceShell>
+    );
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith('ws-test');
+    });
+  });
 });

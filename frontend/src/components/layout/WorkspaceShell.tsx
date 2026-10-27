@@ -143,8 +143,8 @@ function WorkspaceShellContent({
 
   useEffect(() => {
     setMounted(true);
-    fetchWorkspaces();
-  }, [fetchWorkspaces]);
+    fetchWorkspaces(workspaceId);
+  }, [fetchWorkspaces, workspaceId]);
 
   const handleSelectWorkspace = useCallback(
     (id: string) => {
@@ -182,7 +182,7 @@ function WorkspaceShellContent({
   ) => {
     setSyncingCollectionId(item.id);
     try {
-      const res = await fetch(`/api/collections/${item.id}/sync`, {
+      const res = await fetch(`/api/collections/${encodeURIComponent(item.id)}/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -249,7 +249,7 @@ function WorkspaceShellContent({
     }
 
     if (data.specUrl !== undefined || data.specContent !== undefined) {
-      const res = await fetch(`/api/collections/${editingCollection.id}/openapi`, {
+      const res = await fetch(`/api/collections/${encodeURIComponent(editingCollection.id)}/openapi`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
