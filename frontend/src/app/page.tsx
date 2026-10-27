@@ -1,51 +1,109 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 
 export default function Home() {
   const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
+
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const fetchWorkspaces = useWorkspaceStore((s) => s.fetchWorkspaces);
   const createWorkspace = useWorkspaceStore((s) => s.createWorkspace);
 
+  const redirectedRef = useRef(false);
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  const executeRedirect = useCallback((targetId: string) => {
+    if (redirectedRef.current) return;
+    redirectedRef.current = true;
+    routerRef.current.replace(`/workspace/${encodeURIComponent(targetId)}`);
+  }, []);
+
+  const resolveAndRedirect = useCallback(async () => {
+    try {
+      setHasError(false);
+      setErrorMessage(null);
+
+      if (activeWorkspaceId) {
+        executeRedirect(activeWorkspaceId);
+        return;
+      }
+
+      const list = await fetchWorkspaces();
+      const storeError = useWorkspaceStore.getState().error;
+      if (storeError) {
+        throw new Error(storeError);
+      }
+
+      if (list && list.length > 0) {
+        const targetId = useWorkspaceStore.getState().activeWorkspaceId || list[0].id;
+        executeRedirect(targetId);
+      } else {
+        const created = await createWorkspace('Workspace');
+        if (created?.id) {
+          executeRedirect(created.id);
+        }
+      }
+    } catch (error) {
+      redirectedRef.current = false;
+      setHasError(true);
+      setErrorMessage(
+        error instanceof Error ? error.message : 'Falha ao carregar workspaces'
+      );
+    }
+  }, [activeWorkspaceId, fetchWorkspaces, createWorkspace, executeRedirect]);
+
   useEffect(() => {
     let isMounted = true;
 
-    async function resolveAndRedirect() {
-      try {
-        if (activeWorkspaceId) {
-          if (isMounted) {
-            router.replace(`/workspace/${activeWorkspaceId}`);
-          }
-          return;
-        }
-
-        const list = await fetchWorkspaces();
-        if (!isMounted) return;
-
-        if (list && list.length > 0) {
-          const targetId = useWorkspaceStore.getState().activeWorkspaceId || list[0].id;
-          router.replace(`/workspace/${targetId}`);
-        } else {
-          const created = await createWorkspace('Workspace');
-          if (isMounted && created?.id) {
-            router.replace(`/workspace/${created.id}`);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to resolve and redirect workspace:', error);
-      }
+    async function run() {
+      if (!isMounted) return;
+      await resolveAndRedirect();
     }
 
-    resolveAndRedirect();
+    run();
 
     return () => {
       isMounted = false;
     };
-  }, [activeWorkspaceId, fetchWorkspaces, createWorkspace, router]);
+  }, [resolveAndRedirect, retryCount]);
+
+  const handleRetry = () => {
+    useWorkspaceStore.setState({ error: null });
+    redirectedRef.current = false;
+    setRetryCount((prev) => prev + 1);
+  };
+
+  if (hasError) {
+    return (
+      <div
+        role="alert"
+        aria-live="assertive"
+        className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 text-neutral-300 gap-4 p-6"
+      >
+        <AlertCircle className="w-8 h-8 text-rose-500 shrink-0" />
+        <div className="flex flex-col items-center gap-1 text-center">
+          <h2 className="text-base font-semibold text-neutral-100">Erro ao carregar workspace</h2>
+          <p className="text-sm text-neutral-400 max-w-sm">
+            {errorMessage || 'Ocorreu um erro ao carregar o workspace.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleRetry}
+          className="px-4 py-2 text-sm font-medium rounded-md bg-neutral-800 text-neutral-100 hover:bg-neutral-700 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-500 cursor-pointer"
+        >
+          Tentar novamente
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div

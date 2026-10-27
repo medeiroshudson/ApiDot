@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, use } from 'react';
 import { useParams } from 'next/navigation';
 import { WorkspaceShell } from '@/components/layout/WorkspaceShell';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
@@ -12,11 +12,13 @@ export interface WorkspaceLayoutProps {
 
 export default function WorkspaceLayout({ children, params: propsParams }: WorkspaceLayoutProps) {
   const routeParams = useParams();
-  const rawId =
-    propsParams && 'workspaceId' in propsParams && typeof propsParams.workspaceId === 'string'
-      ? propsParams.workspaceId
-      : routeParams?.workspaceId;
 
+  const unwrappedParams =
+    propsParams && typeof (propsParams as any).then === 'function'
+      ? use(propsParams as Promise<{ workspaceId: string }>)
+      : (propsParams as { workspaceId: string } | undefined);
+
+  const rawId = unwrappedParams?.workspaceId ?? routeParams?.workspaceId;
   const workspaceId = Array.isArray(rawId) ? rawId[0] : (typeof rawId === 'string' ? rawId : '');
 
   useEffect(() => {

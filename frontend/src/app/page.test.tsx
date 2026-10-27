@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import Home from './page';
 import { resolveVariables, interpolateVariables } from '@/lib/variables';
@@ -12,14 +12,15 @@ import { useRequestStore } from '@/stores/useRequestStore';
 
 const mockReplace = vi.fn();
 const mockPush = vi.fn();
+const routerMock = {
+  push: mockPush,
+  replace: mockReplace,
+  prefetch: vi.fn(),
+  back: vi.fn(),
+};
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: mockPush,
-    replace: mockReplace,
-    prefetch: vi.fn(),
-    back: vi.fn(),
-  }),
+  useRouter: () => routerMock,
 }));
 
 beforeEach(() => {
@@ -211,6 +212,31 @@ describe('Root Redirector (app/page.tsx)', () => {
     });
   });
 
+  it('encodes URI component in targetId when redirecting', async () => {
+    useWorkspaceStore.setState({ activeWorkspaceId: 'ws/special 123' });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/workspace/ws%2Fspecial%20123');
+    });
+  });
+
+  it('ensures redirect idempotency so executeRedirect only fires once', async () => {
+    useWorkspaceStore.setState({ activeWorkspaceId: 'ws-idempotent' });
+
+    const { rerender } = render(<Home />);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledTimes(1);
+      expect(mockReplace).toHaveBeenCalledWith('/workspace/ws-idempotent');
+    });
+
+    rerender(<Home />);
+
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+  });
+
   it('fetches workspaces and redirects to the first workspace when activeWorkspaceId is not set', async () => {
     vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
       const url = String(input);
@@ -286,16 +312,51 @@ describe('Root Redirector (app/page.tsx)', () => {
     });
   });
 
-  it('handles fetchWorkspaces rejection gracefully without crashing', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Network error'));
+  it('displays accessible error message and retry button when resolving workspaces fails', async () => {
+    vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Network error on list'));
 
     render(<Home />);
 
     await waitFor(() => {
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByText('Erro ao carregar workspace')).toBeInTheDocument();
+      expect(screen.getByText('Network error on list')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /tentar novamente/i })).toBeInTheDocument();
+    });
+  });
+
+  it('retries resolving workspace when "Tentar novamente" is clicked', async () => {
+    let callCount = 0;
+    vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces')) {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.reject(new Error('Temporary server glitch'));
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockWorkspaces,
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
     });
 
-    consoleSpy.mockRestore();
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByText('Temporary server glitch')).toBeInTheDocument();
+    });
+
+    const retryBtn = screen.getByRole('button', { name: /tentar novamente/i });
+    fireEvent.click(retryBtn);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/workspace/ws-1');
+    });
+
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

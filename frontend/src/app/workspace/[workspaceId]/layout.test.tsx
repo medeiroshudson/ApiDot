@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import WorkspaceLayout from './layout';
 import { useParams } from 'next/navigation';
@@ -112,5 +112,36 @@ describe('WorkspaceLayout', () => {
     expect(shell).toBeInTheDocument();
     expect(shell).toHaveAttribute('data-workspace-id', '');
     expect(screen.getByText('Empty workspaceId')).toBeInTheDocument();
+  });
+
+  it('safely unwraps params when passed as a Promise using React 19 use()', async () => {
+    const paramsPromise = Promise.resolve({ workspaceId: 'ws-promise-789' });
+
+    await act(async () => {
+      render(
+        <React.Suspense fallback={<div>Carregando...</div>}>
+          <WorkspaceLayout params={paramsPromise}>
+            <div data-testid="promise-child">From Promise</div>
+          </WorkspaceLayout>
+        </React.Suspense>
+      );
+    });
+
+    const shell = screen.getByTestId('workspace-shell');
+    expect(shell).toHaveAttribute('data-workspace-id', 'ws-promise-789');
+    expect(useWorkspaceStore.getState().activeWorkspaceId).toBe('ws-promise-789');
+    expect(screen.getByTestId('promise-child')).toBeInTheDocument();
+  });
+
+  it('uses params when passed as a plain object directly', () => {
+    render(
+      <WorkspaceLayout params={{ workspaceId: 'ws-object-direct' }}>
+        <div>Direct Object</div>
+      </WorkspaceLayout>
+    );
+
+    const shell = screen.getByTestId('workspace-shell');
+    expect(shell).toHaveAttribute('data-workspace-id', 'ws-object-direct');
+    expect(useWorkspaceStore.getState().activeWorkspaceId).toBe('ws-object-direct');
   });
 });
