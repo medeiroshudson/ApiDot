@@ -177,17 +177,20 @@ function getAutocompleteContext(
       return null;
     }
 
-    const lastQuote = textBefore.lastIndexOf('"');
-    if (lastQuote !== -1) {
-      const content = textBefore.slice(lastQuote + 1);
-      // Ensure cursor is immediately inside the opened quote (no newlines or inner quotes)
-      if (!content.includes('\n') && !content.includes('"')) {
-        return {
-          type: 'property' as const,
-          openPos: lastQuote + 1,
-          hasQuote: true,
-          filter: content.toLowerCase().trim(),
-        };
+    const lastQuoteInSegment = currentSegment.lastIndexOf('"');
+    if (lastQuoteInSegment !== -1) {
+      const quotes = currentSegment.match(/(?<!\\)"/g) || [];
+      if (quotes.length % 2 === 1) {
+        const content = currentSegment.slice(lastQuoteInSegment + 1);
+        if (!content.includes('\n')) {
+          const segmentStart = textBefore.length - currentSegment.length;
+          return {
+            type: 'property' as const,
+            openPos: segmentStart + lastQuoteInSegment + 1,
+            hasQuote: true,
+            filter: content.toLowerCase().trim(),
+          };
+        }
       }
     }
 
