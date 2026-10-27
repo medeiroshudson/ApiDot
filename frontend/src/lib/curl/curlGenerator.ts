@@ -58,7 +58,7 @@ function isJsonPayload(body: string, format?: string): boolean {
   }
   const trimmed = body.trim();
   if (
-    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+    (trimmed.startsWith('{') && !trimmed.startsWith('{{') && trimmed.endsWith('}') && !trimmed.endsWith('}}')) ||
     (trimmed.startsWith('[') && trimmed.endsWith(']'))
   ) {
     return true;
@@ -79,7 +79,8 @@ export function generateCurlCommand(
   request: CurlRequestInput,
   options?: GenerateCurlOptions
 ): string {
-  const method = (request.method || 'GET').toUpperCase().trim();
+  const rawMethod = (request.method || 'GET').toUpperCase().trim();
+  const method = /^[A-Z]+$/.test(rawMethod) ? rawMethod : 'GET';
   let url = request.url || '';
 
   // 1. Resolve path parameters
@@ -154,11 +155,8 @@ export function generateCurlCommand(
     if (!hasAuthHeader) {
       if (authType === 'bearer') {
         const rawToken = request.auth.token ?? '';
-        const token = shouldResolveVariables
-          ? interpolateVariables(rawToken, options?.variables || {}, options?.requestHistory)
-          : rawToken;
-        if (token.trim().length > 0) {
-          headersMap['Authorization'] = `Bearer ${token}`;
+        if (rawToken.trim().length > 0) {
+          headersMap['Authorization'] = `Bearer ${rawToken}`;
         }
       } else if (authType === 'basic') {
         const rawUser = request.auth.username || '';
@@ -179,18 +177,12 @@ export function generateCurlCommand(
     if (authType === 'apikey' && request.auth.key) {
       const rawKey = request.auth.key.trim();
       const rawVal = request.auth.value ?? '';
-      const key = shouldResolveVariables
-        ? interpolateVariables(rawKey, options?.variables || {}, options?.requestHistory)
-        : rawKey;
-      const val = shouldResolveVariables
-        ? interpolateVariables(rawVal, options?.variables || {}, options?.requestHistory)
-        : rawVal;
 
       const hasKeyHeader = Object.keys(headersMap).some(
-        (k) => k.toLowerCase() === key.toLowerCase()
+        (k) => k.toLowerCase() === rawKey.toLowerCase()
       );
-      if (!hasKeyHeader && key) {
-        headersMap[key] = val;
+      if (!hasKeyHeader && rawKey) {
+        headersMap[rawKey] = rawVal;
       }
     }
   }
@@ -220,27 +212,29 @@ export function generateCurlCommand(
     }
   }
 
-  // 7. Resolve variables in headers and body
-  if (shouldResolveVariables) {
-    for (const [k, v] of Object.entries(headersMap)) {
-      const resolvedK = interpolateVariables(k, options?.variables || {}, options?.requestHistory);
-      const resolvedV = interpolateVariables(v, options?.variables || {}, options?.requestHistory);
-      if (resolvedK !== k) {
-        delete headersMap[k];
-      }
-      headersMap[resolvedK] = resolvedV;
-    }
-    if (rawBody !== null) {
-      rawBody = interpolateVariables(rawBody, options?.variables || {}, options?.requestHistory);
-    }
+  // 7. Resolve variables in headers and body without mutating during iteration
+  const effectiveHeaders: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headersMap)) {
+    const finalK = shouldResolveVariables
+      ? interpolateVariables(k, options?.variables || {}, options?.requestHistory)
+      : k;
+    const finalV = shouldResolveVariables
+      ? interpolateVariables(v, options?.variables || {}, options?.requestHistory)
+      : v;
+    effectiveHeaders[finalK] = finalV;
   }
 
-  // 8. Assemble formatted lines with backslash continuations
+  if (rawBody !== null && shouldResolveVariables) {
+    rawBody = interpolateVariables(rawBody, options?.variables || {}, options?.requestHistory);
+  }
+
+  // 8. Assemble formatted lines with backslash continuations and sanitized header values
+  const sanitizeHeaderVal = (val: string) => val.replace(/[\r\n]+/g, ' ').trim();
   const lines: string[] = [];
   lines.push(`curl -X ${method} '${escapeForSingleQuotes(url)}'`);
 
-  for (const [k, v] of Object.entries(headersMap)) {
-    lines.push(`  -H '${escapeForSingleQuotes(k)}: ${escapeForSingleQuotes(v)}'`);
+  for (const [k, v] of Object.entries(effectiveHeaders)) {
+    lines.push(`  -H '${escapeForSingleQuotes(sanitizeHeaderVal(k))}: ${escapeForSingleQuotes(sanitizeHeaderVal(v))}'`);
   }
 
   if (rawBody !== null) {

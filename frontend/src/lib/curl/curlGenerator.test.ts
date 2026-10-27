@@ -520,5 +520,34 @@ describe('curlGenerator', () => {
       expect(parsed.request?.bodyContent).toBe('{"item": "book", "qty": 2}');
       expect(parsed.request?.bodyType).toBe('Json');
     });
+
+    it('falls back to GET if invalid or malicious method is passed', () => {
+      const curl = generateCurlCommand({
+        method: 'GET; rm -rf /; #',
+        url: 'https://api.example.com',
+      });
+      expect(curl).toBe("curl -X GET 'https://api.example.com'");
+    });
+
+    it('sanitizes CRLF from header keys and values', () => {
+      const curl = generateCurlCommand({
+        method: 'GET',
+        url: 'https://api.example.com',
+        headers: {
+          'X-Custom\r\nHeader': 'val\r\nue',
+        },
+      });
+      expect(curl).toContain("-H 'X-Custom Header: val ue'");
+      expect(curl).not.toContain('\r');
+    });
+
+    it('does not treat template variables {{xmlBody}} as JSON braces', () => {
+      const curl = generateCurlCommand({
+        method: 'POST',
+        url: 'https://api.example.com',
+        body: '{{xmlBody}}',
+      });
+      expect(curl).not.toContain("Content-Type: application/json");
+    });
   });
 });
