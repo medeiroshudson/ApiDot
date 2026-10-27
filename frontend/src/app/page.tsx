@@ -28,7 +28,6 @@ import {
 } from '@/hooks/useCollectionTree';
 import {
   WorkspaceTreeDto,
-  WorkspaceDto,
   CollectionNodeDto,
   FolderNodeDto,
   RequestItemNodeDto,
