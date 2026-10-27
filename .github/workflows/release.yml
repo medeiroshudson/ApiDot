@@ -1,7 +1,8 @@
-name: Release ApiDot Agent
+name: Release ApiDot (Containers & Agent)
 
 on:
   push:
+    branches: [main]
     tags:
       - 'v*'
   workflow_dispatch:
@@ -13,10 +14,82 @@ on:
 
 permissions:
   contents: read
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-and-release-agent:
+  build-and-push-containers:
+    name: Build & Push Container (${{ matrix.component }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: server
+            image: ghcr.io/${{ github.repository }}-server
+            dockerfile: ./backend/Dockerfile
+            context: ./backend
+          - component: web
+            image: ghcr.io/${{ github.repository }}-web
+            dockerfile: ./frontend/Dockerfile
+            context: ./frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ matrix.image }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+
+      - name: Write image reference to job summary
+        run: |
+          echo "### Component: ${{ matrix.component }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Image:** \`${{ matrix.image }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Digest:** \`${{ steps.build.outputs.digest }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Tags:**" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ steps.meta.outputs.tags }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  build-agent-binaries:
     name: Build Agent (${{ matrix.rid }})
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -79,9 +152,10 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  publish-release:
+  publish-github-release:
     name: Publish Release to GitHub
-    needs: build-and-release-agent
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    needs: [build-and-push-containers, build-agent-binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -117,5 +191,9 @@ jobs:
           tag_name: ${{ steps.release-tag.outputs.tag }}
           files: artifacts/*
           generate_release_notes: true
+          body: |
+            ## Docker Container Images (GHCR)
+            - `ghcr.io/${{ github.repository }}-server:${{ steps.release-tag.outputs.tag }}`
+            - `ghcr.io/${{ github.repository }}-web:${{ steps.release-tag.outputs.tag }}`
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
