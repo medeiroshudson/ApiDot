@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, act } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { RequestEditor, insertTokenAtCursor, resolvePathParams } from './RequestEditor';
 
@@ -457,5 +457,149 @@ describe('RequestEditor', () => {
 
     // The CodeEditor for body is present
     expect(screen.getByTestId('body-code-editor')).toBeInTheDocument();
+  });
+
+  describe('cURL Export action', () => {
+    it('renders "Copiar cURL" button in top action bar next to "Salvar"', () => {
+      render(<RequestEditor />);
+
+      const copyCurlBtn = screen.getByRole('button', { name: /copiar curl/i });
+      expect(copyCurlBtn).toBeInTheDocument();
+
+      const saveBtn = screen.getByRole('button', { name: /salvar requisição/i });
+      expect(copyCurlBtn.parentElement).toBe(saveBtn.parentElement);
+    });
+
+    it('clicking "Copiar cURL" calls navigator.clipboard.writeText with valid cURL generated from current editor fields', async () => {
+      const writeTextMock = vi.fn().mockResolvedValue(undefined);
+      Object.assign(navigator, {
+        clipboard: {
+          writeText: writeTextMock,
+        },
+      });
+
+      render(
+        <RequestEditor
+          initialRequest={{
+            method: 'POST',
+            url: 'https://api.example.com/items',
+            headers: JSON.stringify({ 'Content-Type': 'application/json', 'X-Custom': '123' }),
+            body: JSON.stringify({ item: 'gadget' }),
+            auth: { type: 'bearer', token: 'secret-token' },
+          }}
+        />
+      );
+
+      const copyCurlBtn = screen.getByRole('button', { name: /copiar curl/i });
+      await act(async () => {
+        fireEvent.click(copyCurlBtn);
+      });
+
+      expect(writeTextMock).toHaveBeenCalledTimes(1);
+      const generatedCurl = writeTextMock.mock.calls[0][0];
+      expect(generatedCurl).toContain("curl -X POST 'https://api.example.com/items'");
+      expect(generatedCurl).toContain("-H 'X-Custom: 123'");
+      expect(generatedCurl).toContain("-H 'Authorization: Bearer secret-token'");
+      expect(generatedCurl).toContain("--data-raw '{\"item\":\"gadget\"}'");
+    });
+
+    it('displays visual feedback "Copiado!" upon clicking and resets after 2000ms', async () => {
+      vi.useFakeTimers();
+      try {
+        const writeTextMock = vi.fn().mockResolvedValue(undefined);
+        Object.assign(navigator, {
+          clipboard: {
+            writeText: writeTextMock,
+          },
+        });
+
+        render(<RequestEditor initialRequest={{ url: 'https://api.example.com' }} />);
+
+        const copyCurlBtn = screen.getByRole('button', { name: /copiar curl/i });
+        expect(screen.queryByText('Copiado!')).toBeNull();
+        expect(screen.getByText('Copiar cURL')).toBeInTheDocument();
+
+        await act(async () => {
+          fireEvent.click(copyCurlBtn);
+        });
+
+        expect(screen.getByText('Copiado!')).toBeInTheDocument();
+
+        await act(async () => {
+          vi.advanceTimersByTime(2000);
+        });
+
+        expect(screen.queryByText('Copiado!')).toBeNull();
+        expect(screen.getByText('Copiar cURL')).toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('preserves variable interpolation and resolves path parameters when provided via props', async () => {
+      const writeTextMock = vi.fn().mockResolvedValue(undefined);
+      Object.assign(navigator, {
+        clipboard: {
+          writeText: writeTextMock,
+        },
+      });
+
+      render(
+        <RequestEditor
+          initialRequest={{
+            method: 'GET',
+            url: '{{baseUrl}}/v1/users/:userId/orders',
+            pathParams: { userId: 'user-789' },
+          }}
+          availableVariables={[
+            { key: 'baseUrl', value: 'https://api.production.com' },
+          ]}
+        />
+      );
+
+      const copyCurlBtn = screen.getByRole('button', { name: /copiar curl/i });
+      await act(async () => {
+        fireEvent.click(copyCurlBtn);
+      });
+
+      expect(writeTextMock).toHaveBeenCalledTimes(1);
+      expect(writeTextMock).toHaveBeenCalledWith(
+        "curl -X GET 'https://api.production.com/v1/users/user-789/orders'"
+      );
+    });
+
+    it('generates cURL using in-memory modified values even before saving', async () => {
+      const writeTextMock = vi.fn().mockResolvedValue(undefined);
+      Object.assign(navigator, {
+        clipboard: {
+          writeText: writeTextMock,
+        },
+      });
+
+      render(
+        <RequestEditor
+          initialRequest={{
+            method: 'GET',
+            url: 'https://api.example.com/initial',
+          }}
+        />
+      );
+
+      const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+      fireEvent.change(urlInput, { target: { value: 'https://api.example.com/modified' } });
+
+      const methodSelect = screen.getByRole('combobox', { name: /método http/i });
+      fireEvent.change(methodSelect, { target: { value: 'DELETE' } });
+
+      const copyCurlBtn = screen.getByRole('button', { name: /copiar curl/i });
+      await act(async () => {
+        fireEvent.click(copyCurlBtn);
+      });
+
+      expect(writeTextMock).toHaveBeenCalledTimes(1);
+      expect(writeTextMock).toHaveBeenCalledWith(
+        "curl -X DELETE 'https://api.example.com/modified'"
+      );
+    });
   });
 });
