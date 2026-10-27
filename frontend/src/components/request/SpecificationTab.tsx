@@ -282,7 +282,7 @@ export function treeToSchemaProperties(nodes: PropertyNode[]): {
         const num = parseFloat(node.example);
         propDef.example = isNaN(num) ? node.example : num;
       } else if (node.type === 'boolean') {
-        propDef.example = node.example === 'true' || node.example === true;
+        propDef.example = String(node.example).toLowerCase() === 'true';
       } else {
         propDef.example = node.example;
       }
