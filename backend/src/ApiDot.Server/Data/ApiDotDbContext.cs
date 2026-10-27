@@ -12,6 +12,7 @@ public class ApiDotDbContext(DbContextOptions<ApiDotDbContext> options) : DbCont
     public DbSet<RequestItem> RequestItems => Set<RequestItem>();
     public DbSet<EnvironmentVariable> EnvironmentVariables => Set<EnvironmentVariable>();
     public DbSet<ExecutionHistory> ExecutionHistories => Set<ExecutionHistory>();
+    public DbSet<AgentDevice> AgentDevices => Set<AgentDevice>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -125,6 +126,19 @@ public class ApiDotDbContext(DbContextOptions<ApiDotDbContext> options) : DbCont
         {
             entity.Property(h => h.Method).HasMaxLength(16);
             entity.Property(h => h.Url).HasMaxLength(2048);
+        });
+
+        modelBuilder.Entity<AgentDevice>(entity =>
+        {
+            entity.Property(d => d.Name).HasMaxLength(200);
+            entity.Property(d => d.TokenHash).HasMaxLength(64);
+            entity.Property(d => d.TokenPrefix).HasMaxLength(32);
+            entity.Property(d => d.LastConnectedHostname).HasMaxLength(256);
+            entity.Property(d => d.LastConnectedOs).HasMaxLength(128);
+            entity.Property(d => d.AgentVersion).HasMaxLength(64);
+            entity.Property(d => d.LastConnectedIp).HasMaxLength(64);
+
+            entity.HasIndex(d => d.TokenHash);
         });
     }
 }
