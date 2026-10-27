@@ -1,11 +1,23 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import Home from './page';
 import { resolveVariables, interpolateVariables } from '@/lib/variables';
 import { VariableItem } from '@/components/environment/VariableGrid';
 import { EnvironmentGroup } from '@/components/environment/EnvironmentModal';
 import { WorkspaceTreeDto } from '@/lib/treeApi';
+import { useLayoutStore, INITIAL_LAYOUT_STATE } from '@/stores/useLayoutStore';
+import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
+import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
+import { useRequestStore } from '@/stores/useRequestStore';
+
+beforeEach(() => {
+  useLayoutStore.setState(INITIAL_LAYOUT_STATE);
+  useWorkspaceStore.getState().reset();
+  useEnvironmentStore.getState().reset();
+  useRequestStore.getState().reset();
+  localStorage.clear();
+});
 
 describe('page variable resolution and interpolation helpers', () => {
   describe('resolveVariables', () => {
@@ -1386,6 +1398,191 @@ describe('Home Page OpenAPI Import Modal & Global "+ Novo" Trigger Integration',
     fireEvent.click(importOption);
 
     expect(screen.getByRole('dialog', { name: /importar especificação openapi/i })).toBeInTheDocument();
+  });
+});
+
+describe('Home Page Resizable Panels and Splitter Integration', () => {
+  const mockWorkspace = {
+    id: 'ws-splitter-1',
+    name: 'Splitter Workspace',
+    createdAtUtc: '2026-10-26T00:00:00Z',
+  };
+
+  const mockTree: WorkspaceTreeDto = {
+    workspaceId: 'ws-splitter-1',
+    workspaceName: 'Splitter Workspace',
+    collections: [
+      {
+        id: 'col-splitter-1',
+        name: 'Splitter Collection',
+        defaultTarget: 'Inherit',
+        openApiSpecUrl: null,
+        folders: [],
+        requests: [
+          {
+            id: 'req-splitter-1',
+            name: 'Splitter Request',
+            method: 'GET',
+            url: 'https://api.example.com/splitter',
+            target: 'Inherit',
+            bodyType: 'None',
+            headersJson: '{}',
+            bodyContent: null,
+            collectionId: 'col-splitter-1',
+            folderId: null,
+          },
+        ],
+      },
+    ],
+  };
+
+  const setupSplitterMocks = () => {
+    return vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/') && url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockTree,
+        } as any);
+      }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [mockWorkspace],
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('renders both PanelSplitters with correct ARIA accessibility attributes and values', async () => {
+    setupSplitterMocks();
+    render(<Home />);
+
+    // Sidebar splitter verification
+    const sidebarSplitter = await screen.findByRole('separator', {
+      name: /redimensionar barra lateral/i,
+    });
+    expect(sidebarSplitter).toBeInTheDocument();
+    expect(sidebarSplitter).toHaveAttribute('id', 'sidebar-splitter');
+    expect(sidebarSplitter).toHaveAttribute('aria-orientation', 'vertical');
+    expect(sidebarSplitter).toHaveAttribute('aria-valuenow', '256');
+    expect(sidebarSplitter).toHaveAttribute('aria-valuemin', '180');
+    expect(sidebarSplitter).toHaveAttribute('aria-valuemax', '480');
+    expect(screen.getByTestId('panel-splitter-sidebar-splitter')).toBe(sidebarSplitter);
+
+    // Request/Response splitter verification
+    const reqRespSplitter = screen.getByRole('separator', {
+      name: /redimensionar painéis de requisição e resposta/i,
+    });
+    expect(reqRespSplitter).toBeInTheDocument();
+    expect(reqRespSplitter).toHaveAttribute('id', 'request-response-splitter');
+    expect(reqRespSplitter).toHaveAttribute('aria-orientation', 'vertical');
+    expect(reqRespSplitter).toHaveAttribute('aria-valuenow', '50');
+    expect(reqRespSplitter).toHaveAttribute('aria-valuemin', '20');
+    expect(reqRespSplitter).toHaveAttribute('aria-valuemax', '80');
+    expect(screen.getByTestId('panel-splitter-request-response-splitter')).toBe(reqRespSplitter);
+  });
+
+  it('resizes sidebar width when keyboard arrow keys are dispatched on sidebar-splitter', async () => {
+    setupSplitterMocks();
+    render(<Home />);
+
+    const sidebarSplitter = await screen.findByRole('separator', {
+      name: /redimensionar barra lateral/i,
+    });
+
+    // ArrowRight increases sidebar width (+10px)
+    fireEvent.keyDown(sidebarSplitter, { key: 'ArrowRight' });
+    expect(useLayoutStore.getState().sidebarWidth).toBe(266);
+    expect(sidebarSplitter).toHaveAttribute('aria-valuenow', '266');
+
+    // ArrowLeft decreases sidebar width (-10px)
+    fireEvent.keyDown(sidebarSplitter, { key: 'ArrowLeft' });
+    expect(useLayoutStore.getState().sidebarWidth).toBe(256);
+    expect(sidebarSplitter).toHaveAttribute('aria-valuenow', '256');
+  });
+
+  it('resets sidebar width on double click or Enter key on sidebar-splitter', async () => {
+    setupSplitterMocks();
+    useLayoutStore.getState().setSidebarWidth(350);
+
+    render(<Home />);
+
+    const sidebarSplitter = await screen.findByRole('separator', {
+      name: /redimensionar barra lateral/i,
+    });
+    expect(sidebarSplitter).toHaveAttribute('aria-valuenow', '350');
+
+    // Double-click triggers reset
+    fireEvent.doubleClick(sidebarSplitter);
+    expect(useLayoutStore.getState().sidebarWidth).toBe(256);
+    expect(sidebarSplitter).toHaveAttribute('aria-valuenow', '256');
+
+    // Modify width again and reset via Enter key
+    fireEvent.keyDown(sidebarSplitter, { key: 'ArrowRight' });
+    expect(useLayoutStore.getState().sidebarWidth).toBe(266);
+    fireEvent.keyDown(sidebarSplitter, { key: 'Enter' });
+    expect(useLayoutStore.getState().sidebarWidth).toBe(256);
+  });
+
+  it('resizes request/response ratio when delta changes on request-response-splitter', async () => {
+    setupSplitterMocks();
+    render(<Home />);
+
+    const workspaceMain = screen.getByRole('main');
+    Object.defineProperty(workspaceMain, 'clientWidth', {
+      value: 1000,
+      configurable: true,
+      writable: true,
+    });
+
+    const reqRespSplitter = await screen.findByRole('separator', {
+      name: /redimensionar painéis de requisição e resposta/i,
+    });
+
+    // ArrowRight moves splitter +10px -> (10 / 1000) * 100 = +1%
+    fireEvent.keyDown(reqRespSplitter, { key: 'ArrowRight' });
+    expect(useLayoutStore.getState().requestResponseRatio).toBe(51);
+    expect(reqRespSplitter).toHaveAttribute('aria-valuenow', '51');
+
+    // ArrowLeft moves splitter -10px -> -1%
+    fireEvent.keyDown(reqRespSplitter, { key: 'ArrowLeft' });
+    expect(useLayoutStore.getState().requestResponseRatio).toBe(50);
+  });
+
+  it('resets request/response ratio on double click and enforces min/max limits', async () => {
+    setupSplitterMocks();
+    useLayoutStore.getState().setRequestResponseRatio(70);
+
+    render(<Home />);
+
+    const reqRespSplitter = await screen.findByRole('separator', {
+      name: /redimensionar painéis de requisição e resposta/i,
+    });
+    expect(reqRespSplitter).toHaveAttribute('aria-valuenow', '70');
+
+    // Double-click resets ratio to default (50)
+    fireEvent.doubleClick(reqRespSplitter);
+    expect(useLayoutStore.getState().requestResponseRatio).toBe(50);
+    expect(reqRespSplitter).toHaveAttribute('aria-valuenow', '50');
+
+    // Verify clamp bounds
+    act(() => {
+      useLayoutStore.getState().setRequestResponseRatio(999);
+    });
+    expect(useLayoutStore.getState().requestResponseRatio).toBe(80);
+
+    act(() => {
+      useLayoutStore.getState().setRequestResponseRatio(-100);
+    });
+    expect(useLayoutStore.getState().requestResponseRatio).toBe(20);
   });
 });
 

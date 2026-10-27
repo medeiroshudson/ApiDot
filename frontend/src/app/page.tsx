@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { MobileDrawer } from '@/components/layout/MobileDrawer';
 import { CollectionTree } from '@/components/layout/CollectionTree';
+import { PanelSplitter } from '@/components/layout/PanelSplitter';
 import {
   RequestEditor,
   RequestData,
@@ -14,7 +15,7 @@ import {
 import { ResponseViewer, ResponseData } from '@/components/response/ResponseViewer';
 import { EnvironmentModal, EnvironmentGroup } from '@/components/environment/EnvironmentModal';
 import { VariableItem } from '@/components/environment/VariableGrid';
-import { DependencyRequest, resolveVariables, interpolateVariables } from '@/lib/variables';
+import { DependencyRequest, interpolateVariables } from '@/lib/variables';
 import { AutocompleteVariable } from '@/components/request/RequestAutocomplete';
 import {
   CollectionSettingsModal,
@@ -33,46 +34,16 @@ import {
   RequestItemNodeDto,
   ExecutionTarget,
   HttpBodyType,
-  fetchWorkspacesApi,
-  createWorkspaceApi,
   importOpenApiCollection,
 } from '@/lib/treeApi';
 import { WorkspaceModal } from '@/components/workspace/WorkspaceModal';
+import { useLayoutStore } from '@/stores/useLayoutStore';
+import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
+import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
+import { useRequestStore, CLEAN_SCRATCHPAD } from '@/stores/useRequestStore';
 import { CheckCircle2, X, AlertCircle } from 'lucide-react';
 
 const STORAGE_KEY_ACTIVE_WORKSPACE = 'apidot_active_workspace_id';
-
-const DEFAULT_ENVIRONMENTS: EnvironmentGroup[] = [
-  { name: 'Development', variables: [] },
-  { name: 'Staging', variables: [] },
-  { name: 'Production', variables: [] },
-];
-
-const DEFAULT_REQUESTS: DependencyRequest[] = [
-  {
-    id: 'req-auth',
-    name: 'Autenticação Login',
-    method: 'POST',
-    url: 'https://api.example.com/auth/login',
-    response: {
-      statusCode: 200,
-      headers: { 'content-type': 'application/json' },
-      body: {
-        token: 'mock-jwt-token-xyz',
-        user: { id: 42, role: 'admin' },
-      },
-    },
-  },
-];
-
-const CLEAN_SCRATCHPAD: RequestData = {
-  method: 'GET',
-  url: '',
-  target: 'Inherit',
-  headers: '',
-  body: '',
-  auth: { type: 'none' },
-};
 
 function flattenFolders(folders: FolderNodeDto[], prefix = ''): FolderOption[] {
   const result: FolderOption[] = [];
@@ -122,82 +93,112 @@ function countCollectionRequests(col: CollectionNodeDto): number {
 }
 
 export default function Home() {
-  const [workspaces, setWorkspaces] = useState<WorkspaceDto[]>([]);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
-  const [isWorkspacesLoading, setIsWorkspacesLoading] = useState(true);
-  const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isAgentOnline, setIsAgentOnline] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [response, setResponse] = useState<ResponseData | null>(null);
-  const [activeMobilePane, setActiveMobilePane] = useState<'request' | 'response'>('request');
+  const workspaceRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(true);
 
-  const refreshWorkspaces = useCallback(async (preferredWorkspaceId?: string): Promise<WorkspaceDto[]> => {
-    try {
-      const list = await fetchWorkspacesApi();
-      const validList = Array.isArray(list) ? list : [];
-      setWorkspaces(validList);
+  // Layout Store
+  const sidebarWidth = useLayoutStore((s) => s.sidebarWidth);
+  const requestResponseRatio = useLayoutStore((s) => s.requestResponseRatio);
+  const adjustSidebarWidth = useLayoutStore((s) => s.adjustSidebarWidth);
+  const adjustRequestResponseRatio = useLayoutStore((s) => s.adjustRequestResponseRatio);
+  const resetSidebarWidth = useLayoutStore((s) => s.resetSidebarWidth);
+  const resetRequestResponseRatio = useLayoutStore((s) => s.resetRequestResponseRatio);
+  const isWorkspaceModalOpen = useLayoutStore((s) => s.isWorkspaceModalOpen);
+  const isSaveModalOpen = useLayoutStore((s) => s.isSaveModalOpen);
+  const isEnvModalOpen = useLayoutStore((s) => s.isEnvModalOpen);
+  const isCollectionSettingsOpen = useLayoutStore((s) => s.isCollectionSettingsOpen);
+  const isImportOpenApiModalOpen = useLayoutStore((s) => s.isImportOpenApiModalOpen);
+  const isDrawerOpen = useLayoutStore((s) => s.isDrawerOpen);
+  const setModalOpen = useLayoutStore((s) => s.setModalOpen);
+  const auditBanner = useLayoutStore((s) => s.auditBanner);
+  const setAuditBanner = useLayoutStore((s) => s.setAuditBanner);
+  const syncError = useLayoutStore((s) => s.syncError);
+  const setSyncError = useLayoutStore((s) => s.setSyncError);
+  const activeMobilePane = useLayoutStore((s) => s.activeMobilePane);
+  const setActiveMobilePane = useLayoutStore((s) => s.setActiveMobilePane);
 
-      if (validList.length === 0) {
-        setActiveWorkspaceId(null);
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem(STORAGE_KEY_ACTIVE_WORKSPACE);
-        }
-        return validList;
+  // Workspace Store
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const isWorkspacesLoading = useWorkspaceStore((s) => s.isLoading);
+  const fetchWorkspaces = useWorkspaceStore((s) => s.fetchWorkspaces);
+  const createWorkspace = useWorkspaceStore((s) => s.createWorkspace);
+  const ensureWorkspaceId = useWorkspaceStore((s) => s.ensureWorkspaceId);
+  const setActiveWorkspaceId = useWorkspaceStore((s) => s.setActiveWorkspaceId);
+
+  // Environment Store
+  const environments = useEnvironmentStore((s) => s.environments);
+  const activeEnvironment = useEnvironmentStore((s) => s.activeEnvironment);
+  const globals = useEnvironmentStore((s) => s.globals);
+  const collectionVariables = useEnvironmentStore((s) => s.collectionVariables);
+  const setEnvironments = useEnvironmentStore((s) => s.setEnvironments);
+  const setActiveEnvironment = useEnvironmentStore((s) => s.setActiveEnvironment);
+  const setGlobals = useEnvironmentStore((s) => s.setGlobals);
+  const setCollectionVariables = useEnvironmentStore((s) => s.setCollectionVariables);
+  const getAvailableVariables = useEnvironmentStore((s) => s.getAvailableVariables);
+  const getResolvedVariables = useEnvironmentStore((s) => s.getResolvedVariables);
+
+  // Request Store
+  const activeRequestId = useRequestStore((s) => s.activeRequestId);
+  const activeRequestDetails = useRequestStore((s) => s.activeRequestDetails);
+  const currentEditorData = useRequestStore((s) => s.currentEditorData);
+  const pendingSaveData = useRequestStore((s) => s.pendingSaveData);
+  const isSavingRequest = useRequestStore((s) => s.isSavingRequest);
+  const isLoading = useRequestStore((s) => s.isLoading);
+  const isAgentOnline = useRequestStore((s) => s.isAgentOnline);
+  const response = useRequestStore((s) => s.response);
+  const requestHistory = useRequestStore((s) => s.requestHistory);
+  const setActiveRequest = useRequestStore((s) => s.setActiveRequest);
+  const setActiveRequestName = useRequestStore((s) => s.setActiveRequestName);
+  const setCurrentEditorData = useRequestStore((s) => s.setCurrentEditorData);
+  const setPendingSaveData = useRequestStore((s) => s.setPendingSaveData);
+  const setIsSavingRequest = useRequestStore((s) => s.setIsSavingRequest);
+  const setIsLoading = useRequestStore((s) => s.setIsLoading);
+  const setResponse = useRequestStore((s) => s.setResponse);
+  const addRequestHistory = useRequestStore((s) => s.addRequestHistory);
+  const resetScratchpad = useRequestStore((s) => s.resetScratchpad);
+
+  // Local Collection & Sync States
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
+  const [syncingCollectionId, setSyncingCollectionId] = useState<string | null>(null);
+  const [editingCollection, setEditingCollection] = useState<CollectionNodeDto | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+    const checkDesktop = () => {
+      if (typeof window !== 'undefined') {
+        setIsDesktop(window.innerWidth >= 768);
       }
-
-      let chosenId: string | null = null;
-      if (preferredWorkspaceId && validList.some((w) => w.id === preferredWorkspaceId)) {
-        chosenId = preferredWorkspaceId;
-      } else {
-        const savedId = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY_ACTIVE_WORKSPACE) : null;
-        if (savedId && validList.some((w) => w.id === savedId)) {
-          chosenId = savedId;
-        } else {
-          chosenId = validList[0].id;
-        }
-      }
-
-      setActiveWorkspaceId(chosenId);
-      if (typeof window !== 'undefined' && chosenId) {
-        localStorage.setItem(STORAGE_KEY_ACTIVE_WORKSPACE, chosenId);
-      }
-      return validList;
-    } catch {
-      return [];
-    }
+    };
+    checkDesktop();
+    window.addEventListener('resize', checkDesktop);
+    return () => window.removeEventListener('resize', checkDesktop);
   }, []);
 
   useEffect(() => {
-    setIsWorkspacesLoading(true);
-    refreshWorkspaces().finally(() => {
-      setIsWorkspacesLoading(false);
-    });
-  }, [refreshWorkspaces]);
+    fetchWorkspaces();
+  }, [fetchWorkspaces]);
 
-  const handleSelectWorkspace = useCallback((id: string) => {
-    setActiveWorkspaceId(id);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_ACTIVE_WORKSPACE, id);
-    }
-  }, []);
+  const handleSelectWorkspace = useCallback(
+    (id: string) => {
+      setActiveWorkspaceId(id);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY_ACTIVE_WORKSPACE, id);
+      }
+    },
+    [setActiveWorkspaceId]
+  );
 
-  const handleCreateWorkspace = useCallback(async (name: string) => {
-    const created = await createWorkspaceApi(name);
-    await refreshWorkspaces(created.id);
-  }, [refreshWorkspaces]);
-
-  const ensureWorkspaceId = useCallback(async (): Promise<string> => {
-    if (activeWorkspaceId) return activeWorkspaceId;
-    const list = await refreshWorkspaces();
-    if (list && list.length > 0) {
-      return list[0].id;
-    }
-    const created = await createWorkspaceApi('Workspace');
-    await refreshWorkspaces(created.id);
-    return created.id;
-  }, [activeWorkspaceId, refreshWorkspaces]);
+  const handleCreateWorkspace = useCallback(
+    async (name: string) => {
+      const created = await createWorkspace(name);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY_ACTIVE_WORKSPACE, created.id);
+      }
+    },
+    [createWorkspace]
+  );
 
   // Tree Hook
   const {
@@ -222,97 +223,24 @@ export default function Home() {
     deleteRequest,
   } = useCollectionTree(activeWorkspaceId);
 
-  // Active Request State in RequestEditor
-  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
-  const [activeRequestDetails, setActiveRequestDetails] = useState<{
-    id: string;
-    name: string;
-    method: string;
-    url: string;
-    target: ExecutionTarget;
-    headers: string;
-    body: string;
-    auth: RequestData['auth'];
-    collectionId?: string | null;
-    folderId?: string | null;
-    schemaDefinition?: string | null;
-  } | null>(null);
-  const [currentEditorData, setCurrentEditorData] = useState<RequestData | null>(null);
-  const [isSavingRequest, setIsSavingRequest] = useState(false);
-
-  // Save As Modal State
-  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
-  const [pendingSaveData, setPendingSaveData] = useState<RequestData | null>(null);
-
-  // Environments and Variables State
-  const [isEnvModalOpen, setIsEnvModalOpen] = useState(false);
-  const [environments, setEnvironments] = useState<EnvironmentGroup[]>(DEFAULT_ENVIRONMENTS);
-  const [activeEnvironment, setActiveEnvironment] = useState<string | null>(null);
-  const [globals, setGlobals] = useState<VariableItem[]>([]);
-  const [collectionVariables, setCollectionVariables] = useState<VariableItem[]>([]);
-  const [requestHistory, setRequestHistory] = useState<DependencyRequest[]>(DEFAULT_REQUESTS);
-
-  // Selected Collection & Sync Modal State
-  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
-  const [syncingCollectionId, setSyncingCollectionId] = useState<string | null>(null);
-  const [isCollectionSettingsOpen, setIsCollectionSettingsOpen] = useState(false);
-  const [isImportOpenApiModalOpen, setIsImportOpenApiModalOpen] = useState(false);
-  const [editingCollection, setEditingCollection] = useState<CollectionNodeDto | null>(null);
-  const [auditBanner, setAuditBanner] = useState<{
-    collectionName: string;
-    report: SyncReport;
-  } | null>(null);
-  const [syncError, setSyncError] = useState<string | null>(null);
-
   const availableVariables = useMemo<AutocompleteVariable[]>(() => {
-    const list: AutocompleteVariable[] = [];
-    globals
-      .filter((g) => g.isActive !== false && g.key.trim())
-      .forEach((g) => {
-        list.push({ key: g.key.trim(), value: g.value, scope: 'global' });
-      });
-    collectionVariables
-      .filter((c) => c.isActive !== false && c.key.trim())
-      .forEach((c) => {
-        list.push({ key: c.key.trim(), value: c.value, scope: 'collection' });
-      });
-    if (activeEnvironment) {
-      const activeEnv = environments.find(
-        (e) => e.name.toLowerCase() === activeEnvironment.toLowerCase()
-      );
-      if (activeEnv) {
-        activeEnv.variables
-          .filter((v) => v.isActive !== false && v.key.trim())
-          .forEach((v) => {
-            list.push({ key: v.key.trim(), value: v.value, scope: activeEnvironment });
-          });
-      }
-    }
-    return list;
-  }, [globals, collectionVariables, environments, activeEnvironment]);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+    return getAvailableVariables();
+  }, [globals, collectionVariables, environments, activeEnvironment, getAvailableVariables]);
 
   // Sync active request details with activeItem state changes
   useEffect(() => {
     if (!activeItem || activeItem.type !== 'request') {
-      setActiveRequestId(null);
-      setActiveRequestDetails(null);
+      setActiveRequest(null, null);
     }
-  }, [activeItem]);
+  }, [activeItem, setActiveRequest]);
 
   const handleEnvironmentsChange = (updated: EnvironmentGroup[]) => {
     setEnvironments(updated);
-    if (activeEnvironment && !updated.some((e) => e.name === activeEnvironment)) {
-      setActiveEnvironment(null);
-    }
   };
 
   const handleOpenCollectionSettings = (item: CollectionNodeDto) => {
     setEditingCollection(item);
-    setIsCollectionSettingsOpen(true);
+    setModalOpen('collectionSettings', true);
   };
 
   const handleQuickSync = async (
@@ -419,8 +347,7 @@ export default function Home() {
         const req =
           (item.data as RequestItemNodeDto | undefined) || findRequestInTree(tree, item.id);
         if (req) {
-          setActiveRequestId(req.id);
-          setActiveRequestDetails({
+          setActiveRequest(req.id, {
             id: req.id,
             name: req.name,
             method: req.method || 'GET',
@@ -438,7 +365,7 @@ export default function Home() {
         setSelectedCollectionId(item.id);
       }
     },
-    [setActiveItem, tree]
+    [setActiveItem, tree, setActiveRequest]
   );
 
   const handleSaveExisting = async (reqData: RequestData) => {
@@ -468,7 +395,7 @@ export default function Home() {
         schemaDefinition: reqData.schemaDefinition || null,
       });
 
-      setActiveRequestDetails({
+      setActiveRequest(updated.id, {
         id: updated.id,
         name: updated.name,
         method: updated.method,
@@ -488,7 +415,7 @@ export default function Home() {
 
   const handleSaveAs = (reqData: RequestData) => {
     setPendingSaveData(reqData);
-    setIsSaveModalOpen(true);
+    setModalOpen('save', true);
   };
 
   const collectionOptions = useMemo<CollectionOption[]>(() => {
@@ -533,8 +460,7 @@ export default function Home() {
       id: created.id,
       data: created,
     });
-    setActiveRequestId(created.id);
-    setActiveRequestDetails({
+    setActiveRequest(created.id, {
       id: created.id,
       name: created.name,
       method: created.method,
@@ -547,7 +473,7 @@ export default function Home() {
       folderId: created.folderId,
       schemaDefinition: created.schemaDefinition,
     });
-    setIsSaveModalOpen(false);
+    setModalOpen('save', false);
     setPendingSaveData(null);
   };
 
@@ -575,8 +501,7 @@ export default function Home() {
       id: created.id,
       data: created,
     });
-    setActiveRequestId(created.id);
-    setActiveRequestDetails({
+    setActiveRequest(created.id, {
       id: created.id,
       name: created.name,
       method: created.method,
@@ -619,13 +544,13 @@ export default function Home() {
       schemaDefinition: (existing as any)?.schemaDefinition || null,
     });
     if (activeRequestId === id) {
-      setActiveRequestDetails((prev) => (prev ? { ...prev, name } : null));
+      setActiveRequestName(name);
     }
     return updated;
   };
 
   const handleImportOpenApi = () => {
-    setIsImportOpenApiModalOpen(true);
+    setModalOpen('importOpenApi', true);
   };
 
   const handleOpenApiImport = async (data: {
@@ -689,12 +614,7 @@ export default function Home() {
     setActiveMobilePane('response');
     const startTime = Date.now();
     try {
-      const activeVariables = resolveVariables(
-        globals,
-        collectionVariables,
-        environments,
-        activeEnvironment
-      );
+      const activeVariables = getResolvedVariables();
 
       const resolvedUrl = interpolateVariables(request.url, activeVariables, requestHistory);
 
@@ -817,10 +737,7 @@ export default function Home() {
         },
       };
 
-      setRequestHistory((prev) => [
-        executedItem,
-        ...prev.filter((r) => r.id !== (activeRequestId || 'req-last')),
-      ]);
+      addRequestHistory(executedItem);
     } catch (err: any) {
       const durationMs = Date.now() - startTime;
       setResponse({
@@ -879,13 +796,16 @@ export default function Home() {
         await duplicateRequest(id);
       }}
       onDeleteRequest={async (id) => {
+        if (activeRequestId === id) {
+          resetScratchpad();
+        }
         await deleteRequest(id);
       }}
       onImportOpenApi={handleImportOpenApi}
       workspaces={workspaces}
       activeWorkspaceId={activeWorkspaceId}
       onSelectWorkspace={handleSelectWorkspace}
-      onCreateWorkspaceClick={() => setIsWorkspaceModalOpen(true)}
+      onCreateWorkspaceClick={() => setModalOpen('workspace', true)}
       isWorkspacesLoading={isWorkspacesLoading}
     />
   );
@@ -899,11 +819,11 @@ export default function Home() {
         title="ApiDot"
         isAgentOnline={isAgentOnline}
         isDrawerOpen={isDrawerOpen}
-        onToggleDrawer={() => setIsDrawerOpen((prev) => !prev)}
+        onToggleDrawer={() => setModalOpen('drawer', !isDrawerOpen)}
         environments={environments.map((e) => e.name)}
         activeEnvironment={activeEnvironment}
         onSelectEnvironment={setActiveEnvironment}
-        onOpenEnvironmentSettings={() => setIsEnvModalOpen(true)}
+        onOpenEnvironmentSettings={() => setModalOpen('env', true)}
       />
 
       {/* Audit Summary Banner */}
@@ -959,7 +879,7 @@ export default function Home() {
 
       <EnvironmentModal
         isOpen={isEnvModalOpen}
-        onClose={() => setIsEnvModalOpen(false)}
+        onClose={() => setModalOpen('env', false)}
         globals={globals}
         collectionVariables={collectionVariables}
         environments={environments}
@@ -972,7 +892,7 @@ export default function Home() {
 
       <CollectionSettingsModal
         isOpen={isCollectionSettingsOpen}
-        onClose={() => setIsCollectionSettingsOpen(false)}
+        onClose={() => setModalOpen('collectionSettings', false)}
         collection={editingCollection}
         onSave={handleSaveCollectionSettings}
         isAgentOnline={isAgentOnline}
@@ -981,21 +901,21 @@ export default function Home() {
 
       <OpenApiImportModal
         isOpen={isImportOpenApiModalOpen}
-        onClose={() => setIsImportOpenApiModalOpen(false)}
+        onClose={() => setModalOpen('importOpenApi', false)}
         workspaceId={activeWorkspaceId || ''}
         onImport={handleOpenApiImport}
       />
 
       <WorkspaceModal
         isOpen={isWorkspaceModalOpen}
-        onClose={() => setIsWorkspaceModalOpen(false)}
+        onClose={() => setModalOpen('workspace', false)}
         onSave={handleCreateWorkspace}
       />
 
       <SaveRequestModal
         isOpen={isSaveModalOpen}
         onClose={() => {
-          setIsSaveModalOpen(false);
+          setModalOpen('save', false);
           setPendingSaveData(null);
         }}
         collections={collectionOptions}
@@ -1009,18 +929,36 @@ export default function Home() {
       />
 
       {/* Mobile Drawer */}
-      <MobileDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)}>
+      <MobileDrawer isOpen={isDrawerOpen} onClose={() => setModalOpen('drawer', false)}>
         {renderSidebarContent()}
       </MobileDrawer>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Desktop Sidebar (hidden on mobile, visible on md+) */}
-        <aside className="hidden md:flex flex-col w-64 border-r border-neutral-800 bg-neutral-900/50 p-4 overflow-hidden">
+        <aside
+          style={{ width: `${sidebarWidth}px` }}
+          className="hidden md:flex flex-col border-r border-neutral-800 bg-neutral-900/50 p-4 overflow-hidden shrink-0"
+        >
           {renderSidebarContent()}
         </aside>
 
+        {/* Divisor Sidebar <-> Workspace */}
+        <PanelSplitter
+          id="sidebar-splitter"
+          ariaLabel="Redimensionar barra lateral"
+          valueNow={sidebarWidth}
+          valueMin={180}
+          valueMax={480}
+          onDeltaChange={adjustSidebarWidth}
+          onReset={resetSidebarWidth}
+          className="hidden md:flex"
+        />
+
         {/* Main Workspace Area (Request & Response panels) */}
-        <main className="flex-1 flex flex-col md:flex-row overflow-hidden bg-neutral-950">
+        <main
+          ref={workspaceRef}
+          className="flex-1 flex flex-col md:flex-row overflow-hidden bg-neutral-950"
+        >
           {/* Mobile Tab Switcher (Requisição vs Resposta) */}
           <div className="flex md:hidden border-b border-neutral-800 bg-neutral-900/90 px-3 py-1.5 gap-2 shrink-0">
             <button
@@ -1059,8 +997,9 @@ export default function Home() {
           </div>
 
           <section
-            className={`flex-1 border-b md:border-b-0 md:border-r border-neutral-800 overflow-hidden flex flex-col ${
-              activeMobilePane === 'request' ? 'flex' : 'hidden md:flex'
+            style={{ flex: isDesktop ? `0 0 ${requestResponseRatio}%` : undefined }}
+            className={`border-b md:border-b-0 md:border-r border-neutral-800 overflow-hidden flex flex-col ${
+              activeMobilePane === 'request' ? 'flex flex-1' : 'hidden md:flex'
             }`}
           >
             <RequestEditor
@@ -1078,6 +1017,22 @@ export default function Home() {
               availableVariables={availableVariables}
             />
           </section>
+
+          {/* Divisor Request <-> Response (apenas desktop) */}
+          <div className="hidden md:flex items-stretch">
+            <PanelSplitter
+              id="request-response-splitter"
+              ariaLabel="Redimensionar painéis de requisição e resposta"
+              valueNow={requestResponseRatio}
+              valueMin={20}
+              valueMax={80}
+              onDeltaChange={(deltaPx) => {
+                const w = workspaceRef.current?.clientWidth;
+                if (w) adjustRequestResponseRatio((deltaPx / w) * 100);
+              }}
+              onReset={resetRequestResponseRatio}
+            />
+          </div>
 
           <section
             className={`flex-1 overflow-hidden flex flex-col ${
