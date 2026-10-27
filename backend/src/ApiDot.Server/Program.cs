@@ -8,6 +8,7 @@ using ApiDot.Core.Models;
 using ApiDot.Core.Variables;
 using ApiDot.Server.Data;
 using ApiDot.Server.Data.Entities;
+using ApiDot.Server.Endpoints;
 using ApiDot.Server.Execution;
 using ApiDot.Server.Models;
 using ApiDot.Server.Services;
@@ -58,6 +59,8 @@ app.MapGet("/health", () => Results.Ok(new
     status = "Healthy",
     timestamp = DateTime.UtcNow
 }));
+
+app.MapAgentDeviceEndpoints();
 
 app.MapGet("/api/workspaces", async (
     ApiDotDbContext db,
