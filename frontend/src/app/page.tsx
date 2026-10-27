@@ -684,16 +684,8 @@ export default function Home() {
         const col = tree.collections.find((c) => c.id === collectionId);
         if (col) {
           if (folderId) {
-            const findFolder = (folders: FolderNodeDto[]): FolderNodeDto | null => {
-              for (const f of folders) {
-                if (f.id === folderId) return f;
-                const sub = findFolder(f.subFolders || []);
-                if (sub) return sub;
-              }
-              return null;
-            };
-            const f = findFolder(col.folders || []);
-            targetName = f ? f.name : col.name;
+            const match = flattenFolders(col.folders || []).find((f) => f.id === folderId);
+            targetName = match ? match.name : col.name;
           } else {
             targetName = col.name;
           }
@@ -758,8 +750,9 @@ export default function Home() {
     let url = req.url;
     let headers: string | Record<string, string> = req.headersJson;
     let body: string | null = req.bodyContent;
-    let bodyFormat: string | undefined =
-      req.bodyType === 'Json' ? 'json' : req.bodyType === 'RawText' ? 'raw' : undefined;
+    let bodyFormat: string | undefined = activeData
+      ? undefined
+      : req.bodyType === 'Json' ? 'json' : req.bodyType === 'RawText' ? 'raw' : undefined;
     let auth: RequestData['auth'] = { type: 'none' };
     let pathParams: Record<string, string> | undefined = undefined;
 
@@ -829,6 +822,7 @@ export default function Home() {
   const handleSend = async (request: RequestData) => {
     setIsLoading(true);
     setResponse(null);
+    setExecutedCurl(null);
     setActiveMobilePane('response');
     const startTime = Date.now();
     try {
