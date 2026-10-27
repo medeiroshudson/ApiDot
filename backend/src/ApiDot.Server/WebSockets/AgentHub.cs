@@ -1,11 +1,12 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Text.Json;
 using ApiDot.Core.Models;
 
 namespace ApiDot.Server.WebSockets;
 
-public sealed record PendingDispatch(Guid UserId, TaskCompletionSource<HttpResponsePayload> Tcs);
+public sealed record PendingDispatch(Guid UserId, TaskCompletionSource<HttpResponsePayload> Tcs, long StartedTimestamp = 0);
 
 public class AgentHub : IAgentHub
 {
@@ -26,13 +27,78 @@ public class AgentHub : IAgentHub
         ArgumentException.ThrowIfNullOrWhiteSpace(agentName);
         ArgumentNullException.ThrowIfNull(socket);
 
+        if (_agents.TryRemove(userId, out var existing))
+        {
+            try
+            {
+                if (existing.Socket.State == WebSocketState.Open || existing.Socket.State == WebSocketState.Connecting)
+                {
+                    existing.Socket.Abort();
+                }
+            }
+            catch
+            {
+                // Ignore failure on aborting replaced socket
+            }
+            existing.Dispose();
+        }
+
         _agents[userId] = new AgentConnection(userId, agentName, socket);
     }
 
     public void UnregisterAgent(Guid userId)
     {
+        UnregisterAgent(userId, null);
+    }
+
+    public void UnregisterAgent(Guid userId, WebSocket? expectedSocket)
+    {
         ValidateUserId(userId);
-        _agents.TryRemove(userId, out _);
+
+        if (expectedSocket != null)
+        {
+            if (_agents.TryGetValue(userId, out var current) && current.Socket == expectedSocket)
+            {
+                if (_agents.TryRemove(userId, out var removed))
+                {
+                    try
+                    {
+                        if (removed.Socket.State == WebSocketState.Open || removed.Socket.State == WebSocketState.Connecting)
+                        {
+                            removed.Socket.Abort();
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore cleanup exceptions
+                    }
+                    removed.Dispose();
+                }
+            }
+            else
+            {
+                // Another connection was already registered for this agent, do not unregister it.
+                return;
+            }
+        }
+        else
+        {
+            if (_agents.TryRemove(userId, out var removed))
+            {
+                try
+                {
+                    if (removed.Socket.State == WebSocketState.Open || removed.Socket.State == WebSocketState.Connecting)
+                    {
+                        removed.Socket.Abort();
+                    }
+                }
+                catch
+                {
+                    // Ignore cleanup exceptions
+                }
+                removed.Dispose();
+            }
+        }
 
         foreach (var kvp in _pendingDispatches)
         {
@@ -47,6 +113,21 @@ public class AgentHub : IAgentHub
     {
         ValidateUserId(userId);
         return _agents.TryGetValue(userId, out var agent) ? agent : null;
+    }
+
+    public void RecordHeartbeat(Guid userId, double latencyMs)
+    {
+        ValidateUserId(userId);
+        if (_agents.TryGetValue(userId, out var agent))
+        {
+            agent.RecordHeartbeat(latencyMs);
+        }
+    }
+
+    public double? GetAgentLatency(Guid userId)
+    {
+        ValidateUserId(userId);
+        return _agents.TryGetValue(userId, out var agent) ? agent.RoundtripLatencyMs : null;
     }
 
     public async Task<HttpResponsePayload> DispatchToAgentAsync(
@@ -74,7 +155,8 @@ public class AgentHub : IAgentHub
         var effectiveToken = linkedCts?.Token ?? cancellationToken;
 
         var tcs = new TaskCompletionSource<HttpResponsePayload>(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (!_pendingDispatches.TryAdd(dispatch.Id, new PendingDispatch(userId, tcs)))
+        var timestamp = Stopwatch.GetTimestamp();
+        if (!_pendingDispatches.TryAdd(dispatch.Id, new PendingDispatch(userId, tcs, timestamp)))
         {
             throw new InvalidOperationException($"A dispatch with ID {dispatch.Id} is already in flight.");
         }
@@ -109,14 +191,27 @@ public class AgentHub : IAgentHub
         }
     }
 
-    public void ReceiveResponse(HttpResponsePayload response)
+    public bool TryCompleteDispatch(HttpResponsePayload response)
     {
         ArgumentNullException.ThrowIfNull(response);
 
         if (_pendingDispatches.TryRemove(response.DispatchId, out var pending))
         {
-            pending.Tcs.TrySetResult(response);
+            if (_agents.TryGetValue(pending.UserId, out var agent))
+            {
+                var elapsedMs = Stopwatch.GetElapsedTime(pending.StartedTimestamp).TotalMilliseconds;
+                agent.RecordHeartbeat(elapsedMs);
+            }
+
+            return pending.Tcs.TrySetResult(response);
         }
+
+        return false;
+    }
+
+    public void ReceiveResponse(HttpResponsePayload response)
+    {
+        TryCompleteDispatch(response);
     }
 
     private static void ValidateUserId(Guid userId)

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -54,6 +55,11 @@ using (var scope = app.Services.CreateScope())
 
 app.UseExceptionHandler();
 
+app.UseWebSockets(new WebSocketOptions
+{
+    KeepAliveInterval = TimeSpan.FromSeconds(15)
+});
+
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "Healthy",
@@ -61,6 +67,149 @@ app.MapGet("/health", () => Results.Ok(new
 }));
 
 app.MapAgentDeviceEndpoints();
+
+app.MapMethods("/ws/agent", new[] { "GET" }, async (
+    HttpContext context,
+    ApiDotDbContext db,
+    IAgentHub agentHub) =>
+{
+    if (!context.WebSockets.IsWebSocketRequest)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Bad Request",
+            detail: "WebSocket request expected.");
+    }
+
+    var token = context.Request.Query["token"].ToString();
+    if (string.IsNullOrWhiteSpace(token))
+    {
+        using var rejectedSocket = await context.WebSockets.AcceptWebSocketAsync();
+        await rejectedSocket.CloseAsync(
+            WebSocketCloseStatus.PolicyViolation,
+            "Unauthorized or revoked agent device token",
+            CancellationToken.None);
+        return Results.Empty;
+    }
+
+    var tokenHash = DeviceTokenHelper.ComputeHash(token);
+    var device = await db.AgentDevices
+        .FirstOrDefaultAsync(d => d.TokenHash == tokenHash, context.RequestAborted);
+
+    if (device is null || device.IsRevoked)
+    {
+        using var rejectedSocket = await context.WebSockets.AcceptWebSocketAsync();
+        await rejectedSocket.CloseAsync(
+            WebSocketCloseStatus.PolicyViolation,
+            "Unauthorized or revoked agent device token",
+            CancellationToken.None);
+        return Results.Empty;
+    }
+
+    using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
+
+    var nameQuery = context.Request.Query["name"].ToString();
+    var osQuery = context.Request.Query["os"].ToString();
+    var versionQuery = context.Request.Query["version"].ToString();
+
+    var agentName = string.IsNullOrWhiteSpace(nameQuery) ? "Agent" : nameQuery.Trim();
+    device.LastConnectedHostname = agentName;
+    device.LastConnectedAtUtc = DateTime.UtcNow;
+
+    if (!string.IsNullOrWhiteSpace(osQuery))
+    {
+        device.LastConnectedOs = osQuery.Trim();
+    }
+
+    if (!string.IsNullOrWhiteSpace(versionQuery))
+    {
+        device.AgentVersion = versionQuery.Trim();
+    }
+
+    var remoteIp = context.Connection.RemoteIpAddress?.ToString();
+    if (!string.IsNullOrWhiteSpace(remoteIp))
+    {
+        device.LastConnectedIp = remoteIp;
+    }
+
+    await db.SaveChangesAsync(context.RequestAborted);
+
+    agentHub.RegisterAgent(device.Id, agentName, webSocket);
+
+    try
+    {
+        var buffer = new byte[1024 * 64];
+        using var ms = new MemoryStream();
+
+        while (webSocket.State == WebSocketState.Open && !context.RequestAborted.IsCancellationRequested)
+        {
+            ms.SetLength(0);
+            WebSocketReceiveResult result;
+            try
+            {
+                do
+                {
+                    result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), context.RequestAborted);
+                    if (result.MessageType == WebSocketMessageType.Close)
+                    {
+                        break;
+                    }
+                    ms.Write(buffer, 0, result.Count);
+                } while (!result.EndOfMessage);
+            }
+            catch (WebSocketException)
+            {
+                break;
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
+            if (result.MessageType == WebSocketMessageType.Close)
+            {
+                try
+                {
+                    if (webSocket.State == WebSocketState.CloseReceived || webSocket.State == WebSocketState.Open)
+                    {
+                        await webSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
+                    }
+                }
+                catch
+                {
+                    // Ignore close output exceptions
+                }
+                break;
+            }
+
+            if (ms.Length > 0 && (result.MessageType == WebSocketMessageType.Text || result.MessageType == WebSocketMessageType.Binary))
+            {
+                try
+                {
+                    var payload = JsonSerializer.Deserialize<HttpResponsePayload>(ms.ToArray(), new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+
+                    if (payload != null && payload.DispatchId != Guid.Empty)
+                    {
+                        agentHub.TryCompleteDispatch(payload);
+                    }
+                }
+                catch (JsonException)
+                {
+                    // Ignore non-payload frames (e.g. text ping/pong or malformed)
+                }
+            }
+        }
+    }
+    finally
+    {
+        agentHub.UnregisterAgent(device.Id, webSocket);
+    }
+
+    return Results.Empty;
+});
 
 app.MapGet("/api/workspaces", async (
     ApiDotDbContext db,
