@@ -276,6 +276,14 @@ export function CollectionTree({
     });
   };
 
+  const handleRootContextMenu = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('input')) {
+      return;
+    }
+    handleContextMenu(e, 'empty');
+  };
+
   const handleRequestDelete = (
     type: 'collection' | 'folder' | 'request',
     item: CollectionNodeDto | FolderNodeDto | RequestItemNodeDto
@@ -849,6 +857,7 @@ export function CollectionTree({
     <div
       ref={treeContainerRef}
       data-testid="collection-tree-container"
+      onContextMenu={handleRootContextMenu}
       className={`flex flex-col h-full overflow-hidden text-sm ${className}`}
     >
       {/* Unified Toolbar */}
@@ -955,7 +964,7 @@ export function CollectionTree({
         <div
           role="tree"
           aria-label="Árvore de Coleções"
-          className="flex-1 overflow-y-auto space-y-0.5 min-h-[120px] focus:outline-none"
+          className="flex-1 flex flex-col overflow-y-auto space-y-0.5 min-h-[120px] focus:outline-none"
         >
           {displayedTree && displayedTree.collections.length > 0 ? (
             displayedTree.collections.map(renderCollection)

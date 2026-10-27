@@ -608,5 +608,48 @@ describe('CollectionTree', () => {
       // Novo dropdown should be closed
       expect(screen.queryByText(/nova coleção/i)).toBeNull();
     });
+
+    it('opens empty context menu when right-clicking on root container or empty message', () => {
+      render(
+        <CollectionTree
+          tree={{ collections: [] }}
+          workspaces={mockWorkspaces}
+          activeWorkspaceId="ws-1"
+        />
+      );
+
+      const container = screen.getByTestId('collection-tree-container');
+      fireEvent.contextMenu(container);
+
+      expect(screen.getByText(/nova coleção/i)).toBeInTheDocument();
+      expect(screen.getByText(/importar openapi/i)).toBeInTheDocument();
+      expect(screen.getByText(/recarregar árvore/i)).toBeInTheDocument();
+
+      // Close menu
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(screen.queryByText(/nova coleção/i)).toBeNull();
+
+      // Right-click on empty message text
+      const emptyMessage = screen.getByText('Nenhuma coleção disponível.');
+      fireEvent.contextMenu(emptyMessage);
+      expect(screen.getByText(/nova coleção/i)).toBeInTheDocument();
+    });
+
+    it('allows native context menu when right-clicking inside search input', () => {
+      render(
+        <CollectionTree
+          tree={mockTree}
+          workspaces={mockWorkspaces}
+          activeWorkspaceId="ws-1"
+        />
+      );
+
+      const searchInput = screen.getByPlaceholderText('Filtrar por nome ou rota...');
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      searchInput.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(screen.queryByText(/nova coleção/i)).toBeNull();
+    });
   });
 });
