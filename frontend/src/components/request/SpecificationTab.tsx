@@ -157,7 +157,12 @@ export function schemaPropertiesToTree(
 
   for (const [key, val] of Object.entries(properties)) {
     if (!val || typeof val !== 'object') continue;
-    const type: SchemaPropertyType = isValidType(val.type) ? val.type : 'string';
+    const type: SchemaPropertyType =
+      val.type && isValidType(val.type)
+        ? val.type
+        : val.properties
+        ? 'object'
+        : 'string';
     const children =
       type === 'object' && val.properties
         ? schemaPropertiesToTree(

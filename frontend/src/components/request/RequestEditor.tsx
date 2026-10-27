@@ -263,7 +263,7 @@ export function RequestEditor({
       }
       if (initialRequest.auth !== undefined) setAuth(initialRequest.auth);
       if (initialRequest.pathParams !== undefined) setPathParams(initialRequest.pathParams);
-      if (initialRequest.schemaDefinition !== undefined) setSchemaDefinition(initialRequest.schemaDefinition);
+      if (initialRequest.schemaDefinition !== undefined) setSchemaDefinition(initialRequest.schemaDefinition || '');
     }
   }, [initialRequest]);
 

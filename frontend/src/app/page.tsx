@@ -616,6 +616,7 @@ export default function Home() {
           : 'None'),
       collectionId: existing?.collectionId || null,
       folderId: existing?.folderId || null,
+      schemaDefinition: (existing as any)?.schemaDefinition || null,
     });
     if (activeRequestId === id) {
       setActiveRequestDetails((prev) => (prev ? { ...prev, name } : null));
