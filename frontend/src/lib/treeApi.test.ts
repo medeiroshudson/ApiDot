@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { useDeviceStore } from '@/stores/useDeviceStore';
 import {
   fetchWorkspaceTree,
   createCollectionApi,
@@ -11,6 +12,8 @@ import {
   updateRequestApi,
   duplicateRequestApi,
   deleteRequestApi,
+  executeRequest,
+  ExecuteRequestDto,
   WorkspaceTreeDto,
   CollectionNodeDto,
   FolderNodeDto,
@@ -22,6 +25,7 @@ describe('treeApi', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    useDeviceStore.getState().reset();
   });
 
   afterEach(() => {
@@ -392,6 +396,117 @@ describe('treeApi', () => {
       await expect(deleteRequestApi('req-1')).resolves.toBeUndefined();
       expect(global.fetch).toHaveBeenCalledWith('/api/requests/req-1', {
         method: 'DELETE',
+      });
+    });
+  });
+
+  describe('executeRequest', () => {
+    const mockPayload: ExecuteRequestDto = {
+      method: 'POST',
+      url: 'https://api.internal/data',
+      target: 'Agent',
+      headers: { 'Custom-Header': 'val' },
+      bodyContent: '{"foo":"bar"}',
+    };
+
+    it('sends POST to /api/requests/execute with JSON body without X-Device-Id when none set', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ statusCode: 200 }),
+      } as Response);
+
+      await executeRequest(mockPayload);
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/requests/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(mockPayload),
+        signal: undefined,
+      });
+    });
+
+    it('injects X-Device-Id from useDeviceStore when activeDeviceId is configured', async () => {
+      useDeviceStore.getState().setActiveDeviceId('dev-guid-store-999');
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+      } as Response);
+
+      await executeRequest(mockPayload);
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/requests/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-Id': 'dev-guid-store-999',
+        },
+        body: JSON.stringify(mockPayload),
+        signal: undefined,
+      });
+    });
+
+    it('prefers deviceIdOverride over useDeviceStore activeDeviceId', async () => {
+      useDeviceStore.getState().setActiveDeviceId('dev-guid-store-999');
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+      } as Response);
+
+      await executeRequest(mockPayload, undefined, 'dev-guid-override-111');
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/requests/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-Id': 'dev-guid-override-111',
+        },
+        body: JSON.stringify(mockPayload),
+        signal: undefined,
+      });
+    });
+
+    it('omits X-Device-Id when deviceIdOverride is null even if store has active device', async () => {
+      useDeviceStore.getState().setActiveDeviceId('dev-guid-store-999');
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+      } as Response);
+
+      await executeRequest(mockPayload, undefined, null);
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/requests/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(mockPayload),
+        signal: undefined,
+      });
+    });
+
+    it('passes abortSignal to fetch', async () => {
+      const controller = new AbortController();
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+      } as Response);
+
+      await executeRequest(mockPayload, controller.signal);
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/requests/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(mockPayload),
+        signal: controller.signal,
       });
     });
   });

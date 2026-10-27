@@ -1,3 +1,5 @@
+import { useDeviceStore } from '@/stores/useDeviceStore';
+
 export type ExecutionTarget = 'Inherit' | 'Server' | 'Agent';
 export type HttpBodyType = 'None' | 'Json' | 'FormData' | 'Multipart' | 'RawText';
 
@@ -250,4 +252,49 @@ export async function importOpenApiCollection(
   });
   return handleResponse<CollectionNodeDto>(res);
 }
+
+export interface ExecuteRequestDto {
+  id?: string;
+  workspaceId?: string;
+  method: string;
+  url: string;
+  target?: ExecutionTarget;
+  headers?: Record<string, string>;
+  bodyType?: HttpBodyType;
+  bodyContent?: string | null;
+  environmentName?: string;
+  collectionId?: string | null;
+  environmentVariables?: Record<string, string>;
+  variables?: Record<string, string>;
+  timeoutSeconds?: number;
+  ignoreSslErrors?: boolean;
+  [key: string]: unknown;
+}
+
+export async function executeRequest(
+  request: ExecuteRequestDto,
+  abortSignal?: AbortSignal,
+  deviceIdOverride?: string | null
+): Promise<Response> {
+  const activeDeviceId =
+    deviceIdOverride !== undefined
+      ? deviceIdOverride
+      : useDeviceStore.getState().activeDeviceId;
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (activeDeviceId && activeDeviceId.trim()) {
+    headers['X-Device-Id'] = activeDeviceId.trim();
+  }
+
+  return fetch('/api/requests/execute', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(request),
+    signal: abortSignal,
+  });
+}
+
 
