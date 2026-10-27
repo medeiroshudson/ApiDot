@@ -673,7 +673,7 @@ export default function Home() {
     let method = req.method;
     let url = req.url;
     let headers: string | Record<string, string> = req.headersJson;
-    let body: string | null = req.bodyContent;
+    let body: string | null | undefined = req.bodyContent;
     let bodyFormat: string | undefined = activeData
       ? undefined
       : req.bodyType === 'Json' ? 'json' : req.bodyType === 'RawText' ? 'raw' : undefined;
