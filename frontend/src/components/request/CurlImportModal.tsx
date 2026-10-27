@@ -71,6 +71,7 @@ export function CurlImportModal({
 
       if (
         previousActiveElementRef.current &&
+        document.contains(previousActiveElementRef.current) &&
         typeof previousActiveElementRef.current.focus === 'function'
       ) {
         previousActiveElementRef.current.focus();
@@ -84,6 +85,7 @@ export function CurlImportModal({
       if (
         wasOpenRef.current &&
         previousActiveElementRef.current &&
+        document.contains(previousActiveElementRef.current) &&
         typeof previousActiveElementRef.current.focus === 'function'
       ) {
         previousActiveElementRef.current.focus();
