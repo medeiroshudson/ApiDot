@@ -1022,7 +1022,7 @@ export default function Home() {
             <PanelSplitter
               id="request-response-splitter"
               ariaLabel="Redimensionar painéis de requisição e resposta"
-              valueNow={requestResponseRatio}
+              valueNow={Math.round(requestResponseRatio)}
               valueMin={20}
               valueMax={80}
               onDeltaChange={(deltaPx) => {

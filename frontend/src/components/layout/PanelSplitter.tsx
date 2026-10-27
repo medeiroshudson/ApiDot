@@ -118,7 +118,7 @@ export const PanelSplitter: React.FC<PanelSplitterProps> = ({
       onLostPointerCapture={handleLostPointerCapture}
       onDoubleClick={handleDoubleClick}
       onKeyDown={handleKeyDown}
-      className={`group relative flex items-center justify-center w-1.5 h-full cursor-col-resize select-none shrink-0 outline-none focus-visible:ring-1 focus-visible:ring-sky-500 touch-none transition-colors ${className}`}
+      className={`group relative flex items-center justify-center w-1.5 h-full cursor-col-resize select-none shrink-0 outline-none focus-visible:ring-1 focus-visible:ring-sky-500 touch-none transition-colors before:absolute before:inset-y-0 before:-inset-x-1.5 before:content-[''] ${className}`}
     >
       {/* 1px visual separator line centered inside hit area */}
       <div

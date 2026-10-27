@@ -1,5 +1,6 @@
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
+import type { SyncReport } from '@/components/collection/CollectionSettingsModal';
 
 export interface LayoutState {
   sidebarWidth: number;
@@ -12,7 +13,7 @@ export interface LayoutState {
   isCollectionSettingsOpen: boolean;
   isImportOpenApiModalOpen: boolean;
   isDrawerOpen: boolean;
-  auditBanner: { collectionName: string; report: any } | null;
+  auditBanner: { collectionName: string; report: SyncReport } | null;
   syncError: string | null;
   setSidebarWidth: (width: number) => void;
   adjustSidebarWidth: (deltaPx: number) => void;
@@ -24,7 +25,7 @@ export interface LayoutState {
   toggleSidebarCollapsed: () => void;
   setActiveMobilePane: (pane: 'request' | 'response') => void;
   setModalOpen: (modal: string, isOpen: boolean) => void;
-  setAuditBanner: (banner: { collectionName: string; report: any } | null) => void;
+  setAuditBanner: (banner: { collectionName: string; report: SyncReport } | null) => void;
   setSyncError: (error: string | null) => void;
 }
 
