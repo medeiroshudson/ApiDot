@@ -70,7 +70,7 @@ app.MapAgentDeviceEndpoints();
 
 app.MapMethods("/ws/agent", new[] { "GET" }, async (
     HttpContext context,
-    ApiDotDbContext db,
+    IServiceScopeFactory scopeFactory,
     IAgentHub agentHub) =>
 {
     if (!context.WebSockets.IsWebSocketRequest)
@@ -84,60 +84,85 @@ app.MapMethods("/ws/agent", new[] { "GET" }, async (
     var token = context.Request.Query["token"].ToString();
     if (string.IsNullOrWhiteSpace(token))
     {
+        using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         using var rejectedSocket = await context.WebSockets.AcceptWebSocketAsync();
-        await rejectedSocket.CloseAsync(
-            WebSocketCloseStatus.PolicyViolation,
-            "Unauthorized or revoked agent device token",
-            CancellationToken.None);
+        try
+        {
+            await rejectedSocket.CloseOutputAsync(
+                WebSocketCloseStatus.PolicyViolation,
+                "Unauthorized or revoked agent device token",
+                closeCts.Token);
+        }
+        catch
+        {
+            // Ignore close output exceptions
+        }
         return Results.Empty;
     }
 
-    var tokenHash = DeviceTokenHelper.ComputeHash(token);
-    var device = await db.AgentDevices
-        .FirstOrDefaultAsync(d => d.TokenHash == tokenHash, context.RequestAborted);
+    Guid deviceId;
+    string agentName;
 
-    if (device is null || device.IsRevoked)
+    using (var scope = scopeFactory.CreateScope())
     {
-        using var rejectedSocket = await context.WebSockets.AcceptWebSocketAsync();
-        await rejectedSocket.CloseAsync(
-            WebSocketCloseStatus.PolicyViolation,
-            "Unauthorized or revoked agent device token",
-            CancellationToken.None);
-        return Results.Empty;
+        var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
+        var tokenHash = DeviceTokenHelper.ComputeHash(token);
+        var device = await db.AgentDevices
+            .FirstOrDefaultAsync(d => d.TokenHash == tokenHash, context.RequestAborted);
+
+        if (device is null || device.IsRevoked)
+        {
+            using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            using var rejectedSocket = await context.WebSockets.AcceptWebSocketAsync();
+            try
+            {
+                await rejectedSocket.CloseOutputAsync(
+                    WebSocketCloseStatus.PolicyViolation,
+                    "Unauthorized or revoked agent device token",
+                    closeCts.Token);
+            }
+            catch
+            {
+                // Ignore close output exceptions
+            }
+            return Results.Empty;
+        }
+
+        var nameQuery = context.Request.Query["name"].ToString();
+        var osQuery = context.Request.Query["os"].ToString();
+        var versionQuery = context.Request.Query["version"].ToString();
+
+        agentName = string.IsNullOrWhiteSpace(nameQuery) ? "Agent" : nameQuery.Trim();
+        device.LastConnectedHostname = agentName;
+        device.LastConnectedAtUtc = DateTime.UtcNow;
+
+        if (!string.IsNullOrWhiteSpace(osQuery))
+        {
+            device.LastConnectedOs = osQuery.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(versionQuery))
+        {
+            device.AgentVersion = versionQuery.Trim();
+        }
+
+        var remoteIp = context.Connection.RemoteIpAddress?.ToString();
+        if (!string.IsNullOrWhiteSpace(remoteIp))
+        {
+            device.LastConnectedIp = remoteIp;
+        }
+
+        await db.SaveChangesAsync(context.RequestAborted);
+        deviceId = device.Id;
     }
 
     using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
 
-    var nameQuery = context.Request.Query["name"].ToString();
-    var osQuery = context.Request.Query["os"].ToString();
-    var versionQuery = context.Request.Query["version"].ToString();
-
-    var agentName = string.IsNullOrWhiteSpace(nameQuery) ? "Agent" : nameQuery.Trim();
-    device.LastConnectedHostname = agentName;
-    device.LastConnectedAtUtc = DateTime.UtcNow;
-
-    if (!string.IsNullOrWhiteSpace(osQuery))
-    {
-        device.LastConnectedOs = osQuery.Trim();
-    }
-
-    if (!string.IsNullOrWhiteSpace(versionQuery))
-    {
-        device.AgentVersion = versionQuery.Trim();
-    }
-
-    var remoteIp = context.Connection.RemoteIpAddress?.ToString();
-    if (!string.IsNullOrWhiteSpace(remoteIp))
-    {
-        device.LastConnectedIp = remoteIp;
-    }
-
-    await db.SaveChangesAsync(context.RequestAborted);
-
-    agentHub.RegisterAgent(device.Id, agentName, webSocket);
+    agentHub.RegisterAgent(deviceId, agentName, webSocket);
 
     try
     {
+        const int maxMessageSizeBytes = 16 * 1024 * 1024; // 16 MB
         var buffer = new byte[1024 * 64];
         using var ms = new MemoryStream();
 
@@ -145,6 +170,8 @@ app.MapMethods("/ws/agent", new[] { "GET" }, async (
         {
             ms.SetLength(0);
             WebSocketReceiveResult result;
+            var messageTooBig = false;
+
             try
             {
                 do
@@ -154,6 +181,13 @@ app.MapMethods("/ws/agent", new[] { "GET" }, async (
                     {
                         break;
                     }
+
+                    if (ms.Length + result.Count > maxMessageSizeBytes)
+                    {
+                        messageTooBig = true;
+                        break;
+                    }
+
                     ms.Write(buffer, 0, result.Count);
                 } while (!result.EndOfMessage);
             }
@@ -166,13 +200,31 @@ app.MapMethods("/ws/agent", new[] { "GET" }, async (
                 break;
             }
 
+            if (messageTooBig)
+            {
+                try
+                {
+                    using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                    await webSocket.CloseOutputAsync(
+                        WebSocketCloseStatus.MessageTooBig,
+                        "Message size exceeds maximum limit of 16MB",
+                        closeCts.Token);
+                }
+                catch
+                {
+                    // Ignore close output exceptions
+                }
+                break;
+            }
+
             if (result.MessageType == WebSocketMessageType.Close)
             {
                 try
                 {
                     if (webSocket.State == WebSocketState.CloseReceived || webSocket.State == WebSocketState.Open)
                     {
-                        await webSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
+                        using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                        await webSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Closing", closeCts.Token);
                     }
                 }
                 catch
@@ -186,26 +238,79 @@ app.MapMethods("/ws/agent", new[] { "GET" }, async (
             {
                 try
                 {
-                    var payload = JsonSerializer.Deserialize<HttpResponsePayload>(ms.ToArray(), new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true
-                    });
+                    var bytes = ms.ToArray();
+                    using var doc = JsonDocument.Parse(bytes);
+                    var root = doc.RootElement;
 
-                    if (payload != null && payload.DispatchId != Guid.Empty)
+                    if (root.TryGetProperty("type", out var typeProp))
                     {
-                        agentHub.TryCompleteDispatch(payload);
+                        var type = typeProp.GetString();
+                        if (string.Equals(type, "heartbeat", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (root.TryGetProperty("latencyMs", out var latProp) && latProp.TryGetDouble(out var lMs))
+                            {
+                                agentHub.RecordHeartbeat(deviceId, lMs);
+                            }
+                            else
+                            {
+                                var agent = agentHub.GetAgent(deviceId);
+                                if (agent != null) agent.LastSeenAt = DateTimeOffset.UtcNow;
+                            }
+                        }
+                        else if (string.Equals(type, "pong", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (root.TryGetProperty("timestamp", out var tsProp) && tsProp.TryGetInt64(out var sentTs))
+                            {
+                                var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                                var latencyMs = Math.Max(0, (double)(nowMs - sentTs));
+                                agentHub.RecordHeartbeat(deviceId, latencyMs);
+                            }
+                            else
+                            {
+                                var agent = agentHub.GetAgent(deviceId);
+                                if (agent != null) agent.LastSeenAt = DateTimeOffset.UtcNow;
+                            }
+                        }
+                        else if (string.Equals(type, "ping", StringComparison.OrdinalIgnoreCase))
+                        {
+                            long? clientTs = null;
+                            if (root.TryGetProperty("timestamp", out var pingTs) && pingTs.TryGetInt64(out var pts))
+                            {
+                                clientTs = pts;
+                            }
+                            var pongJson = JsonSerializer.SerializeToUtf8Bytes(new
+                            {
+                                type = "pong",
+                                timestamp = clientTs ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                            });
+                            await webSocket.SendAsync(pongJson, WebSocketMessageType.Text, true, context.RequestAborted);
+                            var agent = agentHub.GetAgent(deviceId);
+                            if (agent != null) agent.LastSeenAt = DateTimeOffset.UtcNow;
+                        }
+                    }
+                    else if (root.TryGetProperty("dispatchId", out _) || root.TryGetProperty("DispatchId", out _))
+                    {
+                        var payload = JsonSerializer.Deserialize<HttpResponsePayload>(bytes, new JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true
+                        });
+
+                        if (payload != null && payload.DispatchId != Guid.Empty)
+                        {
+                            agentHub.TryCompleteDispatch(payload);
+                        }
                     }
                 }
                 catch (JsonException)
                 {
-                    // Ignore non-payload frames (e.g. text ping/pong or malformed)
+                    // Ignore non-payload frames (e.g. malformed JSON)
                 }
             }
         }
     }
     finally
     {
-        agentHub.UnregisterAgent(device.Id, webSocket);
+        agentHub.UnregisterAgent(deviceId, webSocket);
     }
 
     return Results.Empty;

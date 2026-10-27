@@ -331,13 +331,13 @@ public class AgentHubTests
     }
 
     [Fact]
-    public void AgentConnection_Should_Dispose_SendLock_When_Disposed()
+    public void AgentConnection_Should_Not_Dispose_SendLock_When_Disposed()
     {
         var connection = new AgentConnection(Guid.NewGuid(), "Agent", new TestWebSocket());
         connection.Dispose();
 
         var act = () => connection.SendLock.Wait(0);
-        act.Should().Throw<ObjectDisposedException>();
+        act.Should().NotThrow();
     }
 }
 

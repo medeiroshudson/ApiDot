@@ -40,7 +40,6 @@ public class AgentHub : IAgentHub
             {
                 // Ignore failure on aborting replaced socket
             }
-            existing.Dispose();
         }
 
         _agents[userId] = new AgentConnection(userId, agentName, socket);
@@ -59,20 +58,25 @@ public class AgentHub : IAgentHub
         {
             if (_agents.TryGetValue(userId, out var current) && current.Socket == expectedSocket)
             {
-                if (_agents.TryRemove(userId, out var removed))
+                var kvp = new KeyValuePair<Guid, AgentConnection>(userId, current);
+                if (((ICollection<KeyValuePair<Guid, AgentConnection>>)_agents).Remove(kvp))
                 {
                     try
                     {
-                        if (removed.Socket.State == WebSocketState.Open || removed.Socket.State == WebSocketState.Connecting)
+                        if (current.Socket.State == WebSocketState.Open || current.Socket.State == WebSocketState.Connecting)
                         {
-                            removed.Socket.Abort();
+                            current.Socket.Abort();
                         }
                     }
                     catch
                     {
                         // Ignore cleanup exceptions
                     }
-                    removed.Dispose();
+                }
+                else
+                {
+                    // A reconnect replaced the connection before removal; do not cancel dispatches for the new connection.
+                    return;
                 }
             }
             else
@@ -96,7 +100,6 @@ public class AgentHub : IAgentHub
                 {
                     // Ignore cleanup exceptions
                 }
-                removed.Dispose();
             }
         }
 
@@ -197,12 +200,6 @@ public class AgentHub : IAgentHub
 
         if (_pendingDispatches.TryRemove(response.DispatchId, out var pending))
         {
-            if (_agents.TryGetValue(pending.UserId, out var agent))
-            {
-                var elapsedMs = Stopwatch.GetElapsedTime(pending.StartedTimestamp).TotalMilliseconds;
-                agent.RecordHeartbeat(elapsedMs);
-            }
-
             return pending.Tcs.TrySetResult(response);
         }
 

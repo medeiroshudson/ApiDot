@@ -28,6 +28,8 @@ public record AgentConnection(
 
     public void Dispose()
     {
-        SendLock.Dispose();
+        // SemaphoreSlim uses no unmanaged resources.
+        // It is intentionally not disposed to prevent ObjectDisposedException
+        // during concurrent in-flight dispatches.
     }
 }

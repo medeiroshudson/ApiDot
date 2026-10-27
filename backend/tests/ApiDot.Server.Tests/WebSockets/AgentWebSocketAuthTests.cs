@@ -342,6 +342,111 @@ public class AgentWebSocketAuthTests : IClassFixture<WebApplicationFactory<Progr
         await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None);
     }
 
+    [Fact]
+    public async Task WebSocket_Heartbeat_Message_Updates_Latency_And_LastSeenAt()
+    {
+        var (device, rawToken) = await CreateTestDeviceAsync(name: "Heartbeat Machine");
+        var hub = _factory.Services.GetRequiredService<IAgentHub>();
+
+        var wsClient = _factory.Server.CreateWebSocketClient();
+        var uri = new Uri(_factory.Server.BaseAddress, $"/ws/agent?token={rawToken}&name=Heartbeat-Agent");
+
+        using var socket = await wsClient.ConnectAsync(uri, CancellationToken.None);
+        await WaitForAgentOnlineAsync(hub, device.Id);
+        hub.IsAgentOnline(device.Id).Should().BeTrue();
+
+        var agent = hub.GetAgent(device.Id);
+        agent.Should().NotBeNull();
+        agent!.RoundtripLatencyMs.Should().BeNull();
+
+        // 1. Send heartbeat with explicit latencyMs
+        var heartbeatJson = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            type = "heartbeat",
+            latencyMs = 35.5
+        });
+        await socket.SendAsync(new ArraySegment<byte>(heartbeatJson), WebSocketMessageType.Text, true, CancellationToken.None);
+
+        // Wait for server to process heartbeat
+        for (var i = 0; i < 20 && agent.RoundtripLatencyMs == null; i++)
+        {
+            await Task.Delay(50);
+        }
+        agent.RoundtripLatencyMs.Should().Be(35.5);
+        agent.LastSeenAt.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
+
+        // 2. Send pong with timestamp
+        var sentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - 40;
+        var pongJson = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            type = "pong",
+            timestamp = sentTimestamp
+        });
+        await socket.SendAsync(new ArraySegment<byte>(pongJson), WebSocketMessageType.Text, true, CancellationToken.None);
+
+        // Wait for exponential moving average update
+        var previousLatency = agent.RoundtripLatencyMs;
+        for (var i = 0; i < 20 && agent.RoundtripLatencyMs == previousLatency; i++)
+        {
+            await Task.Delay(50);
+        }
+        agent.RoundtripLatencyMs.Should().NotBe(35.5);
+        agent.RoundtripLatencyMs.Should().BeGreaterThan(0);
+
+        // 3. Send ping and verify server replies with pong
+        var pingJson = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            type = "ping",
+            timestamp = 123456L
+        });
+        await socket.SendAsync(new ArraySegment<byte>(pingJson), WebSocketMessageType.Text, true, CancellationToken.None);
+
+        var buffer = new byte[1024];
+        var receiveResult = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+        receiveResult.MessageType.Should().Be(WebSocketMessageType.Text);
+
+        var replyText = Encoding.UTF8.GetString(buffer, 0, receiveResult.Count);
+        replyText.Should().Contain("\"type\":\"pong\"");
+        replyText.Should().Contain("123456");
+
+        await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task WebSocket_Message_Exceeding_16MB_Closes_With_MessageTooBig()
+    {
+        var (device, rawToken) = await CreateTestDeviceAsync(name: "Oversized Payload Agent");
+        var hub = _factory.Services.GetRequiredService<IAgentHub>();
+
+        var wsClient = _factory.Server.CreateWebSocketClient();
+        var uri = new Uri(_factory.Server.BaseAddress, $"/ws/agent?token={rawToken}&name=Oversized-Agent");
+
+        using var socket = await wsClient.ConnectAsync(uri, CancellationToken.None);
+        await WaitForAgentOnlineAsync(hub, device.Id);
+        hub.IsAgentOnline(device.Id).Should().BeTrue();
+
+        // Send fragments exceeding 16MB (17 chunks of 1MB with endOfMessage: false)
+        var chunk = new byte[1024 * 1024]; // 1MB
+        for (var i = 0; i < 17; i++)
+        {
+            await socket.SendAsync(new ArraySegment<byte>(chunk), WebSocketMessageType.Binary, false, CancellationToken.None);
+        }
+
+        // Receive close frame from server
+        var buffer = new byte[1024];
+        var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+
+        result.MessageType.Should().Be(WebSocketMessageType.Close);
+        result.CloseStatus.Should().Be(WebSocketCloseStatus.MessageTooBig);
+        result.CloseStatusDescription.Should().Contain("16MB");
+
+        for (var i = 0; i < 20 && hub.IsAgentOnline(device.Id); i++)
+        {
+            await Task.Delay(50);
+        }
+        hub.IsAgentOnline(device.Id).Should().BeFalse();
+    }
+
     private static async Task WaitForAgentOnlineAsync(IAgentHub hub, Guid deviceId, int timeoutMs = 2000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
