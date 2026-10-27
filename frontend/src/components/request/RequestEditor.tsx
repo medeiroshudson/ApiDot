@@ -239,6 +239,9 @@ export function RequestEditor({
         }
       }
 
+      const hasVariables = Boolean(availableVariables && availableVariables.length > 0);
+      const hasRequests = Boolean(availableRequests && availableRequests.length > 0);
+
       const curl = generateCurlCommand(
         {
           method,
@@ -252,12 +255,15 @@ export function RequestEditor({
         {
           variables: variablesMap,
           requestHistory: availableRequests,
+          resolveVariables: hasVariables || hasRequests,
         }
       );
 
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(curl);
+      if (!navigator?.clipboard?.writeText) {
+        return;
       }
+
+      await navigator.clipboard.writeText(curl);
 
       setIsCopied(true);
       if (copyTimeoutRef.current) {
@@ -518,7 +524,7 @@ export function RequestEditor({
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            aria-label="Copiar cURL"
+            aria-label={isCopied ? 'Copiado!' : 'Copiar cURL'}
             title={isCopied ? 'Copiado!' : 'Copiar cURL'}
             onClick={handleCopyCurl}
             className="h-7 px-2.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-colors border border-neutral-700/60 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
