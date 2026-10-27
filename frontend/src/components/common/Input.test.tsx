@@ -23,10 +23,15 @@ describe('Input', () => {
     const textarea = screen.getByPlaceholderText('Auto grow input');
 
     expect(textarea).not.toHaveClass('max-h-[84px]');
+    expect(textarea.style.height).toBe('36px');
+
     fireEvent.focus(textarea);
     expect(textarea).toHaveClass('max-h-[84px]');
+    expect(textarea.style.height).toBe('84px');
+
     fireEvent.blur(textarea);
     expect(textarea).not.toHaveClass('max-h-[84px]');
+    expect(textarea.style.height).toBe('36px');
   });
 
   it('prevents default newline insertion when Enter is pressed in autoGrow mode', () => {

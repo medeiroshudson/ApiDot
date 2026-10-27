@@ -1,4 +1,4 @@
-import React, { forwardRef, useState } from 'react';
+import React, { forwardRef, useState, useRef, useCallback, useEffect } from 'react';
 
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
   autoGrow?: boolean;
@@ -26,6 +26,41 @@ export const Input = forwardRef<HTMLInputElement | HTMLTextAreaElement, InputPro
     ref
   ) => {
     const [isFocused, setIsFocused] = useState(false);
+    const internalTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+    const setMergedRef = useCallback(
+      (node: HTMLTextAreaElement | null) => {
+        internalTextareaRef.current = node;
+        if (typeof ref === 'function') {
+          ref(node);
+        } else if (ref) {
+          (ref as React.MutableRefObject<HTMLTextAreaElement | null>).current = node;
+        }
+      },
+      [ref]
+    );
+
+    const adjustHeight = useCallback(() => {
+      const el = internalTextareaRef.current;
+      if (!el) return;
+      if (!isFocused) {
+        el.style.height = '36px';
+        return;
+      }
+      el.style.height = 'auto';
+      const maxHeight = maxRows ? maxRows * 24 + 12 : 84;
+      const scrollH = el.scrollHeight;
+      // In real browser scrollHeight reflects wrapped content; fallback to maxHeight if scrollH unavailable
+      const target = scrollH > 0 ? scrollH : maxHeight;
+      const newHeight = Math.min(Math.max(target, 36), maxHeight);
+      el.style.height = `${newHeight}px`;
+    }, [isFocused, maxRows]);
+
+    useEffect(() => {
+      if (autoGrow) {
+        adjustHeight();
+      }
+    }, [autoGrow, adjustHeight, rest.value, isFocused]);
 
     if (autoGrow) {
       const handleFocus = (e: React.FocusEvent<HTMLTextAreaElement>) => {
@@ -58,6 +93,7 @@ export const Input = forwardRef<HTMLInputElement | HTMLTextAreaElement, InputPro
         }
         (onChange as unknown as React.ChangeEventHandler<HTMLTextAreaElement>)?.(e);
         textareaProps?.onChange?.(e);
+        adjustHeight();
       };
 
       const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -81,6 +117,7 @@ export const Input = forwardRef<HTMLInputElement | HTMLTextAreaElement, InputPro
         }
         (rest as unknown as React.TextareaHTMLAttributes<HTMLTextAreaElement>)?.onPaste?.(e);
         textareaProps?.onPaste?.(e);
+        adjustHeight();
       };
 
       const textareaClasses = [
@@ -107,7 +144,7 @@ export const Input = forwardRef<HTMLInputElement | HTMLTextAreaElement, InputPro
 
       return (
         <textarea
-          ref={ref as React.Ref<HTMLTextAreaElement>}
+          ref={setMergedRef}
           rows={textareaProps?.rows ?? 1}
           aria-invalid={error || undefined}
           {...(rest as unknown as React.TextareaHTMLAttributes<HTMLTextAreaElement>)}
