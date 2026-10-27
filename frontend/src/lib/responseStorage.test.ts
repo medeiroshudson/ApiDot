@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   getMaxResponseCacheBytes,
   saveResponseToStorage,
@@ -217,7 +217,11 @@ describe('responseStorage (IndexedDB Persistent Storage)', () => {
       expect(result).toBeNull();
     });
 
-    it('should reject saving responses larger than the configured maximum cache limit', async () => {
+    it('should reject saving responses larger than the configured maximum cache limit and evict any stale response', async () => {
+      // Pre-save a small response
+      await saveResponseToStorage('req-large', { statusCode: 200, body: 'old-small-content' });
+      expect(await getResponseFromStorage('req-large')).not.toBeNull();
+
       // Configure max cache to 0.001 MB (~1KB = 1048 bytes) for testing limit
       process.env.NEXT_PUBLIC_MAX_RESPONSE_CACHE_MB = '0.001';
 
@@ -231,7 +235,7 @@ describe('responseStorage (IndexedDB Persistent Storage)', () => {
       const saved = await saveResponseToStorage('req-large', largeResponse);
       expect(saved).toBe(false);
 
-      // Verify it was NOT persisted to IndexedDB
+      // Verify stale response was evicted from IndexedDB
       const retrieved = await getResponseFromStorage('req-large');
       expect(retrieved).toBeNull();
     });

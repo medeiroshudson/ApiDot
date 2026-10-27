@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   useRequestStore,
   CLEAN_SCRATCHPAD,
@@ -684,6 +684,26 @@ describe('useRequestStore', () => {
     it('should return null from loadResponseForRequest when key is not in storage or memory', async () => {
       const loaded = await useRequestStore.getState().loadResponseForRequest('req-unknown');
       expect(loaded).toBeNull();
+    });
+
+    it('should not overwrite fresh in-memory response when background storage hydration resolves after a new execution', async () => {
+      const persistedOld: ResponseData = { statusCode: 200, body: 'Old From Storage' };
+      const freshNew: ResponseData = { statusCode: 201, body: 'Fresh Newly Executed' };
+
+      await saveResponseToStorage('req-race', persistedOld);
+
+      // Call setActiveRequest which initiates background getResponseFromStorage('req-race')
+      useRequestStore.getState().setActiveRequest('req-race', { ...sampleRequestDetails, id: 'req-race' });
+
+      // Before storage promise resolves, a new execution response arrives in memory
+      useRequestStore.getState().setResponse(freshNew);
+
+      // Wait a tick for any pending storage promises
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      // The fresh in-memory response must NOT have been overwritten by persistedOld
+      expect(useRequestStore.getState().response).toEqual(freshNew);
+      expect(useRequestStore.getState().responsesByRequestId['req-race']).toEqual(freshNew);
     });
   });
 

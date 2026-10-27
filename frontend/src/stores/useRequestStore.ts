@@ -163,13 +163,18 @@ export const useRequestStore = create<RequestState>()(
                 const currentActiveKey = get().activeRequestId
                   ? get().activeRequestId
                   : getScratchpadKey(workspaceId);
-                set((state) => ({
-                  responsesByRequestId: {
-                    ...state.responsesByRequestId,
-                    [targetKey]: stored,
-                  },
-                  ...(currentActiveKey === targetKey ? { response: stored } : {}),
-                }));
+                set((state) => {
+                  if (state.responsesByRequestId[targetKey]) {
+                    return {};
+                  }
+                  return {
+                    responsesByRequestId: {
+                      ...state.responsesByRequestId,
+                      [targetKey]: stored,
+                    },
+                    ...(currentActiveKey === targetKey ? { response: stored } : {}),
+                  };
+                });
               }
             })
             .catch(() => {});

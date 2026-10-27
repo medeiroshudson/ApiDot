@@ -75,7 +75,10 @@ function getDB(): Promise<IDBDatabase> {
     cachedIdb = idb;
   }
   if (!dbPromise) {
-    dbPromise = openDatabase();
+    dbPromise = openDatabase().catch((err) => {
+      dbPromise = null;
+      throw err;
+    });
   }
   return dbPromise;
 }
@@ -88,12 +91,14 @@ export function resetDatabaseConnectionForTesting(): void {
 /**
  * Persists a response payload to IndexedDB if it fits within the max cache size.
  * Responses exceeding the limit are not written to disk and return false.
+ * Evicts any stale response from storage before returning false.
  * Zero payload mutation: data is stored 100% intact.
  */
 export async function saveResponseToStorage(key: string, data: ResponseData): Promise<boolean> {
   try {
     const serialized = JSON.stringify(data);
     if (serialized.length > getMaxResponseCacheBytes()) {
+      await deleteResponseFromStorage(key);
       return false;
     }
     const db = await getDB();
