@@ -75,10 +75,15 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           } else if (currentActiveId && validList.some((w) => w.id === currentActiveId)) {
             chosenId = currentActiveId;
           } else {
-            const legacyId =
-              typeof window !== 'undefined'
-                ? localStorage.getItem('apidot_active_workspace_id')
-                : null;
+            let legacyId: string | null = null;
+            try {
+              legacyId =
+                typeof window !== 'undefined'
+                  ? localStorage.getItem('apidot_active_workspace_id')
+                  : null;
+            } catch {
+              legacyId = null;
+            }
             if (legacyId && validList.some((w) => w.id === legacyId)) {
               chosenId = legacyId;
             } else {
@@ -114,6 +119,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
               workspaces: [...state.workspaces, created],
               activeWorkspaceId: created.id,
               isLoading: false,
+              error: null,
             }));
           }
           return created;
@@ -144,12 +150,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       },
 
       reset: () => {
-        set({
-          workspaces: [],
-          activeWorkspaceId: null,
-          isLoading: false,
-          error: null,
-        });
+        set(INITIAL_WORKSPACE_STATE);
       },
     }),
     {
