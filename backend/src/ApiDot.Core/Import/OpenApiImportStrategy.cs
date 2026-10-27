@@ -14,6 +14,9 @@ public class OpenApiImportStrategy : ISpecImportStrategy
         "get", "post", "put", "delete", "patch", "options", "head", "trace"
     };
 
+    private static readonly IDeserializer YamlDeserializer = new DeserializerBuilder().Build();
+    private static readonly ISerializer YamlToJsonSerializer = new SerializerBuilder().JsonCompatible().Build();
+
     public ImportFormat Format => ImportFormat.OpenApi;
 
     public bool CanHandle(string? content)
@@ -195,18 +198,14 @@ public class OpenApiImportStrategy : ISpecImportStrategy
 
         try
         {
-            var deserializer = new DeserializerBuilder().Build();
             using var reader = new StringReader(content);
-            var yamlObject = deserializer.Deserialize(reader);
+            var yamlObject = YamlDeserializer.Deserialize(reader);
             if (yamlObject == null)
             {
                 return null;
             }
 
-            var serializer = new SerializerBuilder()
-                .JsonCompatible()
-                .Build();
-            return serializer.Serialize(yamlObject);
+            return YamlToJsonSerializer.Serialize(yamlObject);
         }
         catch
         {
