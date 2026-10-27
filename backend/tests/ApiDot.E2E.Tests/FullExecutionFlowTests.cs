@@ -117,6 +117,7 @@ public class FullExecutionFlowTests : IClassFixture<WebApplicationFactory<Progra
     public async Task Execute_AgentTarget_WithNoAgentOnline_Returns_400_BadRequest_WithProblemDetails()
     {
         var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Device-Id", Guid.NewGuid().ToString());
         var dispatch = new HttpRequestDispatch
         {
             Id = Guid.NewGuid(),
@@ -127,10 +128,10 @@ public class FullExecutionFlowTests : IClassFixture<WebApplicationFactory<Progra
 
         var response = await client.PostAsJsonAsync("/api/requests/execute", dispatch);
 
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
         response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
         var content = await response.Content.ReadAsStringAsync();
-        content.Should().Contain("No online agent found for user");
+        content.Should().Contain("não está conectado ou está offline");
     }
 
     [Fact]
@@ -143,6 +144,7 @@ public class FullExecutionFlowTests : IClassFixture<WebApplicationFactory<Progra
                 services.AddSingleton<IAgentHub, TimeoutAgentHub>();
             });
         }).CreateClient();
+        client.DefaultRequestHeaders.Add("X-Device-Id", Guid.NewGuid().ToString());
 
         var request = new ExecuteRequest
         {

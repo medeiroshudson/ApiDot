@@ -1720,6 +1720,7 @@ app.MapPost("/api/collections/import-openapi", async (
 
 app.MapPost("/api/requests/execute", async (
     ExecuteRequest request,
+    HttpContext httpContext,
     ITargetResolver targetResolver,
     IServerHttpExecutor serverHttpExecutor,
     IAgentHub agentHub,
@@ -1824,13 +1825,26 @@ app.MapPost("/api/requests/execute", async (
 
     if (resolvedTarget == ExecutionTarget.Agent)
     {
-        var userId = (request.UserId.HasValue && request.UserId.Value != Guid.Empty)
-            ? request.UserId.Value
-            : Guid.NewGuid();
+        var rawDeviceId = httpContext.Request.Headers["X-Device-Id"].ToString();
+        if (string.IsNullOrWhiteSpace(rawDeviceId) || !Guid.TryParse(rawDeviceId, out var deviceId) || deviceId == Guid.Empty)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Device Header Missing",
+                detail: "O cabeçalho X-Device-Id é obrigatório para execução via Agent.");
+        }
+
+        if (!agentHub.IsAgentOnline(deviceId))
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Agent Offline",
+                detail: $"O Agent para o dispositivo '{deviceId}' não está conectado ou está offline.");
+        }
 
         try
         {
-            var result = await agentHub.DispatchToAgentAsync(userId, interpolatedDispatch, cancellationToken);
+            var result = await agentHub.DispatchToAgentAsync(deviceId, interpolatedDispatch, cancellationToken);
             if (historyProvider is InMemoryResponseHistoryProvider inMemoryHistory)
             {
                 inMemoryHistory.Record(request.Id.ToString(), result);
