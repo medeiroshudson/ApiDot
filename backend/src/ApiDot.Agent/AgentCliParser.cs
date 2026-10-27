@@ -89,14 +89,47 @@ public static class AgentCliParser
         {
             switch (args[i])
             {
-                case "--server" or "-s" when i + 1 < args.Length:
-                    serverUrl = args[++i];
+                case "--server" or "-s":
+                    if (i + 1 < args.Length)
+                    {
+                        serverUrl = args[++i];
+                    }
+                    else
+                    {
+                        return new AgentCliOptions
+                        {
+                            Command = AgentCommandType.Connect,
+                            ErrorMessage = $"Option '{args[i]}' requires a value."
+                        };
+                    }
                     break;
-                case "--token" or "-t" when i + 1 < args.Length:
-                    token = args[++i];
+                case "--token" or "-t":
+                    if (i + 1 < args.Length)
+                    {
+                        token = args[++i];
+                    }
+                    else
+                    {
+                        return new AgentCliOptions
+                        {
+                            Command = AgentCommandType.Connect,
+                            ErrorMessage = $"Option '{args[i]}' requires a value."
+                        };
+                    }
                     break;
-                case "--name" or "-n" when i + 1 < args.Length:
-                    agentName = args[++i];
+                case "--name" or "-n":
+                    if (i + 1 < args.Length)
+                    {
+                        agentName = args[++i];
+                    }
+                    else
+                    {
+                        return new AgentCliOptions
+                        {
+                            Command = AgentCommandType.Connect,
+                            ErrorMessage = $"Option '{args[i]}' requires a value."
+                        };
+                    }
                     break;
                 case "--ignore-ssl":
                     ignoreSsl = true;
@@ -166,14 +199,47 @@ public static class AgentCliParser
         {
             switch (args[i])
             {
-                case "--server" or "-s" when i + 1 < args.Length:
-                    serverUrl = args[++i];
+                case "--server" or "-s":
+                    if (i + 1 < args.Length)
+                    {
+                        serverUrl = args[++i];
+                    }
+                    else
+                    {
+                        return new AgentCliOptions
+                        {
+                            Command = AgentCommandType.ServiceInstall,
+                            ErrorMessage = $"Option '{args[i]}' requires a value."
+                        };
+                    }
                     break;
-                case "--token" or "-t" when i + 1 < args.Length:
-                    token = args[++i];
+                case "--token" or "-t":
+                    if (i + 1 < args.Length)
+                    {
+                        token = args[++i];
+                    }
+                    else
+                    {
+                        return new AgentCliOptions
+                        {
+                            Command = AgentCommandType.ServiceInstall,
+                            ErrorMessage = $"Option '{args[i]}' requires a value."
+                        };
+                    }
                     break;
-                case "--name" or "-n" when i + 1 < args.Length:
-                    agentName = args[++i];
+                case "--name" or "-n":
+                    if (i + 1 < args.Length)
+                    {
+                        agentName = args[++i];
+                    }
+                    else
+                    {
+                        return new AgentCliOptions
+                        {
+                            Command = AgentCommandType.ServiceInstall,
+                            ErrorMessage = $"Option '{args[i]}' requires a value."
+                        };
+                    }
                     break;
                 case "--ignore-ssl":
                     ignoreSsl = true;

@@ -68,8 +68,7 @@ switch (options.Command)
 
     case AgentCommandType.ServiceRestart:
     {
-        ServiceManager.Stop();
-        var result = ServiceManager.Start();
+        var result = ServiceManager.Restart();
         if (result.Success)
         {
             Console.WriteLine(result.Message);

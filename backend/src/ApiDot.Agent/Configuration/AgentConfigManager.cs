@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Text.Json;
 
 namespace ApiDot.Agent.Configuration;
@@ -28,18 +29,64 @@ public static class AgentConfigManager
 
         var path = customPath ?? DefaultConfigPath;
         var dir = Path.GetDirectoryName(path);
-        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+        if (!string.IsNullOrEmpty(dir))
         {
-            Directory.CreateDirectory(dir);
+            if (!Directory.Exists(dir))
+            {
+                if (!OperatingSystem.IsWindows())
+                {
+                    try
+                    {
+                        Directory.CreateDirectory(dir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                    }
+                    catch (PlatformNotSupportedException)
+                    {
+                        Directory.CreateDirectory(dir);
+                    }
+                }
+                else
+                {
+                    Directory.CreateDirectory(dir);
+                }
+            }
+            else if (!OperatingSystem.IsWindows())
+            {
+                try
+                {
+                    File.SetUnixFileMode(dir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                }
+                catch
+                {
+                    // Best effort permission tightening on existing directory
+                }
+            }
         }
 
         var json = JsonSerializer.Serialize(config, JsonOptions);
-        File.WriteAllText(path, json);
+
+        var streamOptions = new FileStreamOptions
+        {
+            Mode = FileMode.Create,
+            Access = FileAccess.Write,
+            Share = FileShare.None,
+        };
+
+        if (!OperatingSystem.IsWindows())
+        {
+            streamOptions.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+
+        using (var stream = new FileStream(path, streamOptions))
+        using (var writer = new StreamWriter(stream, Encoding.UTF8))
+        {
+            writer.Write(json);
+        }
 
         if (!OperatingSystem.IsWindows())
         {
             try
             {
+                // Ensure 0600 permissions even if the file existed previously with looser permissions
                 File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             }
             catch (PlatformNotSupportedException)

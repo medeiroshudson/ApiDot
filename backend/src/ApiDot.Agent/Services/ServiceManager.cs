@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Security;
 using System.Text;
 using ApiDot.Agent.Configuration;
 
@@ -30,6 +32,10 @@ public static class ServiceManager
         var stdoutLog = Path.Combine(logDir, "agent.log");
         var stderrLog = Path.Combine(logDir, "agent.err.log");
 
+        var escapedExecutable = SecurityElement.Escape(executablePath) ?? executablePath;
+        var escapedStdout = SecurityElement.Escape(stdoutLog) ?? stdoutLog;
+        var escapedStderr = SecurityElement.Escape(stderrLog) ?? stderrLog;
+
         return $"""
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -38,13 +44,13 @@ public static class ServiceManager
     <key>Label</key><string>{MacServiceLabel}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>{executablePath}</string>
+        <string>{escapedExecutable}</string>
         <string>connect</string>
     </array>
     <key>RunAtLoad</key><true/>
     <key>KeepAlive</key><true/>
-    <key>StandardOutPath</key><string>{stdoutLog}</string>
-    <key>StandardErrorPath</key><string>{stderrLog}</string>
+    <key>StandardOutPath</key><string>{escapedStdout}</string>
+    <key>StandardErrorPath</key><string>{escapedStderr}</string>
 </dict>
 </plist>
 """;
@@ -59,7 +65,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart={executablePath} connect
+ExecStart="{executablePath}" connect
 Restart=always
 RestartSec=5
 
@@ -247,6 +253,65 @@ WantedBy=default.target
         }
     }
 
+    public static ServiceOperationResult Restart(string? customServiceFilePath = null)
+    {
+        try
+        {
+            if (OperatingSystem.IsMacOS())
+            {
+                var plistPath = customServiceFilePath ?? MacPlistPath;
+                if (File.Exists(plistPath))
+                {
+                    ProcessRunner("launchctl", $"unload -w \"{plistPath}\"");
+                    var (exitCode, output, error) = ProcessRunner("launchctl", $"load -w \"{plistPath}\"");
+                    if (exitCode != 0)
+                    {
+                        return new ServiceOperationResult(false, $"Failed to reload service: launchctl load returned exit code {exitCode}.", error);
+                    }
+                    return new ServiceOperationResult(true, $"Successfully restarted service '{MacServiceLabel}' via launchd.", plistPath);
+                }
+                else
+                {
+                    var uid = GetUserId();
+                    var (kickExit, kickOut, kickErr) = ProcessRunner("launchctl", $"kickstart -k gui/{uid}/{MacServiceLabel}");
+                    if (kickExit != 0)
+                    {
+                        Stop();
+                        return Start();
+                    }
+                    return new ServiceOperationResult(true, $"Successfully restarted service '{MacServiceLabel}'.");
+                }
+            }
+
+            if (OperatingSystem.IsLinux())
+            {
+                var (exitCode, output, error) = ProcessRunner("systemctl", $"--user restart {LinuxServiceName}");
+                if (exitCode != 0)
+                {
+                    return new ServiceOperationResult(false, $"Failed to restart {LinuxServiceName}.", error);
+                }
+                return new ServiceOperationResult(true, $"Successfully restarted service '{LinuxServiceName}'.");
+            }
+
+            if (OperatingSystem.IsWindows())
+            {
+                ProcessRunner("schtasks", $"/end /tn \"{WindowsTaskName}\"");
+                var (exitCode, output, error) = ProcessRunner("schtasks", $"/run /tn \"{WindowsTaskName}\"");
+                if (exitCode != 0)
+                {
+                    return new ServiceOperationResult(false, $"Failed to start task '{WindowsTaskName}' on restart.", error);
+                }
+                return new ServiceOperationResult(true, $"Successfully restarted task '{WindowsTaskName}'.");
+            }
+
+            return new ServiceOperationResult(false, $"Unsupported operating system: {Environment.OSVersion.Platform}");
+        }
+        catch (Exception ex)
+        {
+            return new ServiceOperationResult(false, $"Failed to restart service: {ex.Message}", ex.ToString());
+        }
+    }
+
     public static ServiceOperationResult Status(string? customServiceFilePath = null)
     {
         try
@@ -365,14 +430,48 @@ WantedBy=default.target
                 }
             };
             process.Start();
-            var output = process.StandardOutput.ReadToEnd();
-            var error = process.StandardError.ReadToEnd();
-            process.WaitForExit();
-            return (process.ExitCode, output, error);
+
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+
+            if (!process.WaitForExit(TimeSpan.FromSeconds(30)))
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch
+                {
+                    // Best effort process termination
+                }
+                return (-1, string.Empty, "Process execution timed out after 30 seconds.");
+            }
+
+            Task.WaitAll([outputTask, errorTask], TimeSpan.FromSeconds(5));
+            return (process.ExitCode, outputTask.Result, errorTask.Result);
         }
         catch (Exception ex)
         {
             return (-1, string.Empty, ex.Message);
         }
     }
+
+    private static uint GetUserId()
+    {
+        if (OperatingSystem.IsMacOS() || OperatingSystem.IsLinux())
+        {
+            try
+            {
+                return getuid();
+            }
+            catch
+            {
+                return 501;
+            }
+        }
+        return 0;
+    }
+
+    [DllImport("libc", EntryPoint = "getuid")]
+    private static extern uint getuid();
 }

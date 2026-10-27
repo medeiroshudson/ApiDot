@@ -1,4 +1,5 @@
 using System.IO;
+using System.Security;
 using ApiDot.Agent;
 using ApiDot.Agent.Configuration;
 using ApiDot.Agent.Services;
@@ -69,6 +70,17 @@ public class ServiceManagerTests : IDisposable
     }
 
     [Fact]
+    public void GenerateLaunchdPlist_ShouldEscapeSpecialXmlCharactersInPaths()
+    {
+        var config = new AgentConfig("https://hub.example.com", "my-secret-token", "Agent-01", true);
+        var dangerousPath = "/custom/path/apidot & agent <test> \"quoted\"";
+        var plist = ServiceManager.GenerateLaunchdPlist(config, dangerousPath);
+
+        plist.Should().Contain(SecurityElement.Escape(dangerousPath));
+        plist.Should().NotContain("<string>/custom/path/apidot & agent");
+    }
+
+    [Fact]
     public void GenerateSystemdUnit_ShouldContainRequiredDirectivesAndExecutable()
     {
         var config = new AgentConfig("https://hub.example.com", "my-secret-token", "Agent-01", false);
@@ -78,11 +90,20 @@ public class ServiceManagerTests : IDisposable
         unit.Should().Contain("Description=ApiDot Local Agent");
         unit.Should().Contain("After=network.target");
         unit.Should().Contain("[Service]");
-        unit.Should().Contain("ExecStart=/usr/bin/apidot-agent connect");
+        unit.Should().Contain("ExecStart=\"/usr/bin/apidot-agent\" connect");
         unit.Should().Contain("Restart=always");
         unit.Should().Contain("RestartSec=5");
         unit.Should().Contain("[Install]");
         unit.Should().Contain("WantedBy=default.target");
+    }
+
+    [Fact]
+    public void GenerateSystemdUnit_ShouldQuoteExecutablePath_WhenPathHasSpaces()
+    {
+        var config = new AgentConfig("https://hub.example.com", "my-secret-token", "Agent-01", false);
+        var unit = ServiceManager.GenerateSystemdUnit(config, "/opt/ApiDot Agent/bin/apidot-agent");
+
+        unit.Should().Contain("ExecStart=\"/opt/ApiDot Agent/bin/apidot-agent\" connect");
     }
 
     [Fact]
@@ -133,7 +154,7 @@ public class ServiceManagerTests : IDisposable
     }
 
     [Fact]
-    public void AgentConfigManager_Save_OnUnix_ShouldSetRestrictiveFilePermissions()
+    public void AgentConfigManager_Save_OnUnix_ShouldSetRestrictiveFileAndDirectoryPermissions()
     {
         if (OperatingSystem.IsWindows())
         {
@@ -141,20 +162,31 @@ public class ServiceManagerTests : IDisposable
         }
 
         var tempDir = CreateTempDirectory();
-        var tempPath = Path.Combine(tempDir, "config.json");
+        var parentDir = Path.Combine(tempDir, "secure_apidot");
+        var tempPath = Path.Combine(parentDir, "config.json");
         var config = new AgentConfig("https://hub.test", "tok_secret_600");
 
         AgentConfigManager.Save(config, tempPath);
 
-        var mode = File.GetUnixFileMode(tempPath);
-        mode.HasFlag(UnixFileMode.UserRead).Should().BeTrue();
-        mode.HasFlag(UnixFileMode.UserWrite).Should().BeTrue();
+        // 0600 on file: UserRead and UserWrite, no Group or Other permissions
+        var fileMode = File.GetUnixFileMode(tempPath);
+        fileMode.HasFlag(UnixFileMode.UserRead).Should().BeTrue();
+        fileMode.HasFlag(UnixFileMode.UserWrite).Should().BeTrue();
 
-        // 0600: Group and Other permissions must not be set
-        var forbiddenModes = UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
-                             UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute |
-                             UnixFileMode.UserExecute;
-        (mode & forbiddenModes).Should().Be(0);
+        var forbiddenFileModes = UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
+                                 UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute |
+                                 UnixFileMode.UserExecute;
+        (fileMode & forbiddenFileModes).Should().Be(0);
+
+        // 0700 on directory: UserRead, UserWrite, UserExecute, no Group or Other permissions
+        var dirMode = File.GetUnixFileMode(parentDir);
+        dirMode.HasFlag(UnixFileMode.UserRead).Should().BeTrue();
+        dirMode.HasFlag(UnixFileMode.UserWrite).Should().BeTrue();
+        dirMode.HasFlag(UnixFileMode.UserExecute).Should().BeTrue();
+
+        var forbiddenDirModes = UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
+                                UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
+        (dirMode & forbiddenDirModes).Should().Be(0);
     }
 
     [Fact]
@@ -286,6 +318,25 @@ public class ServiceManagerTests : IDisposable
         options.ErrorMessage.Should().Contain("Unknown service command");
     }
 
+    [Theory]
+    [InlineData(new string[] { "connect", "--server" }, "Option '--server' requires a value.")]
+    [InlineData(new string[] { "connect", "-s" }, "Option '-s' requires a value.")]
+    [InlineData(new string[] { "connect", "--token" }, "Option '--token' requires a value.")]
+    [InlineData(new string[] { "connect", "-t" }, "Option '-t' requires a value.")]
+    [InlineData(new string[] { "connect", "--name" }, "Option '--name' requires a value.")]
+    [InlineData(new string[] { "connect", "-n" }, "Option '-n' requires a value.")]
+    [InlineData(new string[] { "service", "install", "--server" }, "Option '--server' requires a value.")]
+    [InlineData(new string[] { "service", "install", "-s" }, "Option '-s' requires a value.")]
+    [InlineData(new string[] { "service", "install", "--token" }, "Option '--token' requires a value.")]
+    [InlineData(new string[] { "service", "install", "-t" }, "Option '-t' requires a value.")]
+    [InlineData(new string[] { "service", "install", "--name" }, "Option '--name' requires a value.")]
+    [InlineData(new string[] { "service", "install", "-n" }, "Option '-n' requires a value.")]
+    public void AgentCliParser_Parse_WhenOptionMissingValue_ShouldReturnDescriptiveErrorMessage(string[] args, string expectedErrorMessage)
+    {
+        var options = AgentCliParser.Parse(args);
+        options.ErrorMessage.Should().Be(expectedErrorMessage);
+    }
+
     [Fact]
     public void ServiceManager_StartAndStop_WithMockRunner_ShouldInvokePlatformCommands()
     {
@@ -324,6 +375,39 @@ public class ServiceManagerTests : IDisposable
             executedCommands[0].Arguments.Should().Contain("/run /tn \"ApiDotAgent\"");
             executedCommands[1].FileName.Should().Be("schtasks");
             executedCommands[1].Arguments.Should().Contain("/end /tn \"ApiDotAgent\"");
+        }
+    }
+
+    [Fact]
+    public void ServiceManager_Restart_WithMockRunner_ShouldInvokePlatformRestartCommands()
+    {
+        var executedCommands = new List<(string FileName, string Arguments)>();
+        ServiceManager.ProcessRunner = (file, args) =>
+        {
+            executedCommands.Add((file, args));
+            return (0, "ok", string.Empty);
+        };
+
+        var tempDir = CreateTempDirectory();
+        var tempPlistPath = Path.Combine(tempDir, "test.plist");
+        File.WriteAllText(tempPlistPath, "<plist></plist>");
+
+        var result = ServiceManager.Restart(tempPlistPath);
+        result.Success.Should().BeTrue();
+
+        if (OperatingSystem.IsMacOS())
+        {
+            executedCommands.Should().Contain(c => c.FileName == "launchctl" && c.Arguments.Contains("unload"));
+            executedCommands.Should().Contain(c => c.FileName == "launchctl" && c.Arguments.Contains("load"));
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            executedCommands.Should().Contain(c => c.FileName == "systemctl" && c.Arguments.Contains("restart apidot-agent"));
+        }
+        else if (OperatingSystem.IsWindows())
+        {
+            executedCommands.Should().Contain(c => c.FileName == "schtasks" && c.Arguments.Contains("/end"));
+            executedCommands.Should().Contain(c => c.FileName == "schtasks" && c.Arguments.Contains("/run"));
         }
     }
 
