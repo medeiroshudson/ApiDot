@@ -229,3 +229,22 @@ export async function deleteRequestApi(id: string): Promise<void> {
   });
   return handleResponse<void>(res);
 }
+
+export interface ImportOpenApiCollectionRequest {
+  workspaceId: string;
+  name?: string;
+  specUrl?: string;
+  specContent?: string;
+}
+
+export async function importOpenApiCollection(
+  data: ImportOpenApiCollectionRequest
+): Promise<CollectionNodeDto> {
+  const res = await fetch('/api/collections/import-openapi', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<CollectionNodeDto>(res);
+}
+

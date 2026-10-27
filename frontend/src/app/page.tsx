@@ -20,6 +20,7 @@ import {
   CollectionSettingsModal,
   SyncReport,
 } from '@/components/collection/CollectionSettingsModal';
+import { OpenApiImportModal } from '@/components/collection/OpenApiImportModal';
 import {
   useCollectionTree,
   ActiveTreeItem,
@@ -34,6 +35,7 @@ import {
   HttpBodyType,
   fetchWorkspacesApi,
   createWorkspaceApi,
+  importOpenApiCollection,
 } from '@/lib/treeApi';
 import { WorkspaceModal } from '@/components/workspace/WorkspaceModal';
 import { CheckCircle2, X, AlertCircle } from 'lucide-react';
@@ -107,6 +109,16 @@ function findRequestInTree(
     if (found) return found;
   }
   return null;
+}
+
+function countCollectionRequests(col: CollectionNodeDto): number {
+  let count = Array.isArray(col.requests) ? col.requests.length : 0;
+  const countFolder = (f: FolderNodeDto) => {
+    if (Array.isArray(f.requests)) count += f.requests.length;
+    if (Array.isArray(f.subFolders)) f.subFolders.forEach(countFolder);
+  };
+  if (Array.isArray(col.folders)) col.folders.forEach(countFolder);
+  return count;
 }
 
 export default function Home() {
@@ -243,6 +255,7 @@ export default function Home() {
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [syncingCollectionId, setSyncingCollectionId] = useState<string | null>(null);
   const [isCollectionSettingsOpen, setIsCollectionSettingsOpen] = useState(false);
+  const [isImportOpenApiModalOpen, setIsImportOpenApiModalOpen] = useState(false);
   const [editingCollection, setEditingCollection] = useState<CollectionNodeDto | null>(null);
   const [auditBanner, setAuditBanner] = useState<{
     collectionName: string;
@@ -605,9 +618,46 @@ export default function Home() {
   };
 
   const handleImportOpenApi = () => {
-    if (tree?.collections && tree.collections.length > 0) {
-      handleOpenCollectionSettings(tree.collections[0]);
+    setIsImportOpenApiModalOpen(true);
+  };
+
+  const handleOpenApiImport = async (data: {
+    workspaceId: string;
+    name?: string;
+    specUrl?: string;
+    specContent?: string;
+  }) => {
+    const wsId = data.workspaceId || (await ensureWorkspaceId());
+    const created = await importOpenApiCollection({
+      ...data,
+      workspaceId: wsId,
+    });
+
+    await reloadTree();
+
+    if (created) {
+      setSelectedCollectionId(created.id);
+      setActiveItem({
+        type: 'collection',
+        id: created.id,
+        data: created,
+      });
+
+      const totalRequests = countCollectionRequests(created);
+      setAuditBanner({
+        collectionName: created.name,
+        report: {
+          addedRequests: totalRequests,
+          updatedRequests: 0,
+          fieldsAdded: 0,
+          fieldsRemoved: 0,
+          fieldsPreserved: 0,
+        },
+      });
+      setSyncError(null);
     }
+
+    return created;
   };
 
   const initialEditorRequest = useMemo<Partial<RequestData> & { id?: string }>(() => {
@@ -919,6 +969,13 @@ export default function Home() {
         onSave={handleSaveCollectionSettings}
         isAgentOnline={isAgentOnline}
         onSyncSuccess={handleSyncSuccess}
+      />
+
+      <OpenApiImportModal
+        isOpen={isImportOpenApiModalOpen}
+        onClose={() => setIsImportOpenApiModalOpen(false)}
+        workspaceId={activeWorkspaceId || ''}
+        onImport={handleOpenApiImport}
       />
 
       <WorkspaceModal

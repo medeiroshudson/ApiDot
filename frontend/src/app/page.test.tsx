@@ -1168,3 +1168,224 @@ describe('Home Page Workspace Management & Clean State Integration', () => {
     expect(screen.getByTestId('workspace-switcher-trigger')).toHaveTextContent('Workspace Beta');
   });
 });
+
+describe('Home Page OpenAPI Import Modal & Global "+ Novo" Trigger Integration', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  const mockWs = { id: 'ws-import-1', name: 'Import Workspace', createdAtUtc: '2026-10-26T00:00:00Z' };
+
+  const initialTree: WorkspaceTreeDto = {
+    workspaceId: 'ws-import-1',
+    workspaceName: 'Import Workspace',
+    collections: [
+      {
+        id: 'col-existing-1',
+        name: 'Coleção Existente',
+        defaultTarget: 'Inherit',
+        openApiSpecUrl: null,
+        folders: [],
+        requests: [],
+      },
+    ],
+  };
+
+  const importedCollectionDto: CollectionNodeDto = {
+    id: 'col-imported-99',
+    name: 'Petstore API',
+    defaultTarget: 'Inherit',
+    openApiSpecUrl: 'https://petstore.swagger.io/v2/swagger.json',
+    folders: [
+      {
+        id: 'fold-pets',
+        name: 'Pets',
+        collectionId: 'col-imported-99',
+        parentFolderId: null,
+        defaultTarget: 'Inherit',
+        subFolders: [],
+        requests: [
+          {
+            id: 'req-pet-1',
+            name: 'Find Pet by ID',
+            method: 'GET',
+            url: 'https://petstore.swagger.io/v2/pet/1',
+            target: 'Inherit',
+            bodyType: 'None',
+            headersJson: '{}',
+            collectionId: 'col-imported-99',
+            folderId: 'fold-pets',
+          },
+        ],
+      },
+    ],
+    requests: [
+      {
+        id: 'req-pet-top',
+        name: 'Get Store Info',
+        method: 'GET',
+        url: 'https://petstore.swagger.io/v2/store',
+        target: 'Inherit',
+        bodyType: 'None',
+        headersJson: '{}',
+        collectionId: 'col-imported-99',
+        folderId: null,
+      },
+    ],
+  };
+
+  it('opens OpenApiImportModal when clicking "+ Novo" -> "Importar OpenAPI" in toolbar', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/') && url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => initialTree,
+        } as any);
+      }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [mockWs],
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Coleção Existente')).toBeInTheDocument();
+    });
+
+    // Click "+ Novo" in CollectionTree toolbar
+    const newBtn = screen.getByRole('button', { name: /^novo$/i });
+    fireEvent.click(newBtn);
+
+    // Click "Importar OpenAPI" in dropdown menu
+    const importOption = screen.getByText(/importar openapi/i);
+    fireEvent.click(importOption);
+
+    // OpenApiImportModal opens
+    const dialog = screen.getByRole('dialog', { name: /importar especificação openapi/i });
+    expect(dialog).toBeInTheDocument();
+  });
+
+  it('submits OpenAPI import, reloads tree, selects new collection, and shows audit banner', async () => {
+    let importCalled = false;
+    let importPayload: any = null;
+    let treeFetchCount = 0;
+
+    vi.spyOn(global, 'fetch').mockImplementation((input: any, init?: any) => {
+      const url = String(input);
+      if (url.includes('/api/collections/import-openapi') && init?.method === 'POST') {
+        importCalled = true;
+        importPayload = JSON.parse(init.body);
+        return Promise.resolve({
+          ok: true,
+          status: 201,
+          json: async () => importedCollectionDto,
+        } as any);
+      }
+      if (url.includes('/api/workspaces/') && url.includes('/tree')) {
+        treeFetchCount++;
+        const currentTree = treeFetchCount > 1
+          ? {
+              ...initialTree,
+              collections: [...initialTree.collections, importedCollectionDto],
+            }
+          : initialTree;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => currentTree,
+        } as any);
+      }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [mockWs],
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Coleção Existente')).toBeInTheDocument();
+    });
+
+    // Open modal via "+ Novo"
+    fireEvent.click(screen.getByRole('button', { name: /^novo$/i }));
+    fireEvent.click(screen.getByText(/importar openapi/i));
+
+    const dialog = screen.getByRole('dialog', { name: /importar especificação openapi/i });
+    const urlInput = within(dialog).getByLabelText(/url da especificação/i);
+    fireEvent.change(urlInput, { target: { value: 'https://petstore.swagger.io/v2/swagger.json' } });
+
+    const submitBtn = within(dialog).getByRole('button', { name: /criar e importar/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(importCalled).toBe(true);
+      expect(importPayload).toEqual(
+        expect.objectContaining({
+          workspaceId: 'ws-import-1',
+          specUrl: 'https://petstore.swagger.io/v2/swagger.json',
+        })
+      );
+    });
+
+    // Tree reloaded and shows Petstore API
+    await waitFor(() => {
+      expect(screen.getByText('Petstore API')).toBeInTheDocument();
+    });
+
+    // Audit summary banner is displayed with total requests (2)
+    const banner = await screen.findByTestId('audit-summary-banner');
+    expect(banner).toBeInTheDocument();
+    expect(banner).toHaveTextContent(/Petstore API/i);
+    expect(banner).toHaveTextContent(/2 requisições adicionadas/i);
+  });
+
+  it('opens OpenApiImportModal when right-clicking on empty tree area and selecting Importar OpenAPI', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/') && url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => initialTree,
+        } as any);
+      }
+      if (url.includes('/api/workspaces') && !url.includes('/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [mockWs],
+        } as any);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as any);
+    });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Coleção Existente')).toBeInTheDocument();
+    });
+
+    const emptyArea = screen.getByTestId('collection-tree-empty-area');
+    fireEvent.contextMenu(emptyArea);
+
+    const importOption = screen.getByText(/importar openapi/i);
+    fireEvent.click(importOption);
+
+    expect(screen.getByRole('dialog', { name: /importar especificação openapi/i })).toBeInTheDocument();
+  });
+});
+
