@@ -81,7 +81,7 @@ export function WorkspaceProvider({
 }: {
   workspaceId: string;
   children: React.ReactNode;
-}): JSX.Element {
+}): React.JSX.Element {
   const router = useRouter();
 
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);

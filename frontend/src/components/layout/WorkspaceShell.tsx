@@ -67,7 +67,7 @@ export interface WorkspaceShellProps {
 function WorkspaceShellContent({
   workspaceId,
   children,
-}: WorkspaceShellProps): JSX.Element {
+}: WorkspaceShellProps): React.JSX.Element {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
@@ -583,7 +583,7 @@ function WorkspaceShellContent({
 export function WorkspaceShell({
   workspaceId,
   children,
-}: WorkspaceShellProps): JSX.Element {
+}: WorkspaceShellProps): React.JSX.Element {
   return (
     <WorkspaceProvider workspaceId={workspaceId}>
       <WorkspaceShellContent workspaceId={workspaceId}>
