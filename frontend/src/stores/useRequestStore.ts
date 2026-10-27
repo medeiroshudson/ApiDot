@@ -19,14 +19,20 @@ export interface ActiveRequestDetails {
   schemaDefinition?: string | null;
 }
 
-export const CLEAN_SCRATCHPAD: RequestData = {
-  method: 'GET',
-  url: '',
-  target: 'Inherit',
-  headers: '',
-  body: '',
-  auth: { type: 'none' },
-};
+export const MAX_HISTORY_ITEMS = 50;
+
+function createCleanScratchpad(): RequestData {
+  return {
+    method: 'GET',
+    url: '',
+    target: 'Inherit',
+    headers: '',
+    body: '',
+    auth: { type: 'none' },
+  };
+}
+
+export const CLEAN_SCRATCHPAD: RequestData = Object.freeze(createCleanScratchpad());
 
 export const DEFAULT_REQUESTS: DependencyRequest[] = [
   {
@@ -168,7 +174,7 @@ export const useRequestStore = create<RequestState>()(
           requestHistory: [
             request,
             ...state.requestHistory.filter((r) => r.id !== request.id),
-          ],
+          ].slice(0, MAX_HISTORY_ITEMS),
         }));
       },
 
@@ -176,7 +182,7 @@ export const useRequestStore = create<RequestState>()(
         set({
           activeRequestId: null,
           activeRequestDetails: null,
-          currentEditorData: CLEAN_SCRATCHPAD,
+          currentEditorData: createCleanScratchpad(),
           response: null,
         });
       },
@@ -196,7 +202,7 @@ export const useRequestStore = create<RequestState>()(
       },
 
       getInitialEditorRequest: () => {
-        const { activeRequestDetails } = get();
+        const { activeRequestDetails, currentEditorData } = get();
         if (activeRequestDetails) {
           return {
             id: activeRequestDetails.id,
@@ -209,7 +215,7 @@ export const useRequestStore = create<RequestState>()(
             schemaDefinition: activeRequestDetails.schemaDefinition || undefined,
           };
         }
-        return CLEAN_SCRATCHPAD;
+        return currentEditorData || createCleanScratchpad();
       },
     }),
     {
