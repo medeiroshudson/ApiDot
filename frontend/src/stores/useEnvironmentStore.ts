@@ -40,36 +40,45 @@ const dummyStorage: StateStorage = {
   removeItem: () => {},
 };
 
+function cloneEnvironments(envs: EnvironmentGroup[]): EnvironmentGroup[] {
+  return envs.map((e) => ({
+    ...e,
+    variables: Array.isArray(e.variables) ? [...e.variables] : [],
+  }));
+}
+
 export const useEnvironmentStore = create<EnvironmentState>()(
   persist(
     (set, get) => ({
-      environments: DEFAULT_ENVIRONMENTS,
+      environments: cloneEnvironments(DEFAULT_ENVIRONMENTS),
       activeEnvironment: null,
       globals: [],
       collectionVariables: [],
 
       setEnvironments: (envs: EnvironmentGroup[]) => {
         set((state) => {
+          const validEnvs = Array.isArray(envs) ? envs : [];
           const matched = state.activeEnvironment
-            ? envs.find((e) => e.name.toLowerCase() === state.activeEnvironment!.toLowerCase())
+            ? validEnvs.find((e) => e.name.toLowerCase() === state.activeEnvironment!.toLowerCase())
             : null;
 
           return {
-            environments: envs,
+            environments: validEnvs,
             activeEnvironment: matched ? matched.name : null,
           };
         });
       },
 
-      setActiveEnvironment: (name: string | null) => {
-        if (name === null) {
+      setActiveEnvironment: (name: string | null | undefined) => {
+        if (!name || !name.trim()) {
           set({ activeEnvironment: null });
           return;
         }
+        const trimmed = name.trim();
         const matched = get().environments.find(
-          (e) => e.name.toLowerCase() === name.toLowerCase()
+          (e) => e.name.toLowerCase() === trimmed.toLowerCase()
         );
-        set({ activeEnvironment: matched ? matched.name : name });
+        set({ activeEnvironment: matched ? matched.name : trimmed });
       },
 
       setGlobals: (vars: VariableItem[]) => {
@@ -89,23 +98,23 @@ export const useEnvironmentStore = create<EnvironmentState>()(
         const { globals, collectionVariables, environments, activeEnvironment } = get();
         const list: AutocompleteVariable[] = [];
 
-        globals
+        (globals || [])
           .filter((g) => g.isActive !== false && Boolean(g.key?.trim()))
           .forEach((g) => {
             list.push({ key: g.key.trim(), value: g.value, scope: 'global' });
           });
 
-        collectionVariables
+        (collectionVariables || [])
           .filter((c) => c.isActive !== false && Boolean(c.key?.trim()))
           .forEach((c) => {
             list.push({ key: c.key.trim(), value: c.value, scope: 'collection' });
           });
 
         if (activeEnvironment) {
-          const activeEnv = environments.find(
+          const activeEnv = (environments || []).find(
             (e) => e.name.toLowerCase() === activeEnvironment.toLowerCase()
           );
-          if (activeEnv) {
+          if (activeEnv && Array.isArray(activeEnv.variables)) {
             activeEnv.variables
               .filter((v) => v.isActive !== false && Boolean(v.key?.trim()))
               .forEach((v) => {
@@ -119,10 +128,7 @@ export const useEnvironmentStore = create<EnvironmentState>()(
 
       reset: () => {
         set({
-          environments: DEFAULT_ENVIRONMENTS.map((e) => ({
-            ...e,
-            variables: [...e.variables],
-          })),
+          environments: cloneEnvironments(DEFAULT_ENVIRONMENTS),
           activeEnvironment: null,
           globals: [],
           collectionVariables: [],
