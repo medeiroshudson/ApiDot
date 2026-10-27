@@ -13,7 +13,8 @@ public record CreateRequestItemRequest(
     [property: JsonConverter(typeof(JsonStringEnumConverter))] ExecutionTarget Target = ExecutionTarget.Inherit,
     string HeadersJson = "{}",
     [property: JsonConverter(typeof(JsonStringEnumConverter))] HttpBodyType BodyType = HttpBodyType.None,
-    string? BodyContent = null);
+    string? BodyContent = null,
+    string? SchemaDefinition = null);
 
 public record UpdateRequestItemRequest(
     string Name,
@@ -24,4 +25,5 @@ public record UpdateRequestItemRequest(
     [property: JsonConverter(typeof(JsonStringEnumConverter))] HttpBodyType BodyType,
     string? BodyContent,
     Guid? CollectionId,
-    Guid? FolderId);
+    Guid? FolderId,
+    string? SchemaDefinition = null);

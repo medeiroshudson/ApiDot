@@ -878,7 +878,8 @@ app.MapPost("/api/requests", async (
         Target = request.Target,
         HeadersJson = string.IsNullOrWhiteSpace(request.HeadersJson) ? "{}" : request.HeadersJson,
         BodyType = request.BodyType,
-        BodyContent = request.BodyContent
+        BodyContent = request.BodyContent,
+        SchemaDefinition = request.SchemaDefinition
     };
 
     db.RequestItems.Add(requestItem);
@@ -1037,6 +1038,7 @@ app.MapPut("/api/requests/{id:guid}", async (
     requestItem.HeadersJson = string.IsNullOrWhiteSpace(request.HeadersJson) ? "{}" : request.HeadersJson;
     requestItem.BodyType = request.BodyType;
     requestItem.BodyContent = request.BodyContent;
+    requestItem.SchemaDefinition = request.SchemaDefinition;
     requestItem.CollectionId = request.CollectionId ?? folder?.CollectionId;
     requestItem.FolderId = request.FolderId;
 
@@ -1300,6 +1302,144 @@ app.MapPost("/api/collections/{id:guid}/sync", async (
     await db.SaveChangesAsync(cancellationToken);
 
     return Results.Ok(mergeResult.Report);
+});
+
+app.MapPost("/api/collections/import-openapi", async (
+    ImportOpenApiCollectionRequest? request,
+    ApiDotDbContext db,
+    ISpecImportStrategy strategy,
+    ICollectionMerger merger,
+    IHttpClientFactory httpClientFactory,
+    CancellationToken cancellationToken) =>
+{
+    if (request is null)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Request",
+            detail: "A request body is required.");
+    }
+
+    if (request.WorkspaceId == Guid.Empty)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Workspace ID",
+            detail: "Workspace ID cannot be empty.");
+    }
+
+    var workspaceExists = await db.Workspaces.AnyAsync(w => w.Id == request.WorkspaceId, cancellationToken);
+    if (!workspaceExists)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Workspace Not Found",
+            detail: $"Workspace with ID '{request.WorkspaceId}' was not found.");
+    }
+
+    if (!string.IsNullOrWhiteSpace(request.Name) && request.Name.Trim().Length > 200)
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid Collection Name",
+            detail: "Collection Name cannot exceed 200 characters.");
+    }
+
+    string? specContent = null;
+    string? specUrl = !string.IsNullOrWhiteSpace(request.SpecUrl) ? request.SpecUrl.Trim() : null;
+
+    if (!string.IsNullOrWhiteSpace(request.SpecContent))
+    {
+        specContent = request.SpecContent;
+        if (!string.IsNullOrWhiteSpace(specUrl))
+        {
+            if (specUrl.Length > 2048 || !IsSafeSpecUrl(specUrl, out _))
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Invalid Spec URL",
+                    detail: "A URL fornecida para a especificação é inválida ou inacessível.");
+            }
+        }
+    }
+    else if (!string.IsNullOrWhiteSpace(specUrl))
+    {
+        if (specUrl.Length > 2048 || !IsSafeSpecUrl(specUrl, out var validUri))
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid Spec URL",
+                detail: "A URL fornecida para a especificação é inválida ou inacessível.");
+        }
+
+        var fetchResult = await FetchSpecFromUrlAsync(httpClientFactory, validUri!, cancellationToken);
+        if (!fetchResult.Success)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Failed to Fetch OpenAPI Spec",
+                detail: fetchResult.ErrorMessage ?? "Falha ao obter a especificação da URL fornecida.");
+        }
+
+        specContent = fetchResult.Content;
+    }
+
+    if (string.IsNullOrWhiteSpace(specContent))
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Missing OpenAPI Specification",
+            detail: "No OpenAPI specification was provided in the request.");
+    }
+
+    if (!strategy.CanHandle(specContent))
+    {
+        return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Invalid OpenAPI Specification",
+            detail: "The provided OpenAPI specification is empty or invalid.");
+    }
+
+    var canonicalImport = await strategy.ParseAsync(specContent, cancellationToken);
+
+    string collectionName;
+    if (!string.IsNullOrWhiteSpace(request.Name))
+    {
+        collectionName = request.Name.Trim();
+    }
+    else if (!string.IsNullOrWhiteSpace(canonicalImport.Name))
+    {
+        collectionName = canonicalImport.Name.Trim();
+        if (collectionName.Length > 200)
+        {
+            collectionName = collectionName[..200];
+        }
+    }
+    else
+    {
+        collectionName = "Imported Collection";
+    }
+
+    var collection = new Collection
+    {
+        Id = Guid.NewGuid(),
+        Name = collectionName,
+        WorkspaceId = request.WorkspaceId,
+        DefaultTarget = ExecutionTarget.Inherit,
+        OpenApiSpecUrl = specUrl,
+        OpenApiSpecContent = specContent
+    };
+
+    var mergeResult = merger.Merge(collection, canonicalImport);
+
+    db.Collections.Add(collection);
+    db.Folders.AddRange(collection.Folders);
+    db.RequestItems.AddRange(mergeResult.AddedRequests);
+
+    await db.SaveChangesAsync(cancellationToken);
+
+    var dto = Program.BuildCollectionNodeDto(collection, collection.Folders.ToList(), collection.Requests.ToList());
+    return Results.Created($"/api/collections/{collection.Id}", dto);
 });
 
 app.MapPost("/api/requests/execute", async (
@@ -1705,6 +1845,7 @@ public partial class Program
             r.HeadersJson,
             r.BodyContent,
             r.CollectionId,
-            r.FolderId);
+            r.FolderId,
+            r.SchemaDefinition);
     }
 }

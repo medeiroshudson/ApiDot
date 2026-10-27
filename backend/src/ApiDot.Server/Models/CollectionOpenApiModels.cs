@@ -14,3 +14,5 @@ public class CollectionOpenApiResponse
 
 public record SyncCollectionRequest(string? SpecUrl = null, string? SpecContent = null, string? Format = "openapi");
 
+public record ImportOpenApiCollectionRequest(Guid WorkspaceId, string? Name = null, string? SpecUrl = null, string? SpecContent = null);
+

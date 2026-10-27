@@ -43,4 +43,5 @@ public record RequestItemNodeDto(
     string HeadersJson,
     string? BodyContent,
     Guid? CollectionId,
-    Guid? FolderId);
+    Guid? FolderId,
+    string? SchemaDefinition = null);
