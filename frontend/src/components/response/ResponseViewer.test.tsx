@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ResponseViewer, ResponseData } from './ResponseViewer';
 
@@ -353,6 +353,189 @@ describe('ResponseViewer', () => {
 
       const liveRegion = screen.getByRole('status');
       expect(liveRegion).toHaveTextContent('Falha ao copiar corpo da resposta');
+    });
+  });
+
+  describe('cURL Export Action in ResponseViewer', () => {
+    const mockResponse: ResponseData = {
+      statusCode: 200,
+      statusText: 'OK',
+      durationMs: 142,
+      body: '{"status":"success"}',
+    };
+
+    it('renders "Copiar cURL" button in top bar next to "Copiar" body button when response is present', () => {
+      render(
+        <ResponseViewer
+          response={mockResponse}
+          executedCurl="curl https://api.example.com"
+        />
+      );
+
+      const copyCurlBtn = screen.getByRole('button', {
+        name: 'Copiar cURL da requisição',
+      });
+      expect(copyCurlBtn).toBeInTheDocument();
+
+      const copyBodyBtn = screen.getByRole('button', {
+        name: 'Copiar corpo da resposta',
+      });
+      expect(copyCurlBtn.parentElement).toBe(copyBodyBtn.parentElement);
+    });
+
+    it('disables "Copiar cURL" button when executedCurl is not provided or is empty/whitespace', () => {
+      const { rerender } = render(<ResponseViewer response={mockResponse} />);
+
+      const copyCurlBtn = screen.getByRole('button', {
+        name: 'Copiar cURL da requisição',
+      });
+      expect(copyCurlBtn).toBeDisabled();
+
+      rerender(<ResponseViewer response={mockResponse} executedCurl="" />);
+      expect(copyCurlBtn).toBeDisabled();
+
+      rerender(<ResponseViewer response={mockResponse} executedCurl="   " />);
+      expect(copyCurlBtn).toBeDisabled();
+    });
+
+    it('enables "Copiar cURL" button when executedCurl is passed with non-empty content', () => {
+      render(
+        <ResponseViewer
+          response={mockResponse}
+          executedCurl="curl -X GET 'https://api.example.com/items'"
+        />
+      );
+
+      const copyCurlBtn = screen.getByRole('button', {
+        name: 'Copiar cURL da requisição',
+      });
+      expect(copyCurlBtn).toBeEnabled();
+    });
+
+    it('clicking "Copiar cURL" calls navigator.clipboard.writeText with executedCurl and displays "Copiado!" feedback for 2000ms', async () => {
+      vi.useFakeTimers();
+      try {
+        const curlCommand =
+          "curl -X POST 'https://api.example.com/items' -H 'Content-Type: application/json' --data-raw '{\"name\":\"item1\"}'";
+
+        render(
+          <ResponseViewer
+            response={mockResponse}
+            executedCurl={curlCommand}
+          />
+        );
+
+        const copyCurlBtn = screen.getByRole('button', {
+          name: 'Copiar cURL da requisição',
+        });
+        expect(screen.queryByText('Copiado!')).toBeNull();
+        expect(screen.getByText('Copiar cURL')).toBeInTheDocument();
+
+        await act(async () => {
+          fireEvent.click(copyCurlBtn);
+        });
+
+        expect(navigator.clipboard.writeText).toHaveBeenCalledWith(curlCommand);
+
+        // Feedback in UI and dynamic ARIA label
+        expect(copyCurlBtn).toHaveAttribute('aria-label', 'Comando cURL copiado');
+        expect(screen.getByText('Copiado!')).toBeInTheDocument();
+
+        // sr-only polite announcement
+        const liveRegion = screen.getByRole('status');
+        expect(liveRegion).toHaveTextContent(
+          'Comando cURL copiado para a área de transferência'
+        );
+
+        // Advance timers by 2000ms
+        await act(async () => {
+          vi.advanceTimersByTime(2000);
+        });
+
+        // Reverts back to initial state
+        expect(copyCurlBtn).toHaveAttribute('aria-label', 'Copiar cURL da requisição');
+        expect(screen.getByText('Copiar cURL')).toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('handles clipboard failure gracefully without breaking UI or throwing errors', async () => {
+      Object.assign(navigator, {
+        clipboard: {
+          writeText: vi.fn().mockRejectedValue(new Error('Clipboard write rejected')),
+        },
+      });
+
+      render(
+        <ResponseViewer
+          response={mockResponse}
+          executedCurl="curl https://api.example.com"
+        />
+      );
+
+      const copyCurlBtn = screen.getByRole('button', {
+        name: 'Copiar cURL da requisição',
+      });
+
+      await act(async () => {
+        fireEvent.click(copyCurlBtn);
+      });
+
+      expect(copyCurlBtn).toBeInTheDocument();
+    });
+
+    it('handles missing navigator.clipboard gracefully', async () => {
+      const originalClipboard = navigator.clipboard;
+      try {
+        // @ts-expect-error simulating environment without clipboard
+        delete navigator.clipboard;
+
+        render(
+          <ResponseViewer
+            response={mockResponse}
+            executedCurl="curl https://api.example.com"
+          />
+        );
+
+        const copyCurlBtn = screen.getByRole('button', {
+          name: 'Copiar cURL da requisição',
+        });
+
+        await act(async () => {
+          fireEvent.click(copyCurlBtn);
+        });
+
+        expect(copyCurlBtn).toBeInTheDocument();
+      } finally {
+        Object.assign(navigator, { clipboard: originalClipboard });
+      }
+    });
+
+    it('cleans up timeout timer on unmount', () => {
+      vi.useFakeTimers();
+      try {
+        const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout');
+        const { unmount } = render(
+          <ResponseViewer
+            response={mockResponse}
+            executedCurl="curl https://api.example.com"
+          />
+        );
+
+        const copyCurlBtn = screen.getByRole('button', {
+          name: 'Copiar cURL da requisição',
+        });
+
+        act(() => {
+          fireEvent.click(copyCurlBtn);
+        });
+
+        unmount();
+        expect(clearTimeoutSpy).toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

@@ -22,6 +22,9 @@ import {
   SyncReport,
 } from '@/components/collection/CollectionSettingsModal';
 import { OpenApiImportModal } from '@/components/collection/OpenApiImportModal';
+import { CurlImportModal } from '@/components/request/CurlImportModal';
+import { ParsedCurlRequest } from '@/lib/curl/curlParser';
+import { generateCurlCommand } from '@/lib/curl/curlGenerator';
 import {
   useCollectionTree,
   ActiveTreeItem,
@@ -222,6 +225,13 @@ export default function Home() {
     deleteRequest,
   } = useCollectionTree(activeWorkspaceId);
 
+  const [isImportCurlModalOpen, setIsImportCurlModalOpen] = useState(false);
+  const [importCurlTarget, setImportCurlTarget] = useState<{
+    collectionId: string;
+    folderId?: string | null;
+    targetName?: string;
+  } | null>(null);
+  const [executedCurl, setExecutedCurl] = useState<string | null>(null);
   const availableVariables = useMemo<AutocompleteVariable[]>(() => {
     return getAvailableVariables();
   }, [globals, collectionVariables, environments, activeEnvironment, getAvailableVariables]);
@@ -591,6 +601,127 @@ export default function Home() {
     return created;
   };
 
+  const handleOpenImportCurl = useCallback(
+    (collectionId: string, folderId?: string | null) => {
+      let targetName: string | undefined = undefined;
+      if (tree?.collections) {
+        const col = tree.collections.find((c) => c.id === collectionId);
+        if (col) {
+          if (folderId) {
+            const match = flattenFolders(col.folders || []).find((f) => f.id === folderId);
+            targetName = match ? match.name : col.name;
+          } else {
+            targetName = col.name;
+          }
+        }
+      }
+      setImportCurlTarget({ collectionId, folderId, targetName });
+      setIsImportCurlModalOpen(true);
+    },
+    [tree]
+  );
+
+  const handleImportCurl = async (parsed: ParsedCurlRequest, requestName: string) => {
+    const wsId = await ensureWorkspaceId();
+    const collectionId =
+      importCurlTarget?.collectionId || tree?.collections[0]?.id || selectedCollectionId;
+    if (!collectionId) {
+      throw new Error('Nenhuma coleção selecionada para importação');
+    }
+
+    const created = await createRequest({
+      workspaceId: wsId,
+      name: requestName || parsed.name || 'Nova Requisição',
+      method: parsed.method || 'GET',
+      url: parsed.url || '',
+      target: 'Inherit',
+      headersJson: parsed.headersJson || '{}',
+      bodyType: parsed.bodyType || 'None',
+      bodyContent: parsed.bodyContent || null,
+      collectionId,
+      folderId: importCurlTarget?.folderId || null,
+    });
+
+    await reloadTree();
+
+    setActiveItem({
+      type: 'request',
+      id: created.id,
+      data: created,
+    });
+    setActiveRequest(created.id, {
+      id: created.id,
+      name: created.name,
+      method: created.method,
+      url: created.url,
+      target: created.target,
+      headers: created.headersJson,
+      body: created.bodyContent || '',
+      auth: parsed.auth || { type: 'none' },
+      collectionId: created.collectionId,
+      folderId: created.folderId,
+      schemaDefinition: created.schemaDefinition,
+    });
+    setIsImportCurlModalOpen(false);
+    setImportCurlTarget(null);
+  };
+
+  const handleCopyCurl = async (req: RequestItemNodeDto) => {
+    const isEditingThis = activeRequestId === req.id;
+    const activeData = isEditingThis ? (currentEditorData || activeRequestDetails) : null;
+
+    let method = req.method;
+    let url = req.url;
+    let headers: string | Record<string, string> = req.headersJson;
+    let body: string | null = req.bodyContent;
+    let bodyFormat: string | undefined = activeData
+      ? undefined
+      : req.bodyType === 'Json' ? 'json' : req.bodyType === 'RawText' ? 'raw' : undefined;
+    let auth: RequestData['auth'] = { type: 'none' };
+    let pathParams: Record<string, string> | undefined = undefined;
+
+    if (activeData) {
+      method = activeData.method;
+      url = activeData.url;
+      headers = activeData.headers;
+      body = activeData.body;
+      auth = activeData.auth;
+      pathParams = (activeData as RequestData).pathParams;
+    }
+
+    const activeVariables = getResolvedVariables();
+
+    const hasVariables = Boolean(activeVariables && Object.keys(activeVariables).length > 0);
+    const hasRequests = Boolean(requestHistory && requestHistory.length > 0);
+
+    const safeUrl = (url || '').trim();
+
+    const curl = generateCurlCommand(
+      {
+        method,
+        url: safeUrl,
+        headers,
+        body,
+        bodyFormat,
+        auth,
+        pathParams,
+      },
+      {
+        variables: activeVariables,
+        requestHistory,
+        resolveVariables: hasVariables || hasRequests,
+      }
+    );
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(curl);
+      } catch {
+        // Gracefully handle clipboard errors without crashing UI
+      }
+    }
+  };
+
   const initialEditorRequest = useMemo<Partial<RequestData> & { id?: string }>(() => {
     if (activeRequestDetails) {
       return {
@@ -610,6 +741,7 @@ export default function Home() {
   const handleSend = async (request: RequestData) => {
     setIsLoading(true);
     setResponse(null);
+    setExecutedCurl(null);
     setActiveMobilePane('response');
     const startTime = Date.now();
     try {
@@ -641,6 +773,15 @@ export default function Home() {
       const interpolatedBody = request.body
         ? interpolateVariables(request.body, activeVariables, requestHistory)
         : null;
+
+      const executedCurlCmd = generateCurlCommand({
+        method: request.method,
+        url: resolvedUrl,
+        headers: interpolatedHeaders,
+        body: interpolatedBody,
+        auth: request.auth,
+      });
+      setExecutedCurl(executedCurlCmd);
 
       const res = await fetch('/api/requests/execute', {
         method: 'POST',
@@ -801,6 +942,8 @@ export default function Home() {
         await deleteRequest(id);
       }}
       onImportOpenApi={handleImportOpenApi}
+      onImportCurl={handleOpenImportCurl}
+      onCopyCurl={handleCopyCurl}
       workspaces={workspaces}
       activeWorkspaceId={activeWorkspaceId}
       onSelectWorkspace={handleSelectWorkspace}
@@ -903,6 +1046,16 @@ export default function Home() {
         onClose={() => setModalOpen('importOpenApi', false)}
         workspaceId={activeWorkspaceId || ''}
         onImport={handleOpenApiImport}
+      />
+
+      <CurlImportModal
+        isOpen={isImportCurlModalOpen}
+        onClose={() => {
+          setIsImportCurlModalOpen(false);
+          setImportCurlTarget(null);
+        }}
+        targetName={importCurlTarget?.targetName}
+        onImport={handleImportCurl}
       />
 
       <WorkspaceModal
@@ -1038,7 +1191,11 @@ export default function Home() {
               activeMobilePane === 'response' ? 'flex' : 'hidden md:flex'
             }`}
           >
-            <ResponseViewer response={response} isLoading={isLoading} />
+            <ResponseViewer
+              response={response}
+              isLoading={isLoading}
+              executedCurl={executedCurl || undefined}
+            />
           </section>
         </main>
       </div>

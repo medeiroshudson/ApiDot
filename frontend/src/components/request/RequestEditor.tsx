@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Send, Loader2, X, Sparkles, Save, ChevronDown, Server, Cpu, Shield, FileCode } from 'lucide-react';
+import { Send, Loader2, X, Sparkles, Save, ChevronDown, Server, Cpu, Shield, FileCode, Terminal, Check } from 'lucide-react';
+import { generateCurlCommand } from '@/lib/curl/curlGenerator';
 import { ExecutionTarget } from './TargetSelector';
 import {
   RequestAutocomplete,
@@ -216,6 +217,76 @@ export function RequestEditor({
       onSaveAs?.(requestData);
     }
   }, [isLoading, isSaving, method, url, target, headers, body, bodyFormat, auth, pathParams, schemaDefinition, currentRequestId, initialRequest, onSaveExisting, onSaveAs]);
+
+  const [isCopied, setIsCopied] = useState(false);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleCopyCurl = useCallback(async () => {
+    try {
+      const variablesMap: Record<string, string> = {};
+      if (availableVariables && Array.isArray(availableVariables)) {
+        for (const item of availableVariables) {
+          if (item.key) {
+            variablesMap[item.key] = item.value ?? '';
+          }
+        }
+      }
+
+      const hasVariables = Boolean(availableVariables && availableVariables.length > 0);
+      const hasRequests = Boolean(availableRequests && availableRequests.length > 0);
+
+      const curl = generateCurlCommand(
+        {
+          method,
+          url: url.trim(),
+          headers,
+          body: bodyFormat === 'none' ? '' : body,
+          bodyFormat,
+          auth,
+          pathParams,
+        },
+        {
+          variables: variablesMap,
+          requestHistory: availableRequests,
+          resolveVariables: hasVariables || hasRequests,
+        }
+      );
+
+      if (!navigator?.clipboard?.writeText) {
+        return;
+      }
+
+      await navigator.clipboard.writeText(curl);
+
+      setIsCopied(true);
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+      copyTimeoutRef.current = setTimeout(() => {
+        setIsCopied(false);
+      }, 2000);
+    } catch {
+      // Gracefully handle clipboard errors without breaking UI
+    }
+  }, [
+    method,
+    url,
+    headers,
+    body,
+    bodyFormat,
+    auth,
+    pathParams,
+    availableVariables,
+    availableRequests,
+  ]);
 
   // Global Ctrl+S / Cmd+S shortcut
   useEffect(() => {
@@ -452,6 +523,26 @@ export function RequestEditor({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            aria-label={isCopied ? 'Copiado!' : 'Copiar cURL'}
+            title={isCopied ? 'Copiado!' : 'Copiar cURL'}
+            onClick={handleCopyCurl}
+            className="h-7 px-2.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-colors border border-neutral-700/60 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+          >
+            {isCopied ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
+                <span className="text-emerald-400 font-medium">Copiado!</span>
+              </>
+            ) : (
+              <>
+                <Terminal className="w-3.5 h-3.5 text-neutral-400" aria-hidden="true" />
+                <span>Copiar cURL</span>
+              </>
+            )}
+          </button>
+
           <button
             type="button"
             aria-label="Salvar requisição"
