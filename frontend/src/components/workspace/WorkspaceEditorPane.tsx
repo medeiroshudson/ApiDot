@@ -9,6 +9,7 @@ import {
 import { ResponseViewer, ResponseData } from '@/components/response/ResponseViewer';
 import { AutocompleteVariable } from '@/components/request/RequestAutocomplete';
 import { DependencyRequest, interpolateVariables } from '@/lib/variables';
+import { generateCurlCommand } from '@/lib/curl/curlGenerator';
 import { useLayoutStore } from '@/stores/useLayoutStore';
 import { useRequestStore, CLEAN_SCRATCHPAD, getScratchpadKey } from '@/stores/useRequestStore';
 import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
@@ -25,6 +26,7 @@ export function WorkspaceEditorPane({
 }: WorkspaceEditorPaneProps): React.JSX.Element {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const [isDesktop, setIsDesktop] = useState(true);
+  const [executedCurl, setExecutedCurl] = useState<string | null>(null);
 
   // Layout Store
   const requestResponseRatio = useLayoutStore((s) => s.requestResponseRatio);
@@ -121,6 +123,7 @@ export function WorkspaceEditorPane({
     async (request: RequestData) => {
       setIsLoading(true);
       setResponse(null, requestId, workspaceId);
+      setExecutedCurl(null);
       setActiveMobilePane('response');
       const startTime = Date.now();
       try {
@@ -199,6 +202,15 @@ export function WorkspaceEditorPane({
         const interpolatedBody = request.body
           ? interpolateVariables(request.body, activeVariables, requestHistory)
           : null;
+
+        const executedCurlCmd = generateCurlCommand({
+          method: request.method,
+          url: resolvedUrl,
+          headers: interpolatedHeaders,
+          body: interpolatedBody,
+          auth: request.auth,
+        });
+        setExecutedCurl(executedCurlCmd);
 
         const res = await fetch('/api/requests/execute', {
           method: 'POST',
@@ -451,7 +463,11 @@ export function WorkspaceEditorPane({
           activeMobilePane === 'response' ? 'flex' : 'hidden md:flex'
         }`}
       >
-        <ResponseViewer response={response} isLoading={isLoading} />
+        <ResponseViewer
+          response={response}
+          isLoading={isLoading}
+          executedCurl={executedCurl || undefined}
+        />
       </section>
     </main>
   );
