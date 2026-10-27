@@ -119,12 +119,12 @@ public static class AgentDeviceEndpoints
 
             device.IsRevoked = true;
 
+            await db.SaveChangesAsync(cancellationToken);
+
             if (device.Id != Guid.Empty)
             {
                 agentHub.UnregisterAgent(device.Id);
             }
-
-            await db.SaveChangesAsync(cancellationToken);
 
             return Results.Ok(device.ToDto(isOnline: false));
         });
@@ -149,12 +149,12 @@ public static class AgentDeviceEndpoints
             device.TokenPrefix = tokenPrefix;
             device.IsRevoked = false;
 
+            await db.SaveChangesAsync(cancellationToken);
+
             if (device.Id != Guid.Empty)
             {
                 agentHub.UnregisterAgent(device.Id);
             }
-
-            await db.SaveChangesAsync(cancellationToken);
 
             var response = new RegenerateDeviceTokenResponse
             {

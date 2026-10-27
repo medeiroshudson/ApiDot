@@ -322,4 +322,24 @@ public class AgentDeviceEndpointsTests : IClassFixture<WebApplicationFactory<Pro
         var revokedDevice = verifyList!.First(d => d.Id == created.Id);
         revokedDevice.IsRevoked.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task GetDeviceById_Returns_200_When_Found_And_404_When_Not_Found()
+    {
+        EnsureDatabaseCreated();
+        var client = _factory.CreateClient();
+
+        var createRes = await client.PostAsJsonAsync("/api/agent/devices", new CreateAgentDeviceRequest { Name = "Direct Lookup Device" });
+        var created = await createRes.Content.ReadFromJsonAsync<CreateAgentDeviceResponse>();
+
+        var getRes = await client.GetAsync($"/api/agent/devices/{created!.Id}");
+        getRes.StatusCode.Should().Be(HttpStatusCode.OK);
+        var dto = await getRes.Content.ReadFromJsonAsync<AgentDeviceDto>();
+        dto.Should().NotBeNull();
+        dto!.Id.Should().Be(created.Id);
+        dto.Name.Should().Be("Direct Lookup Device");
+
+        var notFoundRes = await client.GetAsync($"/api/agent/devices/{Guid.NewGuid()}");
+        notFoundRes.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
 }
