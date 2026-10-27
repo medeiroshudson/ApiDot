@@ -4,6 +4,12 @@ import { RequestData } from '@/components/request/RequestEditor';
 import { ResponseData } from '@/components/response/ResponseViewer';
 import { DependencyRequest } from '@/lib/variables';
 import { ExecutionTarget } from '@/lib/treeApi';
+import {
+  saveResponseToStorage,
+  getResponseFromStorage,
+  deleteResponseFromStorage,
+  clearAllResponsesFromStorage,
+} from '@/lib/responseStorage';
 
 export interface ActiveRequestDetails {
   id: string;
@@ -20,6 +26,14 @@ export interface ActiveRequestDetails {
 }
 
 export const MAX_HISTORY_ITEMS = 50;
+export const SCRATCHPAD_REQ_ID = '__scratchpad__';
+
+export function getScratchpadKey(workspaceId?: string | null): string {
+  if (workspaceId && workspaceId.trim()) {
+    return `${SCRATCHPAD_REQ_ID}:${workspaceId.trim()}`;
+  }
+  return SCRATCHPAD_REQ_ID;
+}
 
 function createCleanScratchpad(): RequestData {
   return {
@@ -62,6 +76,7 @@ export const INITIAL_REQUEST_STATE = {
   isLoading: false,
   isAgentOnline: false,
   response: null as ResponseData | null,
+  responsesByRequestId: {} as Record<string, ResponseData>,
   requestHistory: DEFAULT_REQUESTS,
 };
 
@@ -74,17 +89,23 @@ export interface RequestState {
   isLoading: boolean;
   isAgentOnline: boolean;
   response: ResponseData | null;
+  responsesByRequestId: Record<string, ResponseData>;
   requestHistory: DependencyRequest[];
-  setActiveRequest: (id: string | null, details: ActiveRequestDetails | null) => void;
+
+  setActiveRequest: (id: string | null, details: ActiveRequestDetails | null, workspaceId?: string | null) => void;
   setActiveRequestName: (name: string) => void;
   setCurrentEditorData: (data: RequestData | null) => void;
   setPendingSaveData: (data: RequestData | null) => void;
   setIsSavingRequest: (isSaving: boolean) => void;
   setIsLoading: (isLoading: boolean) => void;
   setIsAgentOnline: (isOnline: boolean) => void;
-  setResponse: (response: ResponseData | null) => void;
+  setResponse: (response: ResponseData | null, targetRequestId?: string | null, workspaceId?: string | null) => void;
+  setResponseForRequest: (requestId: string, response: ResponseData | null) => void;
+  loadResponseForRequest: (requestId: string) => Promise<ResponseData | null>;
+  getResponseForActiveRequest: (workspaceId?: string | null) => ResponseData | null;
+  clearResponseForRequest: (requestId: string) => void;
   addRequestHistory: (request: DependencyRequest) => void;
-  resetScratchpad: () => void;
+  resetScratchpad: (workspaceId?: string | null) => void;
   reset: () => void;
   getInitialEditorRequest: () => Partial<RequestData> & { id?: string };
 }
@@ -122,13 +143,37 @@ export const useRequestStore = create<RequestState>()(
       isLoading: false,
       isAgentOnline: false,
       response: null,
+      responsesByRequestId: {},
       requestHistory: cloneDefaultRequests(),
 
-      setActiveRequest: (id: string | null, details: ActiveRequestDetails | null) => {
+      setActiveRequest: (id: string | null, details: ActiveRequestDetails | null, workspaceId?: string | null) => {
+        const targetKey = id ? id : getScratchpadKey(workspaceId);
+        const existingResponse = get().responsesByRequestId[targetKey] ?? null;
+
         set({
           activeRequestId: id,
           activeRequestDetails: details,
+          response: existingResponse,
         });
+
+        if (!existingResponse) {
+          getResponseFromStorage(targetKey)
+            .then((stored) => {
+              if (stored) {
+                const currentActiveKey = get().activeRequestId
+                  ? get().activeRequestId
+                  : getScratchpadKey(workspaceId);
+                set((state) => ({
+                  responsesByRequestId: {
+                    ...state.responsesByRequestId,
+                    [targetKey]: stored,
+                  },
+                  ...(currentActiveKey === targetKey ? { response: stored } : {}),
+                }));
+              }
+            })
+            .catch(() => {});
+        }
       },
 
       setActiveRequestName: (name: string) => {
@@ -165,8 +210,76 @@ export const useRequestStore = create<RequestState>()(
         set({ isAgentOnline: isOnline });
       },
 
-      setResponse: (response: ResponseData | null) => {
-        set({ response });
+      setResponse: (
+        response: ResponseData | null,
+        targetRequestId?: string | null,
+        workspaceId?: string | null
+      ) => {
+        const targetKey =
+          targetRequestId !== undefined
+            ? targetRequestId ?? getScratchpadKey(workspaceId)
+            : get().activeRequestId ?? getScratchpadKey(workspaceId);
+
+        const currentActiveKey = get().activeRequestId
+          ? get().activeRequestId
+          : getScratchpadKey(workspaceId);
+
+        const isTargetActive = targetKey === currentActiveKey;
+
+        if (response === null) {
+          const nextResponses = { ...get().responsesByRequestId };
+          delete nextResponses[targetKey];
+          deleteResponseFromStorage(targetKey).catch(() => {});
+
+          set({
+            responsesByRequestId: nextResponses,
+            ...(isTargetActive ? { response: null } : {}),
+          });
+        } else {
+          const nextResponses = {
+            ...get().responsesByRequestId,
+            [targetKey]: response,
+          };
+          saveResponseToStorage(targetKey, response).catch(() => {});
+
+          set({
+            responsesByRequestId: nextResponses,
+            ...(isTargetActive ? { response } : {}),
+          });
+        }
+      },
+
+      setResponseForRequest: (requestId: string, response: ResponseData | null) => {
+        get().setResponse(response, requestId);
+      },
+
+      loadResponseForRequest: async (requestId: string) => {
+        try {
+          const stored = await getResponseFromStorage(requestId);
+          if (stored) {
+            set((state) => ({
+              responsesByRequestId: {
+                ...state.responsesByRequestId,
+                [requestId]: stored,
+              },
+              ...(state.activeRequestId === requestId ? { response: stored } : {}),
+            }));
+            return stored;
+          }
+        } catch {
+          // Fallback to in-memory store
+        }
+        return get().responsesByRequestId[requestId] ?? null;
+      },
+
+      getResponseForActiveRequest: (workspaceId?: string | null) => {
+        const { activeRequestId, responsesByRequestId, response } = get();
+        const key = activeRequestId ? activeRequestId : getScratchpadKey(workspaceId);
+        return responsesByRequestId[key] ?? response ?? null;
+      },
+
+      clearResponseForRequest: (requestId: string) => {
+        get().setResponse(null, requestId);
       },
 
       addRequestHistory: (request: DependencyRequest) => {
@@ -178,16 +291,23 @@ export const useRequestStore = create<RequestState>()(
         }));
       },
 
-      resetScratchpad: () => {
+      resetScratchpad: (workspaceId?: string | null) => {
+        const scratchKey = getScratchpadKey(workspaceId);
+        const nextResponses = { ...get().responsesByRequestId };
+        delete nextResponses[scratchKey];
+        deleteResponseFromStorage(scratchKey).catch(() => {});
+
         set({
           activeRequestId: null,
           activeRequestDetails: null,
           currentEditorData: createCleanScratchpad(),
           response: null,
+          responsesByRequestId: nextResponses,
         });
       },
 
       reset: () => {
+        clearAllResponsesFromStorage().catch(() => {});
         set({
           activeRequestId: null,
           activeRequestDetails: null,
@@ -197,6 +317,7 @@ export const useRequestStore = create<RequestState>()(
           isLoading: false,
           isAgentOnline: false,
           response: null,
+          responsesByRequestId: {},
           requestHistory: cloneDefaultRequests(),
         });
       },

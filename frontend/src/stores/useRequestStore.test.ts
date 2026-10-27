@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   useRequestStore,
   CLEAN_SCRATCHPAD,
@@ -6,10 +6,131 @@ import {
   REQUEST_STORAGE_KEY,
   INITIAL_REQUEST_STATE,
   ActiveRequestDetails,
+  SCRATCHPAD_REQ_ID,
+  getScratchpadKey,
 } from './useRequestStore';
 import { RequestData } from '@/components/request/RequestEditor';
 import { ResponseData } from '@/components/response/ResponseViewer';
 import { DependencyRequest } from '@/lib/variables';
+import { saveResponseToStorage } from '@/lib/responseStorage';
+
+// In-memory IndexedDB mock for Vitest / JSDOM environment
+function createMockIndexedDB() {
+  const dbs = new Map<string, Map<string, any>>();
+
+  const idb = {
+    open: (dbName: string, version: number = 1) => {
+      const openReq: any = {
+        result: null,
+        error: null,
+        onsuccess: null,
+        onerror: null,
+        onupgradeneeded: null,
+      };
+
+      queueMicrotask(() => {
+        let dbStores = dbs.get(dbName);
+        let isNew = false;
+        if (!dbStores) {
+          dbStores = new Map();
+          dbs.set(dbName, dbStores);
+          isNew = true;
+        }
+
+        const db: any = {
+          name: dbName,
+          version,
+          objectStoreNames: {
+            contains: (storeName: string) => dbStores!.has(storeName),
+          },
+          createObjectStore: (storeName: string) => {
+            if (!dbStores!.has(storeName)) {
+              dbStores!.set(storeName, new Map());
+            }
+            return {};
+          },
+          transaction: (storeNames: string | string[], _mode: string) => {
+            const primaryStoreName = Array.isArray(storeNames) ? storeNames[0] : storeNames;
+            if (!dbStores!.has(primaryStoreName)) {
+              dbStores!.set(primaryStoreName, new Map());
+            }
+            const storeMap = dbStores!.get(primaryStoreName)!;
+
+            const store = {
+              put: (value: any, key: string) => {
+                const req: any = { onsuccess: null, onerror: null, result: null };
+                queueMicrotask(() => {
+                  try {
+                    storeMap.set(key, structuredClone ? structuredClone(value) : JSON.parse(JSON.stringify(value)));
+                    req.result = key;
+                    if (req.onsuccess) req.onsuccess({ target: req });
+                  } catch (err) {
+                    req.error = err;
+                    if (req.onerror) req.onerror({ target: req });
+                  }
+                });
+                return req;
+              },
+              get: (key: string) => {
+                const req: any = { onsuccess: null, onerror: null, result: null };
+                queueMicrotask(() => {
+                  const val = storeMap.get(key);
+                  req.result = val !== undefined ? (structuredClone ? structuredClone(val) : JSON.parse(JSON.stringify(val))) : undefined;
+                  if (req.onsuccess) req.onsuccess({ target: req });
+                });
+                return req;
+              },
+              delete: (key: string) => {
+                const req: any = { onsuccess: null, onerror: null, result: null };
+                queueMicrotask(() => {
+                  storeMap.delete(key);
+                  if (req.onsuccess) req.onsuccess({ target: req });
+                });
+                return req;
+              },
+              clear: () => {
+                const req: any = { onsuccess: null, onerror: null, result: null };
+                queueMicrotask(() => {
+                  storeMap.clear();
+                  if (req.onsuccess) req.onsuccess({ target: req });
+                });
+                return req;
+              },
+            };
+
+            const tx: any = {
+              objectStore: () => store,
+              onerror: null,
+              oncomplete: null,
+            };
+            return tx;
+          },
+          close: () => {},
+        };
+
+        openReq.result = db;
+        if (isNew && openReq.onupgradeneeded) {
+          openReq.onupgradeneeded({ target: openReq });
+        }
+        if (openReq.onsuccess) {
+          openReq.onsuccess({ target: openReq });
+        }
+      });
+
+      return openReq;
+    },
+    deleteDatabase: (dbName: string) => {
+      dbs.delete(dbName);
+      const req: any = { onsuccess: null, onerror: null };
+      queueMicrotask(() => {
+        if (req.onsuccess) req.onsuccess({ target: req });
+      });
+      return req;
+    },
+  };
+
+  return { idb, dbs };
+}
 
 describe('useRequestStore', () => {
   const sampleRequestDetails: ActiveRequestDetails = {
@@ -56,9 +177,21 @@ describe('useRequestStore', () => {
   };
 
   beforeEach(() => {
+    const mockEnv = createMockIndexedDB();
+    (globalThis as any).indexedDB = mockEnv.idb;
+    if (typeof window !== 'undefined') {
+      (window as any).indexedDB = mockEnv.idb;
+    }
     // Reset Zustand store state before each test
     useRequestStore.getState().reset();
     localStorage.clear();
+  });
+
+  afterEach(() => {
+    delete (globalThis as any).indexedDB;
+    if (typeof window !== 'undefined') {
+      delete (window as any).indexedDB;
+    }
   });
 
   describe('1. Constants & Initial State', () => {
@@ -105,6 +238,7 @@ describe('useRequestStore', () => {
         isLoading: false,
         isAgentOnline: false,
         response: null,
+        responsesByRequestId: {},
         requestHistory: DEFAULT_REQUESTS,
       });
     });
@@ -119,6 +253,7 @@ describe('useRequestStore', () => {
       expect(state.isLoading).toBe(false);
       expect(state.isAgentOnline).toBe(false);
       expect(state.response).toBeNull();
+      expect(state.responsesByRequestId).toEqual({});
       expect(state.requestHistory).toEqual(DEFAULT_REQUESTS);
     });
   });
@@ -353,6 +488,7 @@ describe('useRequestStore', () => {
       expect(state.isLoading).toBe(false);
       expect(state.isAgentOnline).toBe(false);
       expect(state.response).toBeNull();
+      expect(state.responsesByRequestId).toEqual({});
       expect(state.requestHistory).toEqual(DEFAULT_REQUESTS);
     });
   });
@@ -384,6 +520,7 @@ describe('useRequestStore', () => {
 
       // Transient / volatile memory fields must be undefined in storage to prevent QuotaExceededError
       expect(parsed.state.response).toBeUndefined();
+      expect(parsed.state.responsesByRequestId).toBeUndefined();
       expect(parsed.state.requestHistory).toBeUndefined();
       expect(parsed.state.activeRequestId).toBeUndefined();
       expect(parsed.state.activeRequestDetails).toBeUndefined();
@@ -404,7 +541,174 @@ describe('useRequestStore', () => {
         currentEditorData: null,
       });
       expect(parsed.state.response).toBeUndefined();
+      expect(parsed.state.responsesByRequestId).toBeUndefined();
       expect(parsed.state.requestHistory).toBeUndefined();
+    });
+  });
+
+  describe('10. Scratchpad Keys & Workspace Isolation', () => {
+    it('should export SCRATCHPAD_REQ_ID as __scratchpad__', () => {
+      expect(SCRATCHPAD_REQ_ID).toBe('__scratchpad__');
+    });
+
+    it('should return __scratchpad__ when workspaceId is not provided or empty', () => {
+      expect(getScratchpadKey()).toBe('__scratchpad__');
+      expect(getScratchpadKey(null)).toBe('__scratchpad__');
+      expect(getScratchpadKey(undefined)).toBe('__scratchpad__');
+      expect(getScratchpadKey('')).toBe('__scratchpad__');
+      expect(getScratchpadKey('   ')).toBe('__scratchpad__');
+    });
+
+    it('should return __scratchpad__:<workspaceId> when workspaceId is provided', () => {
+      expect(getScratchpadKey('ws-123')).toBe('__scratchpad__:ws-123');
+      expect(getScratchpadKey('workspace-prod')).toBe('__scratchpad__:workspace-prod');
+    });
+  });
+
+  describe('11. Multi-Request Response Isolation (responsesByRequestId)', () => {
+    it('should isolate responses by requestId without overwriting or leaking across requests', () => {
+      const responseA: ResponseData = { statusCode: 200, body: { data: 'A' } };
+      const responseB: ResponseData = { statusCode: 201, body: { data: 'B' } };
+
+      // Set active request A and assign response
+      useRequestStore.getState().setActiveRequest('req-a', { ...sampleRequestDetails, id: 'req-a' });
+      useRequestStore.getState().setResponse(responseA);
+
+      expect(useRequestStore.getState().response).toEqual(responseA);
+      expect(useRequestStore.getState().responsesByRequestId['req-a']).toEqual(responseA);
+
+      // Switch to active request B (no response yet)
+      useRequestStore.getState().setActiveRequest('req-b', { ...sampleRequestDetails, id: 'req-b' });
+      expect(useRequestStore.getState().response).toBeNull();
+
+      // Assign response to request B
+      useRequestStore.getState().setResponse(responseB);
+      expect(useRequestStore.getState().response).toEqual(responseB);
+      expect(useRequestStore.getState().responsesByRequestId['req-b']).toEqual(responseB);
+      // Verify request A response was NOT altered
+      expect(useRequestStore.getState().responsesByRequestId['req-a']).toEqual(responseA);
+
+      // Switch back to request A and verify response A is restored
+      useRequestStore.getState().setActiveRequest('req-a', { ...sampleRequestDetails, id: 'req-a' });
+      expect(useRequestStore.getState().response).toEqual(responseA);
+    });
+
+    it('should isolate scratchpad responses per workspaceId', () => {
+      const scratchResponse1: ResponseData = { statusCode: 200, body: 'Scratchpad WS 1' };
+      const scratchResponse2: ResponseData = { statusCode: 200, body: 'Scratchpad WS 2' };
+
+      // Active scratchpad on workspace 1
+      useRequestStore.getState().setActiveRequest(null, null, 'ws-1');
+      useRequestStore.getState().setResponse(scratchResponse1, null, 'ws-1');
+
+      expect(useRequestStore.getState().getResponseForActiveRequest('ws-1')).toEqual(scratchResponse1);
+      expect(useRequestStore.getState().responsesByRequestId['__scratchpad__:ws-1']).toEqual(scratchResponse1);
+
+      // Switch to workspace 2 scratchpad
+      useRequestStore.getState().setActiveRequest(null, null, 'ws-2');
+      expect(useRequestStore.getState().getResponseForActiveRequest('ws-2')).toBeNull();
+
+      useRequestStore.getState().setResponse(scratchResponse2, null, 'ws-2');
+      expect(useRequestStore.getState().getResponseForActiveRequest('ws-2')).toEqual(scratchResponse2);
+      expect(useRequestStore.getState().responsesByRequestId['__scratchpad__:ws-2']).toEqual(scratchResponse2);
+
+      // Workspace 1 scratchpad remains isolated
+      expect(useRequestStore.getState().responsesByRequestId['__scratchpad__:ws-1']).toEqual(scratchResponse1);
+    });
+
+    it('should return active response via getResponseForActiveRequest for both request and scratchpad', () => {
+      // For a specific request
+      useRequestStore.getState().setActiveRequest('req-active', { ...sampleRequestDetails, id: 'req-active' });
+      useRequestStore.getState().setResponse(sampleResponse);
+      expect(useRequestStore.getState().getResponseForActiveRequest()).toEqual(sampleResponse);
+
+      // For a scratchpad without workspace
+      useRequestStore.getState().setActiveRequest(null, null);
+      expect(useRequestStore.getState().getResponseForActiveRequest()).toBeNull();
+      useRequestStore.getState().setResponse(sampleResponse);
+      expect(useRequestStore.getState().getResponseForActiveRequest()).toEqual(sampleResponse);
+      expect(useRequestStore.getState().responsesByRequestId[SCRATCHPAD_REQ_ID]).toEqual(sampleResponse);
+    });
+  });
+
+  describe('12. Direct Request Response Management (setResponseForRequest, clearResponseForRequest, loadResponseForRequest)', () => {
+    it('should set and clear response for a specific request via setResponseForRequest and clearResponseForRequest', () => {
+      useRequestStore.getState().setResponseForRequest('req-target', sampleResponse);
+      expect(useRequestStore.getState().responsesByRequestId['req-target']).toEqual(sampleResponse);
+
+      useRequestStore.getState().clearResponseForRequest('req-target');
+      expect(useRequestStore.getState().responsesByRequestId['req-target']).toBeUndefined();
+    });
+
+    it('should update active response when setResponseForRequest targets currently active request', () => {
+      useRequestStore.getState().setActiveRequest('req-target', { ...sampleRequestDetails, id: 'req-target' });
+      expect(useRequestStore.getState().response).toBeNull();
+
+      useRequestStore.getState().setResponseForRequest('req-target', sampleResponse);
+      expect(useRequestStore.getState().response).toEqual(sampleResponse);
+
+      useRequestStore.getState().clearResponseForRequest('req-target');
+      expect(useRequestStore.getState().response).toBeNull();
+    });
+
+    it('should not clobber active response when setResponse is called for a different background targetRequestId', () => {
+      const activeResp: ResponseData = { statusCode: 200, body: 'Active' };
+      const bgResp: ResponseData = { statusCode: 202, body: 'Background' };
+
+      useRequestStore.getState().setActiveRequest('req-active', { ...sampleRequestDetails, id: 'req-active' });
+      useRequestStore.getState().setResponse(activeResp);
+      expect(useRequestStore.getState().response).toEqual(activeResp);
+
+      // Background request completes
+      useRequestStore.getState().setResponse(bgResp, 'req-bg');
+      // Active response must remain activeResp
+      expect(useRequestStore.getState().response).toEqual(activeResp);
+      // Background response must be stored in map
+      expect(useRequestStore.getState().responsesByRequestId['req-bg']).toEqual(bgResp);
+    });
+
+    it('should load response from storage via loadResponseForRequest and hydrate memory and active response', async () => {
+      const persistedResponse: ResponseData = { statusCode: 200, body: 'From IndexedDB' };
+      await saveResponseToStorage('req-persisted', persistedResponse);
+
+      // Set active request to req-persisted (in-memory response initially null)
+      useRequestStore.getState().setActiveRequest('req-persisted', { ...sampleRequestDetails, id: 'req-persisted' });
+      expect(useRequestStore.getState().responsesByRequestId['req-persisted']).toBeUndefined();
+
+      const loaded = await useRequestStore.getState().loadResponseForRequest('req-persisted');
+      expect(loaded).toEqual(persistedResponse);
+      expect(useRequestStore.getState().responsesByRequestId['req-persisted']).toEqual(persistedResponse);
+      expect(useRequestStore.getState().response).toEqual(persistedResponse);
+    });
+
+    it('should return null from loadResponseForRequest when key is not in storage or memory', async () => {
+      const loaded = await useRequestStore.getState().loadResponseForRequest('req-unknown');
+      expect(loaded).toBeNull();
+    });
+  });
+
+  describe('13. Workspace-Isolated Scratchpad Reset (resetScratchpad)', () => {
+    it('should reset only the workspace-specific scratchpad and keep other request responses intact', () => {
+      const reqResp: ResponseData = { statusCode: 200, body: 'Req' };
+      const scratchResp: ResponseData = { statusCode: 200, body: 'Scratch' };
+
+      useRequestStore.getState().setResponseForRequest('req-kept', reqResp);
+      useRequestStore.getState().setActiveRequest(null, null, 'ws-target');
+      useRequestStore.getState().setResponse(scratchResp, null, 'ws-target');
+
+      expect(useRequestStore.getState().responsesByRequestId['req-kept']).toEqual(reqResp);
+      expect(useRequestStore.getState().responsesByRequestId['__scratchpad__:ws-target']).toEqual(scratchResp);
+
+      useRequestStore.getState().resetScratchpad('ws-target');
+
+      const state = useRequestStore.getState();
+      expect(state.activeRequestId).toBeNull();
+      expect(state.activeRequestDetails).toBeNull();
+      expect(state.currentEditorData).toEqual(CLEAN_SCRATCHPAD);
+      expect(state.response).toBeNull();
+      expect(state.responsesByRequestId['__scratchpad__:ws-target']).toBeUndefined();
+      // Other request responses remain intact!
+      expect(state.responsesByRequestId['req-kept']).toEqual(reqResp);
     });
   });
 });
