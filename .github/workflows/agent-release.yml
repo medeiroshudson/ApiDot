@@ -26,10 +26,6 @@ jobs:
             runner: macos-latest
             binary_name: ApiDot.Agent
             asset_name: apidot-agent-osx-arm64
-          - rid: osx-x64
-            runner: macos-13
-            binary_name: ApiDot.Agent
-            asset_name: apidot-agent-osx-x64
           - rid: linux-x64
             runner: ubuntu-latest
             binary_name: ApiDot.Agent

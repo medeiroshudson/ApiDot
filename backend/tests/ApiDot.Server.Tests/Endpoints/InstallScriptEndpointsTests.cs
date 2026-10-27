@@ -166,7 +166,6 @@ public class InstallScriptEndpointsTests : IClassFixture<WebApplicationFactory<P
 
     [Theory]
     [InlineData("osx", "arm64", "apidot-agent-osx-arm64")]
-    [InlineData("osx", "x64", "apidot-agent-osx-x64")]
     [InlineData("linux", "x64", "apidot-agent-linux-x64")]
     [InlineData("linux", "arm64", "apidot-agent-linux-arm64")]
     [InlineData("win", "x64", "apidot-agent-win-x64.exe")]
@@ -203,6 +202,7 @@ public class InstallScriptEndpointsTests : IClassFixture<WebApplicationFactory<P
     }
 
     [Theory]
+    [InlineData("osx", "x64")] // macOS Intel is deprecated and unsupported
     [InlineData("win", "arm64")] // Windows ARM64 is not supported
     [InlineData("freebsd", "x64")] // Unsupported OS
     [InlineData("osx", "mips")] // Unsupported Arch

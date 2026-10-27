@@ -37,6 +37,11 @@ case "${ARCH_RAW}" in
         ;;
 esac
 
+if [ "${TARGET_OS}" = "osx" ] && [ "${TARGET_ARCH}" != "arm64" ]; then
+    echo "Error: macOS Intel (x64) is deprecated and no longer supported. ApiDot Agent requires Apple Silicon (arm64)." >&2
+    exit 1
+fi
+
 DOWNLOAD_URL="${SERVER_URL}/api/agent/download/${TARGET_OS}/${TARGET_ARCH}"
 INSTALL_DIR="${HOME}/.apidot/bin"
 TARGET_FILE="${INSTALL_DIR}/apidot-agent"

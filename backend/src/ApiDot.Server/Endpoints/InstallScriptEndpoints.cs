@@ -12,7 +12,6 @@ public static class InstallScriptEndpoints
     private static readonly Dictionary<string, string> ValidAssets = new(StringComparer.OrdinalIgnoreCase)
     {
         ["osx/arm64"] = "apidot-agent-osx-arm64",
-        ["osx/x64"] = "apidot-agent-osx-x64",
         ["linux/x64"] = "apidot-agent-linux-x64",
         ["linux/arm64"] = "apidot-agent-linux-arm64",
         ["win/x64"] = "apidot-agent-win-x64.exe"
@@ -65,7 +64,7 @@ public static class InstallScriptEndpoints
                 return Results.Problem(
                     statusCode: StatusCodes.Status400BadRequest,
                     title: "Invalid OS or Architecture",
-                    detail: $"The combination of OS '{os}' and architecture '{arch}' is not supported. Supported combinations: osx/arm64, osx/x64, linux/x64, linux/arm64, win/x64.");
+                    detail: $"The combination of OS '{os}' and architecture '{arch}' is not supported. Supported combinations: osx/arm64, linux/x64, linux/arm64, win/x64.");
             }
 
             var version = configuration["AgentRelease:Version"] ?? "0.4.0";
@@ -223,6 +222,11 @@ public static class InstallScriptEndpoints
                 exit 1
                 ;;
         esac
+
+        if [ "${TARGET_OS}" = "osx" ] && [ "${TARGET_ARCH}" != "arm64" ]; then
+            echo "Error: macOS Intel (x64) is deprecated and no longer supported. ApiDot Agent requires Apple Silicon (arm64)." >&2
+            exit 1
+        fi
 
         DOWNLOAD_URL="${SERVER_URL}/api/agent/download/${TARGET_OS}/${TARGET_ARCH}"
         INSTALL_DIR="${HOME}/.apidot/bin"
