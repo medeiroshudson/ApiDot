@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Copy, Check, Clock, Server, FileCode, Layers, Loader2 } from 'lucide-react';
+import { Copy, Check, Clock, Server, FileCode, Layers, Loader2, Terminal } from 'lucide-react';
 import { TimingWaterfall, TimingBreakdown } from './TimingWaterfall';
 import { CodeEditor } from '../common/CodeEditor';
 
@@ -18,6 +18,7 @@ export interface ResponseViewerProps {
   response: ResponseData | null;
   isLoading?: boolean;
   className?: string;
+  executedCurl?: string;
 }
 
 export const RESPONSE_TABS = [
@@ -59,17 +60,23 @@ export function ResponseViewer({
   response,
   isLoading = false,
   className = '',
+  executedCurl,
 }: ResponseViewerProps) {
   const [activeTab, setActiveTab] = useState<ResponseTabType>('pretty');
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
+  const [copiedCurl, setCopiedCurl] = useState(false);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyCurlTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
       if (copyTimeoutRef.current) {
         clearTimeout(copyTimeoutRef.current);
+      }
+      if (copyCurlTimeoutRef.current) {
+        clearTimeout(copyCurlTimeoutRef.current);
       }
     };
   }, []);
@@ -144,6 +151,25 @@ export function ResponseViewer({
       copyTimeoutRef.current = setTimeout(() => {
         setCopyFailed(false);
       }, 2000);
+    }
+  };
+
+  const handleCopyCurl = async () => {
+    if (!executedCurl || !executedCurl.trim()) return;
+    try {
+      if (!navigator?.clipboard?.writeText) {
+        return;
+      }
+      await navigator.clipboard.writeText(executedCurl);
+      setCopiedCurl(true);
+      if (copyCurlTimeoutRef.current) {
+        clearTimeout(copyCurlTimeoutRef.current);
+      }
+      copyCurlTimeoutRef.current = setTimeout(() => {
+        setCopiedCurl(false);
+      }, 2000);
+    } catch {
+      // Gracefully handle clipboard errors without breaking UI
     }
   };
 
@@ -262,6 +288,27 @@ export function ResponseViewer({
         <div className="flex items-center gap-1">
           <button
             type="button"
+            aria-label={copiedCurl ? 'Comando cURL copiado' : 'Copiar cURL da requisição'}
+            title={copiedCurl ? 'Comando cURL copiado' : 'Copiar cURL da requisição'}
+            onClick={handleCopyCurl}
+            disabled={!executedCurl || !executedCurl.trim()}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded text-neutral-400 hover:text-white hover:bg-neutral-800/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {copiedCurl ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
+                <span className="text-emerald-400">Copiado!</span>
+              </>
+            ) : (
+              <>
+                <Terminal className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Copiar cURL</span>
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
             aria-label={copied ? 'Corpo da resposta copiado' : 'Copiar corpo da resposta'}
             onClick={handleCopyBody}
             disabled={!response.body}
@@ -289,6 +336,8 @@ export function ResponseViewer({
               ? 'Corpo da resposta copiado para a área de transferência'
               : copyFailed
               ? 'Falha ao copiar corpo da resposta'
+              : copiedCurl
+              ? 'Comando cURL copiado para a área de transferência'
               : ''}
           </span>
         </div>
