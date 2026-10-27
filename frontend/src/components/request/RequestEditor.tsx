@@ -479,7 +479,7 @@ export function RequestEditor({
 
       {/* Top Bar Compact (h-9): Method, URL Input, Split Send Button */}
       <div className="p-2.5 sm:p-3 border-b border-neutral-800 bg-neutral-900/40 flex flex-col gap-1.5 shrink-0">
-        <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-start w-full">
+        <div className="flex flex-col sm:flex-row gap-2 items-start w-full">
           <div className="flex items-start gap-2 flex-1 min-w-0">
             <select
               aria-label="Método HTTP"
@@ -512,7 +512,7 @@ export function RequestEditor({
                 }}
                 onChange={(e) => handleUrlChange(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                     e.preventDefault();
                     handleSend();
                   }
