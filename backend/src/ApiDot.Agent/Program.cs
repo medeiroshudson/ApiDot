@@ -1,96 +1,138 @@
 ﻿using ApiDot.Agent;
+using ApiDot.Agent.Configuration;
+using ApiDot.Agent.Services;
 
 Console.WriteLine("ApiDot Local Agent v1.0");
 
-if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
+var fileConfig = AgentConfigManager.Load();
+var options = AgentCliParser.Parse(args, fileConfig);
+
+if (options.IsHelp || options.Command == AgentCommandType.Help)
 {
     PrintUsage();
     return 0;
 }
 
-var startIndex = 0;
-if (args[0].Equals("connect", StringComparison.OrdinalIgnoreCase))
+if (!string.IsNullOrEmpty(options.ErrorMessage))
 {
-    startIndex = 1;
-}
-else if (!args[0].StartsWith("-"))
-{
-    Console.Error.WriteLine($"Unknown command: {args[0]}");
+    Console.Error.WriteLine(options.ErrorMessage);
     PrintUsage();
     return 1;
 }
 
-string? serverUrl = null;
-string? token = null;
-string? agentName = null;
-bool ignoreSsl = false;
-
-for (var i = startIndex; i < args.Length; i++)
+switch (options.Command)
 {
-    switch (args[i])
+    case AgentCommandType.Connect:
+        return await RunConnectAsync(options);
+
+    case AgentCommandType.ServiceInstall:
     {
-        case "--server" or "-s" when i + 1 < args.Length:
-            serverUrl = args[++i];
-            break;
-        case "--token" or "-t" when i + 1 < args.Length:
-            token = args[++i];
-            break;
-        case "--name" or "-n" when i + 1 < args.Length:
-            agentName = args[++i];
-            break;
-        case "--ignore-ssl":
-            ignoreSsl = true;
-            break;
-        case "-h" or "--help":
-            PrintUsage();
+        var config = new AgentConfig(options.ServerUrl!, options.Token!, options.AgentName, options.IgnoreSsl);
+        var result = ServiceManager.Install(config);
+        if (result.Success)
+        {
+            Console.WriteLine(result.Message);
             return 0;
-        default:
-            Console.Error.WriteLine($"Unknown option: {args[i]}");
-            PrintUsage();
-            return 1;
+        }
+        Console.Error.WriteLine(result.Message);
+        if (!string.IsNullOrEmpty(result.Details))
+        {
+            Console.Error.WriteLine(result.Details);
+        }
+        return 1;
     }
+
+    case AgentCommandType.ServiceStart:
+    {
+        var result = ServiceManager.Start();
+        if (result.Success)
+        {
+            Console.WriteLine(result.Message);
+            return 0;
+        }
+        Console.Error.WriteLine(result.Message);
+        return 1;
+    }
+
+    case AgentCommandType.ServiceStop:
+    {
+        var result = ServiceManager.Stop();
+        if (result.Success)
+        {
+            Console.WriteLine(result.Message);
+            return 0;
+        }
+        Console.Error.WriteLine(result.Message);
+        return 1;
+    }
+
+    case AgentCommandType.ServiceRestart:
+    {
+        ServiceManager.Stop();
+        var result = ServiceManager.Start();
+        if (result.Success)
+        {
+            Console.WriteLine(result.Message);
+            return 0;
+        }
+        Console.Error.WriteLine(result.Message);
+        return 1;
+    }
+
+    case AgentCommandType.ServiceStatus:
+    {
+        var result = ServiceManager.Status();
+        Console.WriteLine(result.Message);
+        return result.Success ? 0 : 1;
+    }
+
+    case AgentCommandType.ServiceUninstall:
+    {
+        var result = ServiceManager.Uninstall();
+        if (result.Success)
+        {
+            Console.WriteLine(result.Message);
+            return 0;
+        }
+        Console.Error.WriteLine(result.Message);
+        return 1;
+    }
+
+    default:
+        Console.Error.WriteLine("Unknown command.");
+        PrintUsage();
+        return 1;
 }
 
-if (string.IsNullOrWhiteSpace(serverUrl))
+static async Task<int> RunConnectAsync(AgentCliOptions options)
 {
-    Console.Error.WriteLine("Error: --server is required.");
-    PrintUsage();
-    return 1;
+    using var cts = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) =>
+    {
+        e.Cancel = true;
+        cts.Cancel();
+    };
+
+    using var client = new AgentClient(options.ServerUrl!, options.Token!, options.AgentName, options.IgnoreSsl);
+    await client.StartAsync(cts.Token);
+    return 0;
 }
-
-if (!Uri.TryCreate(serverUrl, UriKind.Absolute, out var uri))
-{
-    Console.Error.WriteLine($"Error: Invalid server URL '{serverUrl}'. A valid absolute URL is required (e.g. http://localhost:5000 or wss://hub.example.com).");
-    PrintUsage();
-    return 1;
-}
-
-if (string.IsNullOrWhiteSpace(token))
-{
-    Console.Error.WriteLine("Error: --token is required.");
-    PrintUsage();
-    return 1;
-}
-
-using var cts = new CancellationTokenSource();
-Console.CancelKeyPress += (_, e) =>
-{
-    e.Cancel = true;
-    cts.Cancel();
-};
-
-using var client = new AgentClient(serverUrl, token, agentName, ignoreSsl);
-await client.StartAsync(cts.Token);
-return 0;
 
 static void PrintUsage()
 {
     Console.WriteLine("""
     Usage:
-      ApiDot.Agent connect --server <url> --token <token> [--name <name>] [--ignore-ssl]
+      ApiDot.Agent connect [--server <url>] [--token <token>] [--name <name>] [--ignore-ssl]
+      ApiDot.Agent service <command> [options]
 
     Commands:
       connect           Connect to ApiDot hub server and listen for execution dispatches
+      service install   Install background service/daemon and save configuration
+      service start     Start background service
+      service stop      Stop background service
+      service restart   Restart background service
+      service status    Show status of background service
+      service uninstall Stop and remove background service
 
     Options:
       -s, --server      ApiDot Hub URL (e.g. http://localhost:5000 or wss://hub.example.com)
