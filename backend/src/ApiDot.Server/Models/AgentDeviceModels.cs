@@ -65,7 +65,7 @@ public static class DeviceTokenHelper
         return Convert.ToHexStringLower(hash);
     }
 
-    public static string ExtractPrefix(string rawToken)
+    public static string ExtractPrefix(string? rawToken)
     {
         if (string.IsNullOrEmpty(rawToken))
             return string.Empty;
