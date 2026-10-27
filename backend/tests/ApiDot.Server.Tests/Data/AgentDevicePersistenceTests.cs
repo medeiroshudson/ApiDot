@@ -159,4 +159,15 @@ public class AgentDevicePersistenceTests
         dto.IsRevoked.Should().BeFalse();
         dto.IsOnline.Should().BeTrue();
     }
+
+    [Fact]
+    public void DeviceTokenHelper_Handles_Edge_Cases()
+    {
+        var actNull = () => DeviceTokenHelper.ComputeHash(null!);
+        actNull.Should().Throw<ArgumentNullException>();
+
+        DeviceTokenHelper.ExtractPrefix(null).Should().Be(string.Empty);
+        DeviceTokenHelper.ExtractPrefix(string.Empty).Should().Be(string.Empty);
+        DeviceTokenHelper.ExtractPrefix("short").Should().Be("short");
+    }
 }

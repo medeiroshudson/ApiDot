@@ -138,7 +138,7 @@ public class ApiDotDbContext(DbContextOptions<ApiDotDbContext> options) : DbCont
             entity.Property(d => d.AgentVersion).HasMaxLength(64);
             entity.Property(d => d.LastConnectedIp).HasMaxLength(64);
 
-            entity.HasIndex(d => d.TokenHash);
+            entity.HasIndex(d => d.TokenHash).IsUnique();
         });
     }
 }

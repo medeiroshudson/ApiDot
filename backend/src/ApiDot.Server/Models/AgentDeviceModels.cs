@@ -51,7 +51,7 @@ public static class DeviceTokenHelper
     {
         Span<byte> randomBytes = stackalloc byte[32];
         RandomNumberGenerator.Fill(randomBytes);
-        var rawToken = TokenPrefixLeader + Convert.ToHexString(randomBytes).ToLowerInvariant();
+        var rawToken = TokenPrefixLeader + Convert.ToHexStringLower(randomBytes);
         var tokenHash = ComputeHash(rawToken);
         var tokenPrefix = ExtractPrefix(rawToken);
         return (rawToken, tokenHash, tokenPrefix);
@@ -62,7 +62,7 @@ public static class DeviceTokenHelper
         ArgumentNullException.ThrowIfNull(rawToken);
         var bytes = Encoding.UTF8.GetBytes(rawToken);
         var hash = SHA256.HashData(bytes);
-        return Convert.ToHexString(hash).ToLowerInvariant();
+        return Convert.ToHexStringLower(hash);
     }
 
     public static string ExtractPrefix(string rawToken)
