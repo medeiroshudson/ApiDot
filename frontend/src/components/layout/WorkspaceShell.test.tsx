@@ -258,6 +258,25 @@ describe('WorkspaceShell', () => {
     expect(screen.getByText('Ambientes e Variáveis')).toBeInTheDocument();
   });
 
+  it('opens GlobalSettingsModal when clicking global settings button in AppHeader', async () => {
+    render(
+      <WorkspaceShell workspaceId="ws-test">
+        <div>Child Area</div>
+      </WorkspaceShell>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Workspace')).toBeInTheDocument();
+    });
+
+    const settingsBtn = screen.getByRole('button', { name: 'Configurações Globais' });
+    fireEvent.click(settingsBtn);
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('Configurações Globais')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /local agents/i })).toBeInTheDocument();
+  });
+
   it('calls fetchWorkspaces with current workspaceId on mount', async () => {
     const fetchSpy = vi.spyOn(useWorkspaceStore.getState(), 'fetchWorkspaces');
     render(

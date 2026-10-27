@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, Settings } from 'lucide-react';
+import { Menu, Settings, Sliders } from 'lucide-react';
 
 export interface AppHeaderProps {
   title?: string;
@@ -10,6 +10,7 @@ export interface AppHeaderProps {
   activeEnvironment?: string | null;
   onSelectEnvironment?: (env: string | null) => void;
   onOpenEnvironmentSettings?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export function AppHeader({
@@ -21,9 +22,8 @@ export function AppHeader({
   activeEnvironment = null,
   onSelectEnvironment,
   onOpenEnvironmentSettings,
+  onOpenSettings,
 }: AppHeaderProps) {
-  const agentStatusText = isAgentOnline ? 'Agent Online' : 'Agent Offline';
-
   return (
     <header className="h-14 border-b border-neutral-800 bg-neutral-950 px-4 flex items-center justify-between select-none">
       <div className="flex items-center gap-3">
@@ -68,24 +68,20 @@ export function AppHeader({
             title="Configurar ambientes e variáveis"
             className="p-2 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-400"
           >
-            <Settings className="w-4 h-4" aria-hidden="true" />
+            <Sliders className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
-        <div
-          data-testid="agent-status-badge"
-          className="flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-900 border border-neutral-800"
-          title={agentStatusText}
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          aria-label="Configurações Globais"
+          aria-haspopup="dialog"
+          title="Configurações Globais"
+          className="p-2 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-400"
         >
-          <span
-            className={`h-2 w-2 rounded-full ${
-              isAgentOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
-            }`}
-          />
-          <span className="hidden sm:inline text-neutral-300">
-            {agentStatusText}
-          </span>
-        </div>
+          <Settings className="w-4 h-4" aria-hidden="true" />
+        </button>
       </div>
     </header>
   );

@@ -16,18 +16,28 @@ describe('AppHeader', () => {
     expect(screen.getByText('v0.4.0')).toBeDefined();
   });
 
-  it('renders agent status badge reflecting connection status with consistent labels', () => {
-    const { rerender } = render(<AppHeader isAgentOnline={true} />);
-    const onlineText = screen.getByText('Agent Online');
-    expect(onlineText).toBeDefined();
-    const onlineBadge = screen.getByTestId('agent-status-badge');
-    expect(onlineBadge.getAttribute('title')).toBe('Agent Online');
+  it('does not render agent status badge in header', () => {
+    render(<AppHeader isAgentOnline={true} />);
+    expect(screen.queryByTestId('agent-status-badge')).toBeNull();
+    expect(screen.queryByText('Agent Online')).toBeNull();
+    expect(screen.queryByText('Agent Offline')).toBeNull();
+  });
 
-    rerender(<AppHeader isAgentOnline={false} />);
-    const offlineText = screen.getByText('Agent Offline');
-    expect(offlineText).toBeDefined();
-    const offlineBadge = screen.getByTestId('agent-status-badge');
-    expect(offlineBadge.getAttribute('title')).toBe('Agent Offline');
+  it('calls onOpenSettings when clicking the global settings button', () => {
+    const handleOpenSettings = vi.fn();
+    render(<AppHeader onOpenSettings={handleOpenSettings} />);
+    const settingsButton = screen.getByRole('button', { name: 'Configurações Globais' });
+    fireEvent.click(settingsButton);
+    expect(handleOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes accessible ARIA attributes for global settings trigger', () => {
+    render(<AppHeader />);
+    const settingsButton = screen.getByRole('button', { name: 'Configurações Globais' });
+    expect(settingsButton.getAttribute('aria-label')).toBe('Configurações Globais');
+    expect(settingsButton.getAttribute('title')).toBe('Configurações Globais');
+    expect(settingsButton.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(settingsButton.getAttribute('type')).toBe('button');
   });
 
   it('calls onToggleDrawer when drawer toggle button is clicked', () => {

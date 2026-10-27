@@ -19,6 +19,7 @@ import {
 } from '@/components/collection/CollectionSettingsModal';
 import { OpenApiImportModal } from '@/components/collection/OpenApiImportModal';
 import { WorkspaceModal } from '@/components/workspace/WorkspaceModal';
+import { GlobalSettingsModal } from '@/components/settings/GlobalSettingsModal';
 import { CurlImportModal } from '@/components/request/CurlImportModal';
 import { ParsedCurlRequest } from '@/lib/curl/curlParser';
 import { generateCurlCommand } from '@/lib/curl/curlGenerator';
@@ -149,6 +150,9 @@ function WorkspaceShellContent({
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [syncingCollectionId, setSyncingCollectionId] = useState<string | null>(null);
   const [editingCollection, setEditingCollection] = useState<CollectionNodeDto | null>(null);
+
+  // Global Settings Modal State
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // cURL Import / Export States
   const [isImportCurlModalOpen, setIsImportCurlModalOpen] = useState(false);
@@ -592,6 +596,7 @@ function WorkspaceShellContent({
         activeEnvironment={activeEnvironment}
         onSelectEnvironment={setActiveEnvironment}
         onOpenEnvironmentSettings={() => setModalOpen('env', true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
       {/* Audit Summary Banner */}
@@ -688,6 +693,11 @@ function WorkspaceShellContent({
         isOpen={isWorkspaceModalOpen}
         onClose={() => setModalOpen('workspace', false)}
         onSave={handleCreateWorkspace}
+      />
+
+      <GlobalSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
 
       <SaveRequestModal
