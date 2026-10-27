@@ -1,0 +1,119 @@
+name: Release ApiDot Agent
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag name (e.g. v0.4.0)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release-agent:
+    name: Build Agent (${{ matrix.rid }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: osx-arm64
+            runner: macos-latest
+            binary_name: ApiDot.Agent
+            asset_name: apidot-agent-osx-arm64
+          - rid: osx-x64
+            runner: macos-13
+            binary_name: ApiDot.Agent
+            asset_name: apidot-agent-osx-x64
+          - rid: linux-x64
+            runner: ubuntu-latest
+            binary_name: ApiDot.Agent
+            asset_name: apidot-agent-linux-x64
+          - rid: linux-arm64
+            runner: ubuntu-24.04-arm
+            binary_name: ApiDot.Agent
+            asset_name: apidot-agent-linux-arm64
+          - rid: win-x64
+            runner: windows-latest
+            binary_name: ApiDot.Agent.exe
+            asset_name: apidot-agent-win-x64.exe
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Native AOT prerequisites (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
+
+      - name: Set up .NET 9 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Publish Native AOT Agent
+        run: |
+          dotnet publish backend/src/ApiDot.Agent/ApiDot.Agent.csproj -c Release -r ${{ matrix.rid }} -p:PublishAot=true -p:InvariantGlobalization=true --self-contained -o ./publish
+
+      - name: Stage artifact
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          if [ ! -f "./publish/${{ matrix.binary_name }}" ]; then
+            echo "Error: Output binary ./publish/${{ matrix.binary_name }} was not found!" >&2
+            ls -la ./publish/ || true
+            exit 1
+          fi
+          cp "./publish/${{ matrix.binary_name }}" "./artifacts/${{ matrix.asset_name }}"
+          chmod +x "./artifacts/${{ matrix.asset_name }}" || true
+          ls -la ./artifacts/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: ./artifacts/${{ matrix.asset_name }}
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish Release to GitHub
+    needs: build-and-release-agent
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List downloaded artifacts
+        run: ls -la artifacts/
+
+      - name: Determine release tag
+        id: release-tag
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ -n "$INPUT_TAG" ]; then
+            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish Release to GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release-tag.outputs.tag }}
+          files: artifacts/**/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
