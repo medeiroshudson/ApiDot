@@ -38,7 +38,8 @@ builder.Services.AddSingleton<IVariableResolver, VariableResolver>();
 builder.Services.AddSingleton<IAgentHub, AgentHub>();
 builder.Services.AddHttpClient<IServerHttpExecutor, ServerHttpExecutor>();
 builder.Services.AddHttpClient();
-builder.Services.AddHttpClient("SpecFetcher", c => c.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddHttpClient("SpecFetcher", c => c.Timeout = TimeSpan.FromSeconds(15))
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 builder.Services.AddSingleton<ISpecImportStrategy, OpenApiImportStrategy>();
 builder.Services.AddSingleton<ICollectionMerger, CollectionMerger>();
 
