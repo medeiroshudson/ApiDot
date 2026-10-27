@@ -498,4 +498,181 @@ public class OpenApiImportStrategyTests
         result.Requests.Should().HaveCount(1);
         result.Requests[0].OperationId.Should().Be("getValid");
     }
+
+    [Fact]
+    public async Task ParseAsync_ShouldExtractTagsAndNormalizePathParamsToColonSyntax()
+    {
+        var strategy = new OpenApiImportStrategy();
+        var yaml = @"
+openapi: 3.0.0
+info:
+  title: Petstore YAML
+  version: 1.0.0
+paths:
+  /pet/{petId}:
+    get:
+      tags:
+        - pet
+        - admin
+      summary: Find pet by ID
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 42
+        - name: status
+          in: query
+          schema:
+            type: string
+          example: available
+      responses:
+        '200':
+          description: successful operation
+";
+
+        var result = await strategy.ParseAsync(yaml);
+        Assert.Single(result.Requests);
+        var req = result.Requests[0];
+        Assert.Equal(["pet", "admin"], req.Tags);
+        Assert.Contains("/pet/:petId", req.Url);
+        Assert.Contains("status=available", req.Url);
+        Assert.NotNull(req.SchemaDefinition);
+        Assert.Contains("petId", req.SchemaDefinition);
+        Assert.Contains("200", req.SchemaDefinition);
+    }
+
+    [Fact]
+    public void CanHandle_ShouldReturnTrue_ForOpenApiOrSwaggerYaml()
+    {
+        var openApiYaml = @"
+openapi: 3.0.0
+info:
+  title: Test YAML API
+  version: 1.0.0
+paths: {}
+";
+
+        var swaggerYaml = @"
+swagger: '2.0'
+info:
+  title: Swagger YAML API
+  version: 2.0
+paths: {}
+";
+
+        var nonApiYaml = @"
+name: my-app
+version: 1.0.0
+description: A regular yaml file
+";
+
+        _strategy.CanHandle(openApiYaml).Should().BeTrue();
+        _strategy.CanHandle(swaggerYaml).Should().BeTrue();
+        _strategy.CanHandle(nonApiYaml).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ParseAsync_ShouldDetectUndeclaredPathTokens_AndCreateImplicitPathParameterMetadata()
+    {
+        var json = """
+        {
+          "openapi": "3.0.0",
+          "info": { "title": "Implicit Params API", "version": "1.0" },
+          "paths": {
+            "/orgs/{orgId}/repos/{repoId}": {
+              "get": {
+                "summary": "Get Repository",
+                "parameters": [
+                  {
+                    "name": "filter",
+                    "in": "query",
+                    "example": "starred"
+                  }
+                ]
+              }
+            }
+          }
+        }
+        """;
+
+        var result = await _strategy.ParseAsync(json);
+        result.Requests.Should().HaveCount(1);
+        var req = result.Requests[0];
+        req.Path.Should().Be("/orgs/:orgId/repos/:repoId");
+        req.Url.Should().Be("/orgs/:orgId/repos/:repoId?filter=starred");
+        req.PathParameters.Should().ContainKey("orgId").WhoseValue.Should().BeEmpty();
+        req.PathParameters.Should().ContainKey("repoId").WhoseValue.Should().BeEmpty();
+        req.Parameters.Should().Contain(p => p.Name == "orgId" && p.In == "path" && p.Required);
+        req.Parameters.Should().Contain(p => p.Name == "repoId" && p.In == "path" && p.Required);
+        req.SchemaDefinition.Should().Contain("orgId");
+        req.SchemaDefinition.Should().Contain("repoId");
+    }
+
+    [Fact]
+    public async Task ParseAsync_ShouldTrimAndDeduplicateTagsCaseInsensitively()
+    {
+        var json = """
+        {
+          "openapi": "3.0.0",
+          "info": { "title": "Tag Dups API", "version": "1.0" },
+          "paths": {
+            "/items": {
+              "get": {
+                "summary": "List Items",
+                "tags": ["pet", " pet ", "PET", "admin", "Admin ", ""]
+              }
+            }
+          }
+        }
+        """;
+
+        var result = await _strategy.ParseAsync(json);
+        result.Requests.Should().HaveCount(1);
+        var req = result.Requests[0];
+        req.Tags.Should().Equal(["pet", "admin"]);
+    }
+
+    [Fact]
+    public void RequestSchemaDefinition_Normalize_ShouldWrapLegacySchema_InBody()
+    {
+        var legacyRawJson = """
+        {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "age": { "type": "integer" }
+          }
+        }
+        """;
+
+        var normalized = RequestSchemaDefinition.Normalize(legacyRawJson);
+        normalized.Should().NotBeNull();
+        normalized.Body.Should().NotBeNull();
+        normalized.Body!["properties"]!["name"]!["type"]!.GetValue<string>().Should().Be("string");
+        normalized.Parameters.Should().BeEmpty();
+        normalized.Responses.Should().BeEmpty();
+
+        // Already structured schema
+        var structuredJson = """
+        {
+          "summary": "Sample",
+          "parameters": [
+            { "name": "id", "in": "path", "type": "string", "required": true }
+          ],
+          "responses": [
+            { "statusCode": "200", "description": "OK" }
+          ]
+        }
+        """;
+
+        var structured = RequestSchemaDefinition.Normalize(structuredJson);
+        structured.Should().NotBeNull();
+        structured.Summary.Should().Be("Sample");
+        structured.Parameters.Should().HaveCount(1);
+        structured.Parameters[0].Name.Should().Be("id");
+        structured.Responses.Should().HaveCount(1);
+        structured.Responses[0].StatusCode.Should().Be("200");
+    }
 }
