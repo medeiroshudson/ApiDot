@@ -33,10 +33,11 @@ export const PanelSplitter: React.FC<PanelSplitterProps> = ({
     if (e.button !== 0 && e.button !== undefined) return;
 
     e.preventDefault();
+    e.currentTarget.focus();
     startXRef.current = typeof e.clientX === 'number' && !isNaN(e.clientX) ? e.clientX : 0;
     setIsDragging(true);
 
-    const pointerId = e.pointerId ?? (e.nativeEvent as any)?.pointerId;
+    const pointerId = e.pointerId ?? (e.nativeEvent as PointerEvent)?.pointerId;
     if (typeof e.currentTarget.setPointerCapture === 'function' && pointerId !== undefined) {
       try {
         e.currentTarget.setPointerCapture(pointerId);
@@ -57,26 +58,9 @@ export const PanelSplitter: React.FC<PanelSplitterProps> = ({
     }
   };
 
-  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
     if (startXRef.current !== null) {
-      const pointerId = e.pointerId ?? (e.nativeEvent as any)?.pointerId;
-      if (typeof e.currentTarget.releasePointerCapture === 'function' && pointerId !== undefined) {
-        try {
-          if (!e.currentTarget.hasPointerCapture || e.currentTarget.hasPointerCapture(pointerId)) {
-            e.currentTarget.releasePointerCapture(pointerId);
-          }
-        } catch {
-          // Safe fallback
-        }
-      }
-      setIsDragging(false);
-      startXRef.current = null;
-    }
-  };
-
-  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (startXRef.current !== null) {
-      const pointerId = e.pointerId ?? (e.nativeEvent as any)?.pointerId;
+      const pointerId = e.pointerId ?? (e.nativeEvent as PointerEvent)?.pointerId;
       if (typeof e.currentTarget.releasePointerCapture === 'function' && pointerId !== undefined) {
         try {
           if (!e.currentTarget.hasPointerCapture || e.currentTarget.hasPointerCapture(pointerId)) {
@@ -102,12 +86,13 @@ export const PanelSplitter: React.FC<PanelSplitterProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = e.shiftKey ? 50 : 10;
     if (e.key === 'ArrowLeft') {
       e.preventDefault();
-      onDeltaChange(-10);
+      onDeltaChange(-step);
     } else if (e.key === 'ArrowRight') {
       e.preventDefault();
-      onDeltaChange(10);
+      onDeltaChange(step);
     } else if (e.key === 'Enter') {
       e.preventDefault();
       onReset?.();
@@ -128,12 +113,12 @@ export const PanelSplitter: React.FC<PanelSplitterProps> = ({
       data-dragging={isDragging ? 'true' : 'false'}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerCancel}
+      onPointerUp={handlePointerEnd}
+      onPointerCancel={handlePointerEnd}
       onLostPointerCapture={handleLostPointerCapture}
       onDoubleClick={handleDoubleClick}
       onKeyDown={handleKeyDown}
-      className={`group relative flex items-center justify-center w-1.5 h-full cursor-col-resize select-none shrink-0 outline-none focus-visible:ring-1 focus-visible:ring-sky-500 transition-colors ${className}`}
+      className={`group relative flex items-center justify-center w-1.5 h-full cursor-col-resize select-none shrink-0 outline-none focus-visible:ring-1 focus-visible:ring-sky-500 touch-none transition-colors ${className}`}
     >
       {/* 1px visual separator line centered inside hit area */}
       <div

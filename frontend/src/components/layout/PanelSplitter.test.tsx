@@ -300,6 +300,38 @@ describe('PanelSplitter', () => {
   });
 
   describe('Keyboard Navigation', () => {
+    it('calls onDeltaChange(-50) on Shift + ArrowLeft key and prevents default', () => {
+      const onDeltaChange = vi.fn();
+      render(
+        <PanelSplitter
+          id="shift-arrow-left"
+          ariaLabel="Divisor teclado acelerado"
+          onDeltaChange={onDeltaChange}
+        />
+      );
+
+      const splitter = screen.getByRole('separator');
+      fireEvent.keyDown(splitter, { key: 'ArrowLeft', shiftKey: true });
+
+      expect(onDeltaChange).toHaveBeenCalledWith(-50);
+    });
+
+    it('calls onDeltaChange(50) on Shift + ArrowRight key and prevents default', () => {
+      const onDeltaChange = vi.fn();
+      render(
+        <PanelSplitter
+          id="shift-arrow-right"
+          ariaLabel="Divisor teclado acelerado"
+          onDeltaChange={onDeltaChange}
+        />
+      );
+
+      const splitter = screen.getByRole('separator');
+      fireEvent.keyDown(splitter, { key: 'ArrowRight', shiftKey: true });
+
+      expect(onDeltaChange).toHaveBeenCalledWith(50);
+    });
+
     it('calls onDeltaChange(-10) on ArrowLeft key and prevents default', () => {
       const onDeltaChange = vi.fn();
       render(
