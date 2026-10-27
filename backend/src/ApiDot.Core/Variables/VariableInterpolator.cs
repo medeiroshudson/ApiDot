@@ -26,6 +26,9 @@ public partial class VariableInterpolator : IVariableInterpolator
     [GeneratedRegex(@"^headers(?:\s*\[\s*(?:'(?<headerName>[^']*)'|""(?<headerName>[^""]*)""|(?<headerName>[^'""\s\]]+))\s*\]|\s*\.\s*(?<headerName>[a-zA-Z0-9_-]+))$", RegexOptions.IgnoreCase | RegexOptions.NonBacktracking)]
     private static partial Regex HeaderPathRegex();
 
+    [GeneratedRegex(@"(?<=/|:|^):([a-zA-Z0-9_]+)|(?<!\{)\{([a-zA-Z0-9_]+)\}(?!\})", RegexOptions.None, 1000)]
+    private static partial Regex PathParameterRegex();
+
     [return: NotNullIfNotNull(nameof(template))]
     public string? Interpolate(string? template, IReadOnlyDictionary<string, string>? variables)
     {
@@ -68,6 +71,49 @@ public partial class VariableInterpolator : IVariableInterpolator
 
             return (variables != null && variables.TryGetValue(rawExpr, out var value)) ? value : match.Value;
         });
+    }
+
+    [return: NotNullIfNotNull(nameof(url))]
+    public string? InterpolatePathParameters(string? url, IReadOnlyDictionary<string, string>? pathParameters)
+    {
+        if (string.IsNullOrEmpty(url) || pathParameters == null || pathParameters.Count == 0)
+        {
+            return url;
+        }
+
+        return PathParameterRegex().Replace(url, match =>
+        {
+            var paramName = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
+            if (TryGetParameterValue(pathParameters, paramName, out var paramValue))
+            {
+                return paramValue;
+            }
+
+            return match.Value;
+        });
+    }
+
+    private static bool TryGetParameterValue(
+        IReadOnlyDictionary<string, string> pathParameters,
+        string paramName,
+        [NotNullWhen(true)] out string? value)
+    {
+        if (pathParameters.TryGetValue(paramName, out value) && value != null)
+        {
+            return true;
+        }
+
+        foreach (var kvp in pathParameters)
+        {
+            if (string.Equals(kvp.Key, paramName, StringComparison.OrdinalIgnoreCase) && kvp.Value != null)
+            {
+                value = kvp.Value;
+                return true;
+            }
+        }
+
+        value = null;
+        return false;
     }
 
     private static string? ResolveRequestChaining(Match requestMatch, IResponseHistoryProvider historyProvider)

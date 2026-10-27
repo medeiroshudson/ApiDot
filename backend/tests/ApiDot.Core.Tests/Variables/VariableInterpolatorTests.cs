@@ -376,6 +376,124 @@ public class VariableInterpolatorTests
         interpolator.Interpolate("{{$request['special-req'].response.headers.Authorization}}", null)
             .Should().Be("Bearer token-abc");
     }
+
+    [Fact]
+    public void InterpolatePathParameters_ShouldReplaceColonTokensWithProvidedValues()
+    {
+        var interpolator = new VariableInterpolator();
+        var pathParams = new Dictionary<string, string>
+        {
+            ["petId"] = "105",
+            ["orderId"] = "999"
+        };
+
+        var result = interpolator.InterpolatePathParameters("https://api.com/v2/pet/:petId/order/:orderId?filter=true", pathParams);
+        Assert.Equal("https://api.com/v2/pet/105/order/999?filter=true", result);
+    }
+
+    [Fact]
+    public void InterpolatePathParameters_ShouldTolerateBraceSyntax()
+    {
+        var interpolator = new VariableInterpolator();
+        var pathParams = new Dictionary<string, string>
+        {
+            ["petId"] = "105",
+            ["orderId"] = "999"
+        };
+
+        var result = interpolator.InterpolatePathParameters("https://api.com/v2/pet/{petId}/order/{orderId}", pathParams);
+        result.Should().Be("https://api.com/v2/pet/105/order/999");
+    }
+
+    [Fact]
+    public void InterpolatePathParameters_ShouldMatchParameterNamesCaseInsensitively()
+    {
+        var interpolator = new VariableInterpolator();
+        var pathParams = new Dictionary<string, string>
+        {
+            ["petid"] = "105",
+            ["ORDERID"] = "999"
+        };
+
+        var result = interpolator.InterpolatePathParameters("https://api.com/v2/pet/:petId/order/:orderId", pathParams);
+        result.Should().Be("https://api.com/v2/pet/105/order/999");
+    }
+
+    [Fact]
+    public void InterpolatePathParameters_ShouldPreserveUnmatchedTokens()
+    {
+        var interpolator = new VariableInterpolator();
+        var pathParams = new Dictionary<string, string>
+        {
+            ["petId"] = "105"
+        };
+
+        var result = interpolator.InterpolatePathParameters("https://api.com/v2/pet/:petId/order/:missingId", pathParams);
+        result.Should().Be("https://api.com/v2/pet/105/order/:missingId");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void InterpolatePathParameters_ShouldHandleNullOrEmptyUrl(string? url)
+    {
+        var interpolator = new VariableInterpolator();
+        var pathParams = new Dictionary<string, string> { ["petId"] = "105" };
+
+        var result = interpolator.InterpolatePathParameters(url, pathParams);
+        result.Should().Be(url);
+    }
+
+    [Fact]
+    public void InterpolatePathParameters_ShouldHandleNullOrEmptyPathParameters()
+    {
+        var interpolator = new VariableInterpolator();
+        const string url = "https://api.com/v2/pet/:petId";
+
+        interpolator.InterpolatePathParameters(url, null).Should().Be(url);
+        interpolator.InterpolatePathParameters(url, new Dictionary<string, string>()).Should().Be(url);
+    }
+
+    [Fact]
+    public void InterpolatePathParameters_ShouldNotModifyDoubleBraceEnvironmentVariables()
+    {
+        var interpolator = new VariableInterpolator();
+        var pathParams = new Dictionary<string, string>
+        {
+            ["petId"] = "105",
+            ["baseUrl"] = "unexpected"
+        };
+
+        var result = interpolator.InterpolatePathParameters("{{baseUrl}}/v2/pet/:petId", pathParams);
+        result.Should().Be("{{baseUrl}}/v2/pet/105");
+    }
+
+    [Fact]
+    public void InterpolatePathParameters_ShouldNotMatchPortNumbers()
+    {
+        var interpolator = new VariableInterpolator();
+        var pathParams = new Dictionary<string, string>
+        {
+            ["petId"] = "105",
+            ["8080"] = "should-not-replace"
+        };
+
+        var result = interpolator.InterpolatePathParameters("http://localhost:8080/v2/pet/:petId", pathParams);
+        result.Should().Be("http://localhost:8080/v2/pet/105");
+    }
+
+    [Fact]
+    public void InterpolatePathParameters_ShouldHandleTokenAtStartOfUrl()
+    {
+        var interpolator = new VariableInterpolator();
+        var pathParams = new Dictionary<string, string>
+        {
+            ["petId"] = "105"
+        };
+
+        var result = interpolator.InterpolatePathParameters(":petId/order", pathParams);
+        result.Should().Be("105/order");
+    }
 }
 
 file class FakeResponseHistoryProvider : IResponseHistoryProvider
