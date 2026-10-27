@@ -136,6 +136,7 @@ export function ResponseViewer({
       await navigator.clipboard.writeText(response.body);
       setCopied(true);
       setCopyFailed(false);
+      setCopiedCurl(false);
       if (copyTimeoutRef.current) {
         clearTimeout(copyTimeoutRef.current);
       }
@@ -162,6 +163,8 @@ export function ResponseViewer({
       }
       await navigator.clipboard.writeText(executedCurl);
       setCopiedCurl(true);
+      setCopied(false);
+      setCopyFailed(false);
       if (copyCurlTimeoutRef.current) {
         clearTimeout(copyCurlTimeoutRef.current);
       }
