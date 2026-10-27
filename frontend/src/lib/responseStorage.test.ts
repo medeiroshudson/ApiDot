@@ -5,6 +5,7 @@ import {
   getResponseFromStorage,
   deleteResponseFromStorage,
   clearAllResponsesFromStorage,
+  resetDatabaseConnectionForTesting,
 } from './responseStorage';
 import { ResponseData } from '@/components/response/ResponseViewer';
 
@@ -314,6 +315,70 @@ describe('responseStorage (IndexedDB Persistent Storage)', () => {
       expect(getResult).toBeNull();
 
       await expect(deleteResponseFromStorage('req-ssr')).resolves.toBeUndefined();
+      await expect(clearAllResponsesFromStorage()).resolves.toBeUndefined();
+    });
+  });
+
+  describe('6. Transaction Abort Handling', () => {
+    beforeEach(() => {
+      resetDatabaseConnectionForTesting();
+      const abortingIdb = {
+        open: () => {
+          const req: any = {};
+          queueMicrotask(() => {
+            const db: any = {
+              name: 'apidot_responses_db',
+              version: 1,
+              objectStoreNames: { contains: () => true },
+              transaction: () => {
+                const tx: any = {
+                  objectStore: () => ({
+                    put: () => ({}),
+                    get: () => ({}),
+                    delete: () => ({}),
+                    clear: () => ({}),
+                  }),
+                  onerror: null,
+                  onabort: null,
+                };
+                queueMicrotask(() => {
+                  if (tx.onabort) tx.onabort(new Event('abort'));
+                });
+                return tx;
+              },
+            };
+            req.result = db;
+            if (req.onsuccess) req.onsuccess({ target: req });
+          });
+          return req;
+        },
+      };
+
+      (globalThis as any).indexedDB = abortingIdb;
+      if (typeof window !== 'undefined') {
+        (window as any).indexedDB = abortingIdb;
+      }
+    });
+
+    afterEach(() => {
+      resetDatabaseConnectionForTesting();
+    });
+
+    it('should resolve saveResponseToStorage with false on transaction abort', async () => {
+      const result = await saveResponseToStorage('req-abort', sampleResponse);
+      expect(result).toBe(false);
+    });
+
+    it('should resolve getResponseFromStorage with null on transaction abort', async () => {
+      const result = await getResponseFromStorage('req-abort');
+      expect(result).toBeNull();
+    });
+
+    it('should resolve deleteResponseFromStorage on transaction abort without hanging', async () => {
+      await expect(deleteResponseFromStorage('req-abort')).resolves.toBeUndefined();
+    });
+
+    it('should resolve clearAllResponsesFromStorage on transaction abort without hanging', async () => {
       await expect(clearAllResponsesFromStorage()).resolves.toBeUndefined();
     });
   });

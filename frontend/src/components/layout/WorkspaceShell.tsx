@@ -152,7 +152,7 @@ function WorkspaceShellContent({
       if (typeof window !== 'undefined') {
         localStorage.setItem(STORAGE_KEY_ACTIVE_WORKSPACE, id);
       }
-      router.push(`/workspace/${id}`);
+      router.push(`/workspace/${encodeURIComponent(id)}`);
     },
     [setActiveWorkspaceId, router]
   );
@@ -163,7 +163,7 @@ function WorkspaceShellContent({
       if (typeof window !== 'undefined') {
         localStorage.setItem(STORAGE_KEY_ACTIVE_WORKSPACE, created.id);
       }
-      router.push(`/workspace/${created.id}`);
+      router.push(`/workspace/${encodeURIComponent(created.id)}`);
     },
     [createWorkspace, router]
   );
@@ -373,7 +373,7 @@ function WorkspaceShellContent({
     });
     setModalOpen('save', false);
     setPendingSaveData(null);
-    router.push(`/workspace/${workspaceId}/request/${created.id}`);
+    router.push(`/workspace/${encodeURIComponent(workspaceId)}/request/${encodeURIComponent(created.id)}`);
   };
 
   const renderSidebarContent = (className?: string) => (

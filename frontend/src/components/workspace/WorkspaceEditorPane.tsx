@@ -175,10 +175,11 @@ export function WorkspaceEditorPane({
               activeVariables,
               requestHistory
             );
+            const rawCreds = `${username}:${password}`;
             const credentials =
               typeof btoa !== 'undefined'
-                ? btoa(`${username}:${password}`)
-                : Buffer.from(`${username}:${password}`).toString('base64');
+                ? btoa(unescape(encodeURIComponent(rawCreds)))
+                : Buffer.from(rawCreds, 'utf-8').toString('base64');
             interpolatedHeaders['Authorization'] = `Basic ${credentials}`;
           } else if (request.auth.type === 'apikey' && request.auth.key) {
             const apiKey = interpolateVariables(
@@ -203,6 +204,7 @@ export function WorkspaceEditorPane({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            workspaceId: workspaceId || undefined,
             method: request.method,
             url: resolvedUrl,
             target: request.target,
@@ -348,6 +350,15 @@ export function WorkspaceEditorPane({
     [requestId, activeRequestId, handleSaveExisting, handleSaveAs]
   );
 
+  const handleEditorChange = useCallback(
+    (data: RequestData) => {
+      if (!requestId) {
+        setCurrentEditorData(data);
+      }
+    },
+    [requestId, setCurrentEditorData]
+  );
+
   const effectiveRequestId = requestId || activeRequestId || undefined;
   const effectiveRequestName =
     activeRequestDetails?.name ||
@@ -412,7 +423,7 @@ export function WorkspaceEditorPane({
           isAgentOnline={isAgentOnline}
           isLoading={isLoading}
           onSend={handleSend}
-          onChange={setCurrentEditorData}
+          onChange={handleEditorChange}
           availableRequests={requestHistory}
           availableVariables={availableVariables}
         />

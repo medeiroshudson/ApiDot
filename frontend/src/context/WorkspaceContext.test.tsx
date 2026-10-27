@@ -161,7 +161,7 @@ describe('WorkspaceContext', () => {
 
     vi.spyOn(global, 'fetch').mockImplementation((input: any, init?: any) => {
       const url = String(input);
-      if (url.includes('/api/workspaces/ws-123/tree')) {
+      if (url.includes('/tree')) {
         return Promise.resolve({
           ok: true,
           status: 200,
@@ -338,7 +338,7 @@ describe('WorkspaceContext', () => {
     expect(useRequestStore.getState().activeRequestDetails?.name).toBe('Updated Status');
   });
 
-  it('handles deleting request and redirects to workspace root if active request is deleted', async () => {
+  it('handles deleting request, cleans cached response, and redirects to workspace root if active request is deleted', async () => {
     useRequestStore.getState().setActiveRequest('req-root', {
       id: 'req-root',
       name: 'Root Status',
@@ -349,6 +349,12 @@ describe('WorkspaceContext', () => {
       body: '',
       auth: { type: 'none' },
     });
+    useRequestStore.getState().setResponse(
+      { statusCode: 200, body: 'cached-response-data' },
+      'req-root',
+      'ws-123'
+    );
+    expect(useRequestStore.getState().responsesByRequestId['req-root']).toBeDefined();
 
     render(
       <WorkspaceProvider workspaceId="ws-123">
@@ -366,6 +372,41 @@ describe('WorkspaceContext', () => {
 
     expect(mockPush).toHaveBeenCalledWith('/workspace/ws-123');
     expect(useRequestStore.getState().activeRequestId).toBeNull();
+    expect(useRequestStore.getState().responsesByRequestId['req-root']).toBeUndefined();
+  });
+
+  it('encodes dynamic route parameters with encodeURIComponent on router.push', async () => {
+    render(
+      <WorkspaceProvider workspaceId="ws with spaces">
+        <ConsumerComponent />
+      </WorkspaceProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('is-loading')).toHaveTextContent('ready');
+    });
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Select Root Request' }));
+    });
+    expect(mockPush).toHaveBeenCalledWith('/workspace/ws%20with%20spaces/request/req-root');
+
+    act(() => {
+      useRequestStore.getState().setActiveRequest('req-root', {
+        id: 'req-root',
+        name: 'Root',
+        method: 'GET',
+        url: '',
+        target: 'Inherit',
+        headers: '{}',
+        body: '',
+        auth: { type: 'none' },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Root Request' }));
+    });
+    expect(mockPush).toHaveBeenCalledWith('/workspace/ws%20with%20spaces');
   });
 
   it('handles saving existing request and updates store', async () => {

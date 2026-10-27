@@ -110,6 +110,7 @@ export async function saveResponseToStorage(key: string, data: ResponseData): Pr
       req.onsuccess = () => resolve(true);
       req.onerror = () => resolve(false);
       tx.onerror = () => resolve(false);
+      tx.onabort = () => resolve(false);
     });
   } catch {
     return false;
@@ -133,6 +134,7 @@ export async function getResponseFromStorage(key: string): Promise<ResponseData 
       };
       req.onerror = () => resolve(null);
       tx.onerror = () => resolve(null);
+      tx.onabort = () => resolve(null);
     });
   } catch {
     return null;
@@ -153,6 +155,7 @@ export async function deleteResponseFromStorage(key: string): Promise<void> {
       req.onsuccess = () => resolve();
       req.onerror = () => resolve();
       tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
     });
   } catch {
     // Graceful no-op
@@ -173,6 +176,7 @@ export async function clearAllResponsesFromStorage(): Promise<void> {
       req.onsuccess = () => resolve();
       req.onerror = () => resolve();
       tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
     });
   } catch {
     // Graceful no-op

@@ -585,4 +585,116 @@ describe('WorkspaceEditorPane', () => {
       expect(capturedHeaders['x-bool']).toBe('true');
     });
   });
+
+  it('dispatches workspaceId in execute payload on handleSend', async () => {
+    let capturedBody: any = null;
+    vi.spyOn(global, 'fetch').mockImplementation((input: any, init: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/ws-1/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockTree,
+        } as any);
+      }
+      if (url.includes('/api/requests/execute')) {
+        capturedBody = JSON.parse(init.body);
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => ({ statusCode: 200 }),
+        } as any);
+      }
+      return Promise.resolve({ ok: true } as any);
+    });
+
+    await renderEditorPane('ws-1', 'req-1');
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('https://api.example.com/users')).toBeInTheDocument();
+    });
+
+    const sendButton = screen.getByRole('button', { name: /Enviar requisição/i });
+    await act(async () => {
+      fireEvent.click(sendButton);
+    });
+
+    await waitFor(() => {
+      expect(capturedBody).toBeDefined();
+      expect(capturedBody.workspaceId).toBe('ws-1');
+    });
+  });
+
+  it('safely encodes unicode characters in Basic auth credentials without throwing', async () => {
+    let capturedHeaders: Record<string, string> = {};
+    vi.spyOn(global, 'fetch').mockImplementation((input: any, init: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces/ws-1/tree')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => mockTree,
+        } as any);
+      }
+      if (url.includes('/api/requests/execute')) {
+        const parsed = JSON.parse(init.body);
+        capturedHeaders = parsed.headers;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => ({ statusCode: 200 }),
+        } as any);
+      }
+      return Promise.resolve({ ok: true } as any);
+    });
+
+    useRequestStore.getState().setCurrentEditorData({
+      method: 'GET',
+      url: 'https://api.example.com/basic-unicode',
+      target: 'Inherit',
+      headers: '',
+      body: '',
+      auth: { type: 'basic', username: 'usuário', password: 'senh@çã' },
+    });
+
+    await renderEditorPane('ws-1', null);
+
+    const sendButton = screen.getByRole('button', { name: /Enviar requisição/i });
+    await act(async () => {
+      fireEvent.click(sendButton);
+    });
+
+    const rawCreds = 'usuário:senh@çã';
+    const expectedB64 = btoa(unescape(encodeURIComponent(rawCreds)));
+    await waitFor(() => {
+      expect(capturedHeaders['Authorization']).toBe(`Basic ${expectedB64}`);
+    });
+  });
+
+  it('does not overwrite currentEditorData when editing an existing request', async () => {
+    const scratchData = {
+      method: 'POST' as const,
+      url: 'https://scratchpad.example.com',
+      target: 'Browser' as const,
+      headers: '{"x-scratch": "true"}',
+      body: '{"draft": true}',
+      auth: { type: 'none' as const },
+    };
+    useRequestStore.getState().setCurrentEditorData(scratchData);
+
+    await renderEditorPane('ws-1', 'req-1');
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('https://api.example.com/users')).toBeInTheDocument();
+    });
+
+    const urlInput = screen.getByDisplayValue('https://api.example.com/users');
+    act(() => {
+      fireEvent.change(urlInput, { target: { value: 'https://api.example.com/users/modified' } });
+    });
+
+    expect(useRequestStore.getState().currentEditorData?.url).toBe('https://scratchpad.example.com');
+  });
 });

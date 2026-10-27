@@ -94,6 +94,7 @@ export function WorkspaceProvider({
   const setIsSavingRequest = useRequestStore((s) => s.setIsSavingRequest);
   const setPendingSaveData = useRequestStore((s) => s.setPendingSaveData);
   const resetScratchpad = useRequestStore((s) => s.resetScratchpad);
+  const clearResponseForRequest = useRequestStore((s) => s.clearResponseForRequest);
 
   const setModalOpen = useLayoutStore((s) => s.setModalOpen);
 
@@ -146,7 +147,7 @@ export function WorkspaceProvider({
             schemaDefinition: req.schemaDefinition,
           });
         }
-        router.push(`/workspace/${workspaceId}/request/${item.id}`);
+        router.push(`/workspace/${encodeURIComponent(workspaceId)}/request/${encodeURIComponent(item.id)}`);
       }
     },
     [setActiveItem, tree, setActiveRequest, router, workspaceId]
@@ -185,7 +186,7 @@ export function WorkspaceProvider({
         collectionId: created.collectionId,
         folderId: created.folderId,
       });
-      router.push(`/workspace/${workspaceId}/request/${created.id}`);
+      router.push(`/workspace/${encodeURIComponent(workspaceId)}/request/${encodeURIComponent(created.id)}`);
       return created;
     },
     [tree, createRequest, workspaceId, setActiveItem, setActiveRequest, router]
@@ -286,12 +287,13 @@ export function WorkspaceProvider({
   const deleteRequest = useCallback(
     async (id: string) => {
       await treeDeleteRequest(id);
+      clearResponseForRequest(id);
       if (activeRequestId === id) {
         resetScratchpad(workspaceId);
-        router.push(`/workspace/${workspaceId}`);
+        router.push(`/workspace/${encodeURIComponent(workspaceId)}`);
       }
     },
-    [activeRequestId, resetScratchpad, workspaceId, router, treeDeleteRequest]
+    [activeRequestId, resetScratchpad, workspaceId, router, treeDeleteRequest, clearResponseForRequest]
   );
 
   const contextValue = useMemo<WorkspaceContextValue>(

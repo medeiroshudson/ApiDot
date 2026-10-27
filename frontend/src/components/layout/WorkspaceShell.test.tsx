@@ -270,4 +270,44 @@ describe('WorkspaceShell', () => {
       expect(fetchSpy).toHaveBeenCalledWith('ws-test');
     });
   });
+
+  it('encodes workspaceId in router.push when switching to workspace with special characters', async () => {
+    const customWorkspaces = [
+      ...mockWorkspaces,
+      { id: 'ws with spaces', name: 'Spaces Workspace', createdAtUtc: '2026-10-27T00:00:00Z' },
+    ];
+    vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+      const url = String(input);
+      if (url.includes('/tree')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => mockTree } as any);
+      }
+      if (url.includes('/api/workspaces')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => customWorkspaces } as any);
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) } as any);
+    });
+
+    useWorkspaceStore.setState({
+      workspaces: customWorkspaces,
+      activeWorkspaceId: 'ws-test',
+    });
+
+    render(
+      <WorkspaceShell workspaceId="ws-test">
+        <div>Child Area</div>
+      </WorkspaceShell>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Workspace')).toBeInTheDocument();
+    });
+
+    const switcherBtn = screen.getByRole('button', { name: /workspace: test workspace/i });
+    fireEvent.click(switcherBtn);
+
+    const spacesOption = await screen.findByText('Spaces Workspace');
+    fireEvent.click(spacesOption);
+
+    expect(mockPush).toHaveBeenCalledWith('/workspace/ws%20with%20spaces');
+  });
 });
