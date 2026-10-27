@@ -458,4 +458,61 @@ describe('RequestEditor', () => {
     // The CodeEditor for body is present
     expect(screen.getByTestId('body-code-editor')).toBeInTheDocument();
   });
+
+  it('renders URL field with autoGrow behavior (textarea with rows="1" and break-all)', () => {
+    render(<RequestEditor initialRequest={{ url: 'https://api.example.com/long/path' }} />);
+
+    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    expect(urlInput.tagName).toBe('TEXTAREA');
+    expect(urlInput).toHaveAttribute('rows', '1');
+    expect(urlInput).toHaveClass('break-all');
+  });
+
+  it('keeps method selector, URL input, and Send button aligned to top with items-start', () => {
+    render(<RequestEditor />);
+
+    const methodSelect = screen.getByRole('combobox', { name: /método http/i });
+    const controlsContainer = methodSelect.parentElement;
+    expect(controlsContainer).toHaveClass('items-start');
+
+    const sendBtn = screen.getByRole('button', { name: /enviar requisição/i });
+    const sendContainer = sendBtn.parentElement;
+    expect(sendContainer).toHaveClass('items-start');
+  });
+
+  it('triggers request dispatch without appending newlines when pressing Enter in URL field', () => {
+    const onSend = vi.fn();
+    render(
+      <RequestEditor
+        onSend={onSend}
+        initialRequest={{ method: 'GET', url: 'https://api.example.com/test' }}
+      />
+    );
+
+    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    fireEvent.keyDown(urlInput, { key: 'Enter', code: 'Enter' });
+
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'https://api.example.com/test',
+      })
+    );
+    expect(urlInput).toHaveValue('https://api.example.com/test');
+  });
+
+  it('clears URL when clicking clear button (X) in autoGrow input', () => {
+    render(<RequestEditor initialRequest={{ url: 'https://api.example.com/data' }} />);
+
+    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    expect(urlInput).toHaveValue('https://api.example.com/data');
+
+    const clearBtn = screen.getByRole('button', { name: /limpar url/i });
+    expect(clearBtn).toBeInTheDocument();
+    expect(clearBtn).toHaveClass('top-2.5');
+
+    fireEvent.click(clearBtn);
+
+    expect(urlInput).toHaveValue('');
+    expect(screen.queryByRole('button', { name: /limpar url/i })).toBeNull();
+  });
 });
