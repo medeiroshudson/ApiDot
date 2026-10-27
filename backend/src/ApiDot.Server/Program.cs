@@ -51,6 +51,22 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
     dbContext.Database.EnsureCreated();
+    dbContext.Database.ExecuteSqlRaw(@"
+        CREATE TABLE IF NOT EXISTS ""AgentDevices"" (
+            ""Id"" TEXT NOT NULL CONSTRAINT ""PK_AgentDevices"" PRIMARY KEY,
+            ""Name"" TEXT NOT NULL,
+            ""TokenHash"" TEXT NOT NULL,
+            ""TokenPrefix"" TEXT NULL,
+            ""CreatedAtUtc"" TEXT NOT NULL,
+            ""LastConnectedAtUtc"" TEXT NULL,
+            ""LastConnectedIp"" TEXT NULL,
+            ""LastConnectedHostname"" TEXT NULL,
+            ""LastConnectedOs"" TEXT NULL,
+            ""AgentVersion"" TEXT NULL,
+            ""IsRevoked"" INTEGER NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_AgentDevices_TokenHash"" ON ""AgentDevices"" (""TokenHash"");
+    ");
 }
 
 app.UseExceptionHandler();
