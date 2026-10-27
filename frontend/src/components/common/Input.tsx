@@ -11,7 +11,7 @@ export const Input = forwardRef<HTMLInputElement | HTMLTextAreaElement, InputPro
   (
     {
       autoGrow = false,
-      maxRows: _maxRows,
+      maxRows,
       error = false,
       textareaProps,
       className = '',
@@ -20,6 +20,7 @@ export const Input = forwardRef<HTMLInputElement | HTMLTextAreaElement, InputPro
       onFocus,
       onBlur,
       type = 'text',
+      style,
       ...rest
     },
     ref
@@ -40,7 +41,7 @@ export const Input = forwardRef<HTMLInputElement | HTMLTextAreaElement, InputPro
       };
 
       const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
           e.preventDefault();
         }
         (onKeyDown as unknown as React.KeyboardEventHandler<HTMLTextAreaElement>)?.(e);
@@ -71,7 +72,8 @@ export const Input = forwardRef<HTMLInputElement | HTMLTextAreaElement, InputPro
             const start = target.selectionStart ?? 0;
             const end = target.selectionEnd ?? 0;
             const val = target.value;
-            target.value = val.slice(0, start) + sanitized + val.slice(end);
+            const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+            setter?.call(target, val.slice(0, start) + sanitized + val.slice(end));
             target.selectionStart = target.selectionEnd = start + sanitized.length;
             const event = new Event('input', { bubbles: true });
             target.dispatchEvent(event);
@@ -84,7 +86,7 @@ export const Input = forwardRef<HTMLInputElement | HTMLTextAreaElement, InputPro
       const textareaClasses = [
         'w-full min-h-[36px] py-2 pl-3 pr-8 text-xs sm:text-sm bg-neutral-900/90 border rounded-md text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-1 font-mono transition-all disabled:opacity-50 disabled:cursor-not-allowed break-all resize-none leading-snug',
         isFocused
-          ? 'max-h-[84px] overflow-y-auto'
+          ? (maxRows ? 'overflow-y-auto' : 'max-h-[84px] overflow-y-auto')
           : 'max-h-[36px] overflow-hidden truncate',
         error
           ? 'border-rose-500 focus:ring-rose-500 shadow-sm shadow-rose-950/40'
@@ -97,12 +99,20 @@ export const Input = forwardRef<HTMLInputElement | HTMLTextAreaElement, InputPro
         .filter(Boolean)
         .join(' ');
 
+      const dynamicStyle = {
+        ...(maxRows && isFocused ? { maxHeight: `${maxRows * 24 + 12}px` } : {}),
+        ...style,
+        ...textareaProps?.style,
+      };
+
       return (
         <textarea
           ref={ref as React.Ref<HTMLTextAreaElement>}
           rows={textareaProps?.rows ?? 1}
+          aria-invalid={error || undefined}
           {...(rest as unknown as React.TextareaHTMLAttributes<HTMLTextAreaElement>)}
           {...textareaProps}
+          style={dynamicStyle}
           className={textareaClasses}
           onFocus={handleFocus}
           onBlur={handleBlur}
@@ -127,6 +137,8 @@ export const Input = forwardRef<HTMLInputElement | HTMLTextAreaElement, InputPro
       <input
         ref={ref as React.Ref<HTMLInputElement>}
         type={type}
+        aria-invalid={error || undefined}
+        style={style}
         className={inputClasses}
         onChange={onChange}
         onKeyDown={onKeyDown}

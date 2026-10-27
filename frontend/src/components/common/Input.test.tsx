@@ -64,5 +64,13 @@ describe('Input', () => {
     render(<Input error placeholder="Error state" />);
     const input = screen.getByPlaceholderText('Error state');
     expect(input).toHaveClass('border-rose-500');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('applies error ring styling and aria-invalid on autoGrow mode', () => {
+    render(<Input autoGrow error placeholder="Error state autoGrow" />);
+    const textarea = screen.getByPlaceholderText('Error state autoGrow');
+    expect(textarea).toHaveClass('border-rose-500');
+    expect(textarea).toHaveAttribute('aria-invalid', 'true');
   });
 });
