@@ -238,66 +238,84 @@ app.MapMethods("/ws/agent", new[] { "GET" }, async (
             {
                 try
                 {
-                    var bytes = ms.ToArray();
-                    using var doc = JsonDocument.Parse(bytes);
+                    if (!ms.TryGetBuffer(out var segment))
+                    {
+                        segment = new ArraySegment<byte>(ms.ToArray());
+                    }
+                    using var doc = JsonDocument.Parse(segment.AsMemory(0, (int)ms.Length));
                     var root = doc.RootElement;
 
-                    if (root.TryGetProperty("type", out var typeProp))
+                    if (root.ValueKind == JsonValueKind.Object)
                     {
-                        var type = typeProp.GetString();
-                        if (string.Equals(type, "heartbeat", StringComparison.OrdinalIgnoreCase))
+                        if (root.TryGetProperty("type", out var typeProp))
                         {
-                            if (root.TryGetProperty("latencyMs", out var latProp) && latProp.TryGetDouble(out var lMs))
+                            var type = typeProp.GetString();
+                            if (string.Equals(type, "heartbeat", StringComparison.OrdinalIgnoreCase))
                             {
-                                agentHub.RecordHeartbeat(deviceId, lMs);
+                                if (root.TryGetProperty("latencyMs", out var latProp) && latProp.TryGetDouble(out var lMs))
+                                {
+                                    agentHub.RecordHeartbeat(deviceId, lMs);
+                                }
+                                else
+                                {
+                                    var agent = agentHub.GetAgent(deviceId);
+                                    if (agent != null) agent.LastSeenAt = DateTimeOffset.UtcNow;
+                                }
                             }
-                            else
+                            else if (string.Equals(type, "pong", StringComparison.OrdinalIgnoreCase))
                             {
-                                var agent = agentHub.GetAgent(deviceId);
-                                if (agent != null) agent.LastSeenAt = DateTimeOffset.UtcNow;
+                                if (root.TryGetProperty("timestamp", out var tsProp) && tsProp.TryGetInt64(out var sentTs))
+                                {
+                                    var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                                    var latencyMs = Math.Max(0, (double)(nowMs - sentTs));
+                                    agentHub.RecordHeartbeat(deviceId, latencyMs);
+                                }
+                                else
+                                {
+                                    var agent = agentHub.GetAgent(deviceId);
+                                    if (agent != null) agent.LastSeenAt = DateTimeOffset.UtcNow;
+                                }
                             }
-                        }
-                        else if (string.Equals(type, "pong", StringComparison.OrdinalIgnoreCase))
-                        {
-                            if (root.TryGetProperty("timestamp", out var tsProp) && tsProp.TryGetInt64(out var sentTs))
+                            else if (string.Equals(type, "ping", StringComparison.OrdinalIgnoreCase))
                             {
-                                var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                                var latencyMs = Math.Max(0, (double)(nowMs - sentTs));
-                                agentHub.RecordHeartbeat(deviceId, latencyMs);
-                            }
-                            else
-                            {
-                                var agent = agentHub.GetAgent(deviceId);
-                                if (agent != null) agent.LastSeenAt = DateTimeOffset.UtcNow;
-                            }
-                        }
-                        else if (string.Equals(type, "ping", StringComparison.OrdinalIgnoreCase))
-                        {
-                            long? clientTs = null;
-                            if (root.TryGetProperty("timestamp", out var pingTs) && pingTs.TryGetInt64(out var pts))
-                            {
-                                clientTs = pts;
-                            }
-                            var pongJson = JsonSerializer.SerializeToUtf8Bytes(new
-                            {
-                                type = "pong",
-                                timestamp = clientTs ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-                            });
-                            await webSocket.SendAsync(pongJson, WebSocketMessageType.Text, true, context.RequestAborted);
-                            var agent = agentHub.GetAgent(deviceId);
-                            if (agent != null) agent.LastSeenAt = DateTimeOffset.UtcNow;
-                        }
-                    }
-                    else if (root.TryGetProperty("dispatchId", out _) || root.TryGetProperty("DispatchId", out _))
-                    {
-                        var payload = JsonSerializer.Deserialize<HttpResponsePayload>(bytes, new JsonSerializerOptions
-                        {
-                            PropertyNameCaseInsensitive = true
-                        });
+                                long? clientTs = null;
+                                if (root.TryGetProperty("timestamp", out var pingTs) && pingTs.TryGetInt64(out var pts))
+                                {
+                                    clientTs = pts;
+                                }
+                                var pongJson = JsonSerializer.SerializeToUtf8Bytes(new
+                                {
+                                    type = "pong",
+                                    timestamp = clientTs ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                                });
 
-                        if (payload != null && payload.DispatchId != Guid.Empty)
+                                var agent = agentHub.GetAgent(deviceId);
+                                if (agent != null && agent.Socket == webSocket)
+                                {
+                                    await agent.SendLock.WaitAsync(context.RequestAborted);
+                                    try
+                                    {
+                                        await webSocket.SendAsync(pongJson, WebSocketMessageType.Text, true, context.RequestAborted);
+                                    }
+                                    finally
+                                    {
+                                        agent.SendLock.Release();
+                                    }
+                                    agent.LastSeenAt = DateTimeOffset.UtcNow;
+                                }
+                            }
+                        }
+                        else if (root.TryGetProperty("dispatchId", out _) || root.TryGetProperty("DispatchId", out _))
                         {
-                            agentHub.TryCompleteDispatch(payload);
+                            var payload = JsonSerializer.Deserialize<HttpResponsePayload>(segment.AsMemory(0, (int)ms.Length).Span, new JsonSerializerOptions
+                            {
+                                PropertyNameCaseInsensitive = true
+                            });
+
+                            if (payload != null && payload.DispatchId != Guid.Empty)
+                            {
+                                agentHub.TryCompleteDispatch(payload);
+                            }
                         }
                     }
                 }

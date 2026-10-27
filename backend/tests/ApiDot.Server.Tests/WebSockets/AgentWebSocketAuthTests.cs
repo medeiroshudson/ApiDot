@@ -447,6 +447,42 @@ public class AgentWebSocketAuthTests : IClassFixture<WebApplicationFactory<Progr
         hub.IsAgentOnline(device.Id).Should().BeFalse();
     }
 
+    [Fact]
+    public async Task WebSocket_Ignores_NonObject_Json_Payloads_Without_Disconnecting()
+    {
+        var (device, rawToken) = await CreateTestDeviceAsync(name: "NonObject Json Agent");
+        var hub = _factory.Services.GetRequiredService<IAgentHub>();
+
+        var wsClient = _factory.Server.CreateWebSocketClient();
+        var uri = new Uri(_factory.Server.BaseAddress, $"/ws/agent?token={rawToken}");
+
+        using var socket = await wsClient.ConnectAsync(uri, CancellationToken.None);
+        await WaitForAgentOnlineAsync(hub, device.Id);
+        hub.IsAgentOnline(device.Id).Should().BeTrue();
+
+        // Send non-object JSON (array, primitive number, string)
+        var nonObjectPayloads = new[]
+        {
+            Encoding.UTF8.GetBytes("[\"array\", 1, 2]"),
+            Encoding.UTF8.GetBytes("\"plain string\""),
+            Encoding.UTF8.GetBytes("12345"),
+            Encoding.UTF8.GetBytes("true")
+        };
+
+        foreach (var payload in nonObjectPayloads)
+        {
+            await socket.SendAsync(new ArraySegment<byte>(payload), WebSocketMessageType.Text, true, CancellationToken.None);
+        }
+
+        await Task.Delay(100);
+
+        // Socket should remain open and online
+        socket.State.Should().Be(WebSocketState.Open);
+        hub.IsAgentOnline(device.Id).Should().BeTrue();
+
+        await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None);
+    }
+
     private static async Task WaitForAgentOnlineAsync(IAgentHub hub, Guid deviceId, int timeoutMs = 2000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
