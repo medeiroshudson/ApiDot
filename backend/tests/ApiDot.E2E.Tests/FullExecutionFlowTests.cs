@@ -114,7 +114,7 @@ public class FullExecutionFlowTests : IClassFixture<WebApplicationFactory<Progra
     }
 
     [Fact]
-    public async Task Execute_AgentTarget_WithNoAgentOnline_Returns_400_BadRequest_WithProblemDetails()
+    public async Task Execute_AgentTarget_WithNoAgentOnline_Returns_409_Conflict_WithProblemDetails()
     {
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Device-Id", Guid.NewGuid().ToString());

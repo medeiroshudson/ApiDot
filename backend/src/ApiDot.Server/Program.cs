@@ -1862,11 +1862,18 @@ app.MapPost("/api/requests/execute", async (
                 title: "Agent Execution Timed Out",
                 detail: "The dispatch to the local agent timed out or was canceled.");
         }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("No online agent found", StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Agent Offline",
+                detail: ex.Message);
+        }
         catch (InvalidOperationException ex)
         {
             return Results.Problem(
-                statusCode: StatusCodes.Status400BadRequest,
-                title: "Agent Offline",
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Agent Dispatch Error",
                 detail: ex.Message);
         }
     }
