@@ -981,6 +981,308 @@ public class CollectionMergerTests
         result.AddedRequests[0].Url.Should().Be("/orders");
     }
 
+    [Fact]
+    public void Merge_ShouldCreateFoldersForTagsAndDuplicateMultiTagRequests()
+    {
+        var merger = new CollectionMerger();
+        var collection = new Collection
+        {
+            Id = Guid.NewGuid(),
+            Name = "Test",
+            WorkspaceId = Guid.NewGuid()
+        };
+
+        var imported = new CanonicalCollectionImport
+        {
+            Requests =
+            [
+                new CanonicalRequest
+                {
+                    Name = "MultiTag Endpoint",
+                    Method = "GET",
+                    Path = "/items",
+                    Url = "/items",
+                    Tags = ["inventory", "sales"]
+                },
+                new CanonicalRequest
+                {
+                    Name = "Root Endpoint",
+                    Method = "GET",
+                    Path = "/health",
+                    Url = "/health",
+                    Tags = []
+                }
+            ]
+        };
+
+        var result = merger.Merge(collection, imported);
+
+        Assert.Equal(2, collection.Folders.Count);
+        Assert.Contains(collection.Folders, f => f.Name == "inventory");
+        Assert.Contains(collection.Folders, f => f.Name == "sales");
+
+        Assert.Equal(3, collection.Requests.Count);
+        Assert.Equal(1, collection.Requests.Count(r => r.FolderId == null));
+        Assert.Equal(2, collection.Requests.Count(r => r.Name == "MultiTag Endpoint"));
+    }
+
+    [Fact]
+    public void Merge_ShouldReuseExistingFolderCaseInsensitively()
+    {
+        var merger = new CollectionMerger();
+        var workspaceId = Guid.NewGuid();
+        var collectionId = Guid.NewGuid();
+        var existingFolderId = Guid.NewGuid();
+
+        var collection = new Collection
+        {
+            Id = collectionId,
+            Name = "Existing Folder API",
+            WorkspaceId = workspaceId,
+            Folders =
+            [
+                new Folder
+                {
+                    Id = existingFolderId,
+                    Name = "Inventory",
+                    CollectionId = collectionId,
+                    WorkspaceId = workspaceId
+                }
+            ]
+        };
+
+        var imported = new CanonicalCollectionImport
+        {
+            Requests =
+            [
+                new CanonicalRequest
+                {
+                    Name = "Get Inventory",
+                    Method = "GET",
+                    Path = "/inventory",
+                    Url = "/inventory",
+                    Tags = ["inventory"]
+                }
+            ]
+        };
+
+        var result = merger.Merge(collection, imported);
+
+        collection.Folders.Should().HaveCount(1);
+        collection.Folders.First().Id.Should().Be(existingFolderId);
+        collection.Requests.Should().HaveCount(1);
+        collection.Requests.First().FolderId.Should().Be(existingFolderId);
+    }
+
+    [Fact]
+    public void Merge_ShouldMatchExistingRequestDeterministicallyByMethodRouteAndFolderId()
+    {
+        var merger = new CollectionMerger();
+        var workspaceId = Guid.NewGuid();
+        var collectionId = Guid.NewGuid();
+        var folder1Id = Guid.NewGuid();
+        var folder2Id = Guid.NewGuid();
+        var req1Id = Guid.NewGuid();
+        var req2Id = Guid.NewGuid();
+        var req3Id = Guid.NewGuid();
+
+        var collection = new Collection
+        {
+            Id = collectionId,
+            Name = "Deterministic Match API",
+            WorkspaceId = workspaceId,
+            Folders =
+            [
+                new Folder { Id = folder1Id, Name = "inventory", CollectionId = collectionId, WorkspaceId = workspaceId },
+                new Folder { Id = folder2Id, Name = "sales", CollectionId = collectionId, WorkspaceId = workspaceId }
+            ],
+            Requests =
+            [
+                new RequestItem
+                {
+                    Id = req1Id,
+                    Name = "Items in Inventory",
+                    Method = "GET",
+                    Url = "/items",
+                    FolderId = folder1Id,
+                    BodyType = HttpBodyType.Json,
+                    BodyContent = "{\"source\": \"inv\"}"
+                },
+                new RequestItem
+                {
+                    Id = req2Id,
+                    Name = "Items in Sales",
+                    Method = "GET",
+                    Url = "/items",
+                    FolderId = folder2Id,
+                    BodyType = HttpBodyType.Json,
+                    BodyContent = "{\"source\": \"sales\"}"
+                },
+                new RequestItem
+                {
+                    Id = req3Id,
+                    Name = "Root Items",
+                    Method = "GET",
+                    Url = "/items",
+                    FolderId = null,
+                    BodyType = HttpBodyType.Json,
+                    BodyContent = "{\"source\": \"root\"}"
+                }
+            ]
+        };
+
+        var imported = new CanonicalCollectionImport
+        {
+            Requests =
+            [
+                new CanonicalRequest
+                {
+                    Name = "Items Spec",
+                    Method = "GET",
+                    Path = "/items",
+                    Url = "/items",
+                    Tags = ["inventory", "sales"],
+                    BodyType = HttpBodyType.Json,
+                    BodyContent = "{\"version\": 2}"
+                }
+            ]
+        };
+
+        var result = merger.Merge(collection, imported);
+
+        result.Report.UpdatedRequests.Should().Be(2);
+        result.Report.AddedRequests.Should().Be(0);
+        result.AddedRequests.Should().BeEmpty();
+        collection.Requests.Should().HaveCount(3);
+
+        var req1 = collection.Requests.First(r => r.Id == req1Id);
+        req1.FolderId.Should().Be(folder1Id);
+        req1.BodyContent.Should().Contain("version");
+
+        var req2 = collection.Requests.First(r => r.Id == req2Id);
+        req2.FolderId.Should().Be(folder2Id);
+        req2.BodyContent.Should().Contain("version");
+
+        var req3 = collection.Requests.First(r => r.Id == req3Id);
+        req3.FolderId.Should().BeNull();
+        req3.BodyContent.Should().Be("{\"source\": \"root\"}");
+    }
+
+    [Fact]
+    public void Merge_ShouldUpdateSchemaDefinitionWhenPresent()
+    {
+        var merger = new CollectionMerger();
+        var collection = new Collection
+        {
+            Id = Guid.NewGuid(),
+            Name = "Schema Update API",
+            WorkspaceId = Guid.NewGuid(),
+            Requests =
+            [
+                new RequestItem
+                {
+                    Name = "Get User",
+                    Method = "GET",
+                    Url = "/users/1",
+                    SchemaDefinition = "{\"old\":true}"
+                }
+            ]
+        };
+
+        var imported = new CanonicalCollectionImport
+        {
+            Requests =
+            [
+                new CanonicalRequest
+                {
+                    Name = "Get User",
+                    Method = "GET",
+                    Path = "/users/1",
+                    Url = "/users/1",
+                    SchemaDefinition = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"}}}"
+                }
+            ]
+        };
+
+        var result = merger.Merge(collection, imported);
+
+        result.Report.UpdatedRequests.Should().Be(1);
+        var req = collection.Requests.First();
+        req.SchemaDefinition.Should().Be("{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"}}}");
+    }
+
+    [Fact]
+    public void Merge_ShouldAssignSchemaDefinitionToNewRequests()
+    {
+        var merger = new CollectionMerger();
+        var collection = new Collection
+        {
+            Id = Guid.NewGuid(),
+            Name = "New Schema API",
+            WorkspaceId = Guid.NewGuid(),
+            Requests = []
+        };
+
+        var imported = new CanonicalCollectionImport
+        {
+            Requests =
+            [
+                new CanonicalRequest
+                {
+                    Name = "New Item",
+                    Method = "POST",
+                    Path = "/items",
+                    Url = "/items",
+                    Tags = ["catalog"],
+                    SchemaDefinition = "{\"type\":\"object\",\"required\":[\"name\"]}"
+                }
+            ]
+        };
+
+        var result = merger.Merge(collection, imported);
+
+        result.Report.AddedRequests.Should().Be(1);
+        var req = collection.Requests.First();
+        req.SchemaDefinition.Should().Be("{\"type\":\"object\",\"required\":[\"name\"]}");
+        req.FolderId.Should().NotBeNull();
+        collection.Folders.Should().HaveCount(1);
+        collection.Folders.First().Id.Should().Be(req.FolderId!.Value);
+    }
+
+    [Fact]
+    public void Merge_WithDistinctNormalizedTags_ShouldDeduplicateTagsOnSameRequest()
+    {
+        var merger = new CollectionMerger();
+        var collection = new Collection
+        {
+            Id = Guid.NewGuid(),
+            Name = "Deduplicate Tags API",
+            WorkspaceId = Guid.NewGuid()
+        };
+
+        var imported = new CanonicalCollectionImport
+        {
+            Requests =
+            [
+                new CanonicalRequest
+                {
+                    Name = "Single Item",
+                    Method = "GET",
+                    Path = "/items",
+                    Url = "/items",
+                    Tags = ["inventory", "INVENTORY", "  inventory  "]
+                }
+            ]
+        };
+
+        var result = merger.Merge(collection, imported);
+
+        collection.Folders.Should().HaveCount(1);
+        collection.Folders.First().Name.Should().Be("inventory");
+        collection.Requests.Should().HaveCount(1);
+        collection.Requests.First().FolderId.Should().Be(collection.Folders.First().Id);
+    }
+
     private static string BuildNestedJsonObject(int depth, string leafKey, string leafValue)
     {
         var sb = new System.Text.StringBuilder();

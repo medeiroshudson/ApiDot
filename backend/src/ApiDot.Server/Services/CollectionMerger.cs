@@ -22,7 +22,16 @@ public class CollectionMerger : ICollectionMerger
         var matchedExistingIds = new HashSet<Guid>();
         var initialExisting = collection.Requests.ToList();
 
-        var routeIndex = new Dictionary<(string Method, string Route), List<RequestItem>>();
+        var folderMap = new Dictionary<string, Folder>(StringComparer.OrdinalIgnoreCase);
+        foreach (var folder in collection.Folders)
+        {
+            if (!string.IsNullOrWhiteSpace(folder.Name))
+            {
+                folderMap.TryAdd(folder.Name.Trim(), folder);
+            }
+        }
+
+        var routeIndex = new Dictionary<(string Method, string Route, Guid? FolderId), List<RequestItem>>();
         var orderIndex = new Dictionary<Guid, int>(initialExisting.Count);
 
         for (var i = 0; i < initialExisting.Count; i++)
@@ -32,7 +41,7 @@ public class CollectionMerger : ICollectionMerger
 
             var method = req.Method?.ToUpperInvariant() ?? string.Empty;
             var route = NormalizeRoute(req.Url);
-            var key = (method, route);
+            var key = (method, route, req.FolderId);
             if (!routeIndex.TryGetValue(key, out var list))
             {
                 list = new List<RequestItem>();
@@ -43,84 +52,148 @@ public class CollectionMerger : ICollectionMerger
 
         foreach (var canonicalReq in imported.Requests)
         {
-            var canonicalMethod = canonicalReq.Method?.ToUpperInvariant() ?? string.Empty;
-            var canonicalPathRoute = NormalizeRoute(canonicalReq.Path);
-            var canonicalUrlRoute = NormalizeRoute(canonicalReq.Url);
+            var distinctTags = canonicalReq.Tags?
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Select(t => t.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList() ?? [];
 
-            RequestItem? matched = null;
-
-            if (canonicalPathRoute == canonicalUrlRoute)
+            if (distinctTags.Count > 0)
             {
-                if (routeIndex.TryGetValue((canonicalMethod, canonicalPathRoute), out var candidates))
+                foreach (var tag in distinctTags)
                 {
-                    matched = candidates.FirstOrDefault(r => !matchedExistingIds.Contains(r.Id));
+                    if (!folderMap.TryGetValue(tag, out var folder))
+                    {
+                        folder = new Folder
+                        {
+                            Id = Guid.NewGuid(),
+                            Name = tag,
+                            CollectionId = collection.Id,
+                            WorkspaceId = collection.WorkspaceId
+                        };
+                        collection.Folders.Add(folder);
+                        folderMap[tag] = folder;
+                    }
+
+                    ProcessRequestTarget(
+                        collection,
+                        canonicalReq,
+                        folder.Id,
+                        routeIndex,
+                        orderIndex,
+                        matchedExistingIds,
+                        report,
+                        addedRequests);
                 }
             }
             else
             {
-                RequestItem? pathMatch = null;
-                if (!string.IsNullOrEmpty(canonicalPathRoute) && routeIndex.TryGetValue((canonicalMethod, canonicalPathRoute), out var pathCandidates))
-                {
-                    pathMatch = pathCandidates.FirstOrDefault(r => !matchedExistingIds.Contains(r.Id));
-                }
-
-                RequestItem? urlMatch = null;
-                if (!string.IsNullOrEmpty(canonicalUrlRoute) && routeIndex.TryGetValue((canonicalMethod, canonicalUrlRoute), out var urlCandidates))
-                {
-                    urlMatch = urlCandidates.FirstOrDefault(r => !matchedExistingIds.Contains(r.Id));
-                }
-
-                if (pathMatch != null && urlMatch != null)
-                {
-                    matched = orderIndex[pathMatch.Id] <= orderIndex[urlMatch.Id] ? pathMatch : urlMatch;
-                }
-                else
-                {
-                    matched = pathMatch ?? urlMatch;
-                }
-            }
-
-            if (matched != null)
-            {
-                matchedExistingIds.Add(matched.Id);
-                report.UpdatedRequests++;
-
-                MergeRequest(matched, canonicalReq, report);
-            }
-            else
-            {
-                report.AddedRequests++;
-                var newRequest = new RequestItem
-                {
-                    Id = Guid.NewGuid(),
-                    Name = !string.IsNullOrWhiteSpace(canonicalReq.Name)
-                        ? canonicalReq.Name
-                        : $"{canonicalMethod} {canonicalReq.Path}",
-                    Method = canonicalMethod,
-                    Url = !string.IsNullOrWhiteSpace(canonicalReq.Url) ? canonicalReq.Url : canonicalReq.Path,
-                    HeadersJson = SerializeHeaders(canonicalReq.Headers),
-                    BodyType = canonicalReq.BodyType,
-                    BodyContent = canonicalReq.BodyContent,
-                    SchemaDefinition = canonicalReq.BodySchemaJson,
-                    Target = ExecutionTarget.Inherit,
-                    WorkspaceId = collection.WorkspaceId,
-                    CollectionId = collection.Id,
-                    FolderId = null,
-                    CreatedAtUtc = DateTime.UtcNow
-                };
-
-                matchedExistingIds.Add(newRequest.Id);
-                collection.Requests.Add(newRequest);
-                addedRequests.Add(newRequest);
+                ProcessRequestTarget(
+                    collection,
+                    canonicalReq,
+                    null,
+                    routeIndex,
+                    orderIndex,
+                    matchedExistingIds,
+                    report,
+                    addedRequests);
             }
         }
 
         return new MergeResult(report, addedRequests);
     }
 
+    private static void ProcessRequestTarget(
+        Collection collection,
+        CanonicalRequest canonicalReq,
+        Guid? targetFolderId,
+        Dictionary<(string Method, string Route, Guid? FolderId), List<RequestItem>> routeIndex,
+        Dictionary<Guid, int> orderIndex,
+        HashSet<Guid> matchedExistingIds,
+        SyncReport report,
+        List<RequestItem> addedRequests)
+    {
+        var canonicalMethod = canonicalReq.Method?.ToUpperInvariant() ?? string.Empty;
+        var canonicalPathRoute = NormalizeRoute(canonicalReq.Path);
+        var canonicalUrlRoute = NormalizeRoute(canonicalReq.Url);
+
+        RequestItem? matched = null;
+
+        if (canonicalPathRoute == canonicalUrlRoute)
+        {
+            if (routeIndex.TryGetValue((canonicalMethod, canonicalPathRoute, targetFolderId), out var candidates))
+            {
+                matched = candidates.FirstOrDefault(r => !matchedExistingIds.Contains(r.Id));
+            }
+        }
+        else
+        {
+            RequestItem? pathMatch = null;
+            if (!string.IsNullOrEmpty(canonicalPathRoute) && routeIndex.TryGetValue((canonicalMethod, canonicalPathRoute, targetFolderId), out var pathCandidates))
+            {
+                pathMatch = pathCandidates.FirstOrDefault(r => !matchedExistingIds.Contains(r.Id));
+            }
+
+            RequestItem? urlMatch = null;
+            if (!string.IsNullOrEmpty(canonicalUrlRoute) && routeIndex.TryGetValue((canonicalMethod, canonicalUrlRoute, targetFolderId), out var urlCandidates))
+            {
+                urlMatch = urlCandidates.FirstOrDefault(r => !matchedExistingIds.Contains(r.Id));
+            }
+
+            if (pathMatch != null && urlMatch != null)
+            {
+                matched = orderIndex[pathMatch.Id] <= orderIndex[urlMatch.Id] ? pathMatch : urlMatch;
+            }
+            else
+            {
+                matched = pathMatch ?? urlMatch;
+            }
+        }
+
+        if (matched != null)
+        {
+            matchedExistingIds.Add(matched.Id);
+            report.UpdatedRequests++;
+
+            MergeRequest(matched, canonicalReq, report);
+        }
+        else
+        {
+            report.AddedRequests++;
+            var newRequest = new RequestItem
+            {
+                Id = Guid.NewGuid(),
+                Name = !string.IsNullOrWhiteSpace(canonicalReq.Name)
+                    ? canonicalReq.Name
+                    : $"{canonicalMethod} {canonicalReq.Path}",
+                Method = canonicalMethod,
+                Url = !string.IsNullOrWhiteSpace(canonicalReq.Url) ? canonicalReq.Url : canonicalReq.Path,
+                HeadersJson = SerializeHeaders(canonicalReq.Headers),
+                BodyType = canonicalReq.BodyType,
+                BodyContent = canonicalReq.BodyContent,
+                SchemaDefinition = !string.IsNullOrWhiteSpace(canonicalReq.SchemaDefinition)
+                    ? canonicalReq.SchemaDefinition
+                    : canonicalReq.BodySchemaJson,
+                Target = ExecutionTarget.Inherit,
+                WorkspaceId = collection.WorkspaceId,
+                CollectionId = collection.Id,
+                FolderId = targetFolderId,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+
+            matchedExistingIds.Add(newRequest.Id);
+            collection.Requests.Add(newRequest);
+            addedRequests.Add(newRequest);
+        }
+    }
+
     private static void MergeRequest(RequestItem existing, CanonicalRequest canonicalReq, SyncReport report)
     {
-        if (!string.IsNullOrWhiteSpace(canonicalReq.BodySchemaJson))
+        if (!string.IsNullOrWhiteSpace(canonicalReq.SchemaDefinition))
+        {
+            existing.SchemaDefinition = canonicalReq.SchemaDefinition;
+        }
+        else if (!string.IsNullOrWhiteSpace(canonicalReq.BodySchemaJson))
         {
             existing.SchemaDefinition = canonicalReq.BodySchemaJson;
         }
