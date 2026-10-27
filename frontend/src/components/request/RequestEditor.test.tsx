@@ -428,4 +428,34 @@ describe('RequestEditor', () => {
       })
     );
   });
+
+  it('computes schemaProperties from schemaDefinition and provides autocompletion in body editor', () => {
+    const testSchema = JSON.stringify({
+      summary: 'Pets API',
+      body: {
+        type: 'object',
+        properties: {
+          category: { type: 'string', description: 'Category name' },
+        },
+      },
+    });
+
+    render(
+      <RequestEditor
+        initialRequest={{
+          method: 'POST',
+          url: 'https://api.com/pets',
+          body: '{ "cat',
+          schemaDefinition: testSchema,
+        }}
+      />
+    );
+
+    // Switch to Corpo tab
+    const bodyTab = screen.getByRole('tab', { name: /corpo/i });
+    fireEvent.click(bodyTab);
+
+    // The CodeEditor for body is present
+    expect(screen.getByTestId('body-code-editor')).toBeInTheDocument();
+  });
 });

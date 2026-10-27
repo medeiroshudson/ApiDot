@@ -16,7 +16,7 @@ import {
 } from './DependencyLinkerModal';
 import { CodeEditor } from '../common/CodeEditor';
 import { ParamsTab } from './ParamsTab';
-import { SpecificationTab } from './SpecificationTab';
+import { SpecificationTab, extractSchemaProperties } from './SpecificationTab';
 
 export { SaveRequestModal } from './SaveRequestModal';
 export type { SaveRequestModalProps, CollectionOption, FolderOption } from './SaveRequestModal';
@@ -134,6 +134,10 @@ export function RequestEditor({
   const [schemaDefinition, setSchemaDefinition] = useState<string>(
     initialRequest?.schemaDefinition || ''
   );
+
+  const schemaProperties = useMemo(() => {
+    return extractSchemaProperties(schemaDefinition);
+  }, [schemaDefinition]);
   const [bodyFormat, setBodyFormat] = useState<BodyFormat>(() => {
     if (!initialRequest?.body) return 'none';
     if (initialRequest.body.trim().startsWith('{') || initialRequest.body.trim().startsWith('[')) return 'json';
@@ -914,6 +918,7 @@ export function RequestEditor({
                 onChange={(val) => handleBodyChange(val)}
                 availableRequests={availableRequests}
                 availableVariables={availableVariables}
+                schemaProperties={schemaProperties}
               />
             )}
           </div>

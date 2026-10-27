@@ -9,6 +9,9 @@ import {
   FileText,
   HelpCircle,
 } from 'lucide-react';
+import type { SchemaPropertyItem } from './RequestAutocomplete';
+
+export type { SchemaPropertyItem };
 
 export type SchemaPropertyType =
   | 'string'
@@ -143,6 +146,57 @@ export function parseSchemaDefinition(raw?: string | object): StructuredSchema {
     body: parsed,
     responses: [],
   };
+}
+
+/**
+ * Extracts a flattened list of SchemaPropertyItem from schemaDefinition.
+ */
+export function extractSchemaProperties(raw?: string | object): SchemaPropertyItem[] {
+  if (!raw) return [];
+  try {
+    const structured = parseSchemaDefinition(raw);
+    const bodyObj = structured.body;
+    if (!bodyObj || typeof bodyObj !== 'object') return [];
+
+    const result: SchemaPropertyItem[] = [];
+    const seen = new Set<string>();
+
+    function collect(props?: Record<string, any>) {
+      if (!props || typeof props !== 'object') return;
+      for (const [key, val] of Object.entries(props)) {
+        if (!key || seen.has(key)) continue;
+        if (!val || typeof val !== 'object') {
+          seen.add(key);
+          result.push({ key, type: 'string' });
+          continue;
+        }
+
+        const type = val.type || (val.properties ? 'object' : 'string');
+        seen.add(key);
+        result.push({
+          key,
+          type: typeof type === 'string' ? type : 'string',
+          description: typeof val.description === 'string' ? val.description : undefined,
+        });
+
+        if (val.properties && typeof val.properties === 'object') {
+          collect(val.properties);
+        }
+        if (val.items?.properties && typeof val.items.properties === 'object') {
+          collect(val.items.properties);
+        }
+      }
+    }
+
+    collect(bodyObj.properties);
+    if (bodyObj.items?.properties) {
+      collect(bodyObj.items.properties);
+    }
+
+    return result;
+  } catch {
+    return [];
+  }
 }
 
 /**

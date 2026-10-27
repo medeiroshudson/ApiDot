@@ -13,6 +13,12 @@ export interface AutocompleteRequest {
   method: string;
 }
 
+export interface SchemaPropertyItem {
+  key: string;
+  type: string;
+  description?: string;
+}
+
 export interface CursorCoords {
   left: number;
   top: number;
@@ -33,6 +39,7 @@ export interface RequestAutocompleteProps {
   onChange?: (val: string, newCursor?: number) => void;
   availableVariables?: AutocompleteVariable[];
   availableRequests?: AutocompleteRequest[];
+  schemaProperties?: SchemaPropertyItem[];
   className?: string;
   children?: React.ReactNode;
 }
@@ -40,10 +47,12 @@ export interface RequestAutocompleteProps {
 interface SuggestionItem {
   id: string;
   name: string;
-  type: 'variable' | 'token' | 'request';
+  type: 'variable' | 'token' | 'request' | 'property';
   method?: string;
   detail?: string;
   scope?: string;
+  propertyType?: string;
+  description?: string;
 }
 
 export const HTTP_METHOD_BADGES: Record<string, string> = {
@@ -58,35 +67,145 @@ export const HTTP_METHOD_BADGES: Record<string, string> = {
 
 export const METHOD_COLORS = HTTP_METHOD_BADGES;
 
-function getAutocompleteContext(text: string, cursorPos: number) {
-  const textBefore = text.slice(0, cursorPos);
-  const lastOpen = textBefore.lastIndexOf('{{');
-  if (lastOpen === -1) return null;
+export const SCHEMA_TYPE_BADGES: Record<string, string> = {
+  string: 'text-emerald-400 bg-emerald-950/60 border-emerald-800/80',
+  number: 'text-amber-400 bg-amber-950/60 border-amber-800/80',
+  integer: 'text-amber-400 bg-amber-950/60 border-amber-800/80',
+  boolean: 'text-purple-400 bg-purple-950/60 border-purple-800/80',
+  object: 'text-blue-400 bg-blue-950/60 border-blue-800/80',
+  array: 'text-cyan-400 bg-cyan-950/60 border-cyan-800/80',
+};
 
-  const content = textBefore.slice(lastOpen + 2);
-  // If closing braces or newline exists between {{ and cursorPos, do not trigger
-  if (content.includes('}}') || content.includes('\n')) return null;
-
-  // Request chaining trigger: {{$request[
-  const requestMatch = content.match(/^\$request\[(.*)$/);
-  if (requestMatch) {
-    const rawFilter = requestMatch[1]
-      .replace(/^['"]/, '')
-      .replace(/['"]$/, '')
-      .toLowerCase()
-      .trim();
-    return {
-      type: 'request' as const,
-      openPos: lastOpen,
-      filter: rawFilter,
+type AutocompleteContext =
+  | {
+      type: 'request';
+      openPos: number;
+      filter: string;
+    }
+  | {
+      type: 'variable';
+      openPos: number;
+      filter: string;
+    }
+  | {
+      type: 'property';
+      openPos: number;
+      hasQuote: boolean;
+      filter: string;
     };
+
+function isAfterColonInSegment(segment: string): boolean {
+  let inQuote = false;
+  let quoteChar = '';
+  for (let i = 0; i < segment.length; i++) {
+    const ch = segment[i];
+    if ((ch === '"' || ch === "'") && (i === 0 || segment[i - 1] !== '\\')) {
+      if (!inQuote) {
+        inQuote = true;
+        quoteChar = ch;
+      } else if (ch === quoteChar) {
+        inQuote = false;
+      }
+    } else if (ch === ':' && !inQuote) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function getSegmentAfterLastDelimiter(textBefore: string): string {
+  let inQuote = false;
+  let quoteChar = '';
+  let lastDelim = -1;
+  for (let i = 0; i < textBefore.length; i++) {
+    const ch = textBefore[i];
+    if ((ch === '"' || ch === "'") && (i === 0 || textBefore[i - 1] !== '\\')) {
+      if (!inQuote) {
+        inQuote = true;
+        quoteChar = ch;
+      } else if (ch === quoteChar) {
+        inQuote = false;
+      }
+    } else if ((ch === '{' || ch === ',') && !inQuote) {
+      lastDelim = i;
+    }
+  }
+  return lastDelim !== -1 ? textBefore.slice(lastDelim + 1) : textBefore;
+}
+
+function getAutocompleteContext(
+  text: string,
+  cursorPos: number,
+  hasSchemaProperties = false
+): AutocompleteContext | null {
+  const textBefore = text.slice(0, cursorPos);
+
+  // 1. Check for variable/request interpolation {{ ...
+  const lastOpen = textBefore.lastIndexOf('{{');
+  if (lastOpen !== -1) {
+    const content = textBefore.slice(lastOpen + 2);
+    // If closing braces or newline exists between {{ and cursorPos, do not trigger
+    if (!content.includes('}}') && !content.includes('\n')) {
+      // Request chaining trigger: {{$request[
+      const requestMatch = content.match(/^\$request\[(.*)$/);
+      if (requestMatch) {
+        const rawFilter = requestMatch[1]
+          .replace(/^['"]/, '')
+          .replace(/['"]$/, '')
+          .toLowerCase()
+          .trim();
+        return {
+          type: 'request' as const,
+          openPos: lastOpen,
+          filter: rawFilter,
+        };
+      }
+
+      return {
+        type: 'variable' as const,
+        openPos: lastOpen,
+        filter: content.toLowerCase().trim(),
+      };
+    }
   }
 
-  return {
-    type: 'variable' as const,
-    openPos: lastOpen,
-    filter: content.toLowerCase().trim(),
-  };
+  // 2. Check for schema property context (inside JSON quotes, after ", or typing property name)
+  if (hasSchemaProperties) {
+    const currentSegment = getSegmentAfterLastDelimiter(textBefore);
+    if (isAfterColonInSegment(currentSegment)) {
+      // Cursor is on the value side of a property pair, do not autocomplete property keys
+      return null;
+    }
+
+    const lastQuote = textBefore.lastIndexOf('"');
+    if (lastQuote !== -1) {
+      const content = textBefore.slice(lastQuote + 1);
+      // Ensure cursor is immediately inside the opened quote (no newlines or inner quotes)
+      if (!content.includes('\n') && !content.includes('"')) {
+        return {
+          type: 'property' as const,
+          openPos: lastQuote + 1,
+          hasQuote: true,
+          filter: content.toLowerCase().trim(),
+        };
+      }
+    }
+
+    // Bare property name without quotes (e.g. { cat or typing on blank line)
+    const wordMatch = textBefore.match(/([a-zA-Z0-9_$-]+)$/);
+    if (wordMatch) {
+      const word = wordMatch[1];
+      const wordStart = cursorPos - word.length;
+      return {
+        type: 'property' as const,
+        openPos: wordStart,
+        hasQuote: false,
+        filter: word.toLowerCase().trim(),
+      };
+    }
+  }
+
+  return null;
 }
 
 export function RequestAutocomplete({
@@ -98,6 +217,7 @@ export function RequestAutocomplete({
   onChange,
   availableVariables = [],
   availableRequests = [],
+  schemaProperties = [],
   className = '',
   children,
 }: RequestAutocompleteProps) {
@@ -138,14 +258,33 @@ export function RequestAutocomplete({
     updateCursorFromElement();
   }, [value, updateCursorFromElement]);
 
+  const hasSchemaProperties = Boolean(schemaProperties && schemaProperties.length > 0);
+
   // Parse trigger context
   const context = useMemo(() => {
-    return getAutocompleteContext(value, effectiveCursorPos);
-  }, [value, effectiveCursorPos]);
+    return getAutocompleteContext(value, effectiveCursorPos, hasSchemaProperties);
+  }, [value, effectiveCursorPos, hasSchemaProperties]);
 
   // Generate suggestions based on context
   const suggestions = useMemo<SuggestionItem[]>(() => {
     if (!context) return [];
+
+    if (context.type === 'property') {
+      const items: SuggestionItem[] = [];
+      schemaProperties.forEach((prop) => {
+        if (!context.filter || prop.key.toLowerCase().includes(context.filter)) {
+          items.push({
+            id: prop.key,
+            name: prop.key,
+            type: 'property',
+            propertyType: prop.type,
+            detail: prop.description,
+            description: prop.description,
+          });
+        }
+      });
+      return items;
+    }
 
     if (context.type === 'request') {
       const filtered = availableRequests.filter((req) => {
@@ -211,7 +350,7 @@ export function RequestAutocomplete({
     });
 
     return items;
-  }, [context, availableVariables, availableRequests]);
+  }, [context, availableVariables, availableRequests, schemaProperties]);
 
   // Reset selectedIndex whenever context changes
   useEffect(() => {
@@ -287,8 +426,46 @@ export function RequestAutocomplete({
       if (!context) return;
       const el = getTargetElement();
       const currentVal = value;
+
+      if (context.type === 'property') {
+        let prefix = '';
+        let insertText = '';
+        let suffix = currentVal.slice(effectiveCursorPos);
+
+        // Consume any remaining word characters in suffix
+        const wordTailMatch = suffix.match(/^[a-zA-Z0-9_$-]+/);
+        if (wordTailMatch) {
+          suffix = suffix.slice(wordTailMatch[0].length);
+        }
+
+        if (context.hasQuote) {
+          // Inside quotes context: prefix ends with " (openPos is right after ")
+          prefix = currentVal.slice(0, context.openPos);
+          insertText = item.name;
+        } else {
+          // Bare property name context: openPos is start of identifier
+          prefix = currentVal.slice(0, context.openPos);
+          const hasColon = suffix.trimStart().startsWith(':');
+          insertText = hasColon ? `"${item.name}"` : `"${item.name}": `;
+        }
+
+        const newValue = prefix + insertText + suffix;
+        const newCursor = prefix.length + insertText.length;
+
+        if (el) {
+          el.value = newValue;
+          el.setSelectionRange(newCursor, newCursor);
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
+        setCursorPosition(newCursor);
+        onChange?.(newValue, newCursor);
+        setIsDismissed(true);
+        return;
+      }
+
       const prefix = currentVal.slice(0, context.openPos);
-      let suffix = currentVal.slice(cursorPosition);
+      let suffix = currentVal.slice(effectiveCursorPos);
 
       let insertText = '';
       let shouldStayOpen = false;
@@ -335,7 +512,7 @@ export function RequestAutocomplete({
         setIsDismissed(true);
       }
     },
-    [context, cursorPosition, getTargetElement, onChange, value]
+    [context, effectiveCursorPos, getTargetElement, onChange, value]
   );
 
   // Keydown and cursor event listeners on the active element
@@ -496,6 +673,18 @@ export function RequestAutocomplete({
                   )}
                   <span className="font-mono text-purple-300 font-semibold truncate">{item.name}</span>
                 </>
+              ) : item.type === 'property' ? (
+                <>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold border shrink-0 ${
+                      SCHEMA_TYPE_BADGES[item.propertyType?.toLowerCase() || 'string'] ||
+                      SCHEMA_TYPE_BADGES.string
+                    }`}
+                  >
+                    [{item.propertyType || 'string'}]
+                  </span>
+                  <span className="font-mono text-emerald-300 font-medium truncate">{item.name}</span>
+                </>
               ) : (
                 <>
                   <Variable className="w-3.5 h-3.5 text-sky-400 shrink-0" aria-hidden="true" />
@@ -504,9 +693,9 @@ export function RequestAutocomplete({
               )}
             </div>
 
-            {item.detail && (
+            {(item.description || item.detail) && (
               <span className="text-[10px] text-neutral-400 shrink-0 max-w-[140px] truncate font-mono">
-                {item.detail}
+                {item.description || item.detail}
               </span>
             )}
           </div>

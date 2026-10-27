@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { RequestAutocomplete, HTTP_METHOD_BADGES, METHOD_COLORS } from './RequestAutocomplete';
+import { RequestAutocomplete, HTTP_METHOD_BADGES, METHOD_COLORS, SchemaPropertyItem } from './RequestAutocomplete';
 
 describe('RequestAutocomplete', () => {
   const mockVariables = [
@@ -378,5 +378,174 @@ describe('RequestAutocomplete', () => {
 
     expect(screen.getByText('POST')).toBeDefined();
     expect(screen.getByText('GET')).toBeDefined();
+  });
+
+  describe('RequestAutocomplete with schemaProperties', () => {
+    it('suggests schema properties with badge and description when typing in body editor', () => {
+      const schemaProps: SchemaPropertyItem[] = [
+        { key: 'category', type: 'string', description: 'Pet category name' },
+        { key: 'tags', type: 'array', description: 'Pet tags' },
+      ];
+
+      render(
+        <RequestAutocomplete
+          value='{ "cat'
+          cursorPos={6}
+          schemaProperties={schemaProps}
+        />
+      );
+
+      expect(screen.getByText('category')).toBeInTheDocument();
+      expect(screen.getByText('[string]')).toBeInTheDocument();
+    });
+
+    it('suggests all schema properties when typing after opening quote', () => {
+      const schemaProps: SchemaPropertyItem[] = [
+        { key: 'category', type: 'string', description: 'Pet category name' },
+        { key: 'tags', type: 'array', description: 'Pet tags' },
+        { key: 'count', type: 'integer' },
+      ];
+
+      render(
+        <RequestAutocomplete
+          value='{ "'
+          cursorPos={3}
+          schemaProperties={schemaProps}
+        />
+      );
+
+      expect(screen.getByText('category')).toBeInTheDocument();
+      expect(screen.getByText('[string]')).toBeInTheDocument();
+      expect(screen.getByText('Pet category name')).toBeInTheDocument();
+      expect(screen.getByText('tags')).toBeInTheDocument();
+      expect(screen.getByText('[array]')).toBeInTheDocument();
+      expect(screen.getByText('count')).toBeInTheDocument();
+      expect(screen.getByText('[integer]')).toBeInTheDocument();
+    });
+
+    it('selecting a schema property inside quotes inserts key', () => {
+      const onChange = vi.fn();
+      const schemaProps: SchemaPropertyItem[] = [
+        { key: 'category', type: 'string', description: 'Pet category name' },
+      ];
+
+      render(
+        <RequestAutocomplete
+          value='{ "cat'
+          cursorPos={6}
+          schemaProperties={schemaProps}
+          onChange={onChange}
+        />
+      );
+
+      fireEvent.click(screen.getByText('category'));
+
+      expect(onChange).toHaveBeenCalledWith('{ "category', 11);
+    });
+
+    it('selecting a schema property when typing bare property name inserts "key": ', () => {
+      const onChange = vi.fn();
+      const schemaProps: SchemaPropertyItem[] = [
+        { key: 'category', type: 'string', description: 'Pet category name' },
+      ];
+
+      render(
+        <RequestAutocomplete
+          value='{ cat'
+          cursorPos={5}
+          schemaProperties={schemaProps}
+          onChange={onChange}
+        />
+      );
+
+      fireEvent.click(screen.getByText('category'));
+
+      expect(onChange).toHaveBeenCalledWith('{ "category": ', 14);
+    });
+
+    it('preserves closing quotes and subsequent content when selecting inside quotes', () => {
+      const onChange = vi.fn();
+      const schemaProps: SchemaPropertyItem[] = [
+        { key: 'category', type: 'string', description: 'Pet category name' },
+      ];
+
+      render(
+        <RequestAutocomplete
+          value='{ "c" }'
+          cursorPos={4}
+          schemaProperties={schemaProps}
+          onChange={onChange}
+        />
+      );
+
+      fireEvent.click(screen.getByText('category'));
+
+      expect(onChange).toHaveBeenCalledWith('{ "category" }', 11);
+    });
+
+    it('does not trigger schema properties autocompletion when typing a value after colon', () => {
+      const schemaProps: SchemaPropertyItem[] = [
+        { key: 'category', type: 'string' },
+      ];
+
+      render(
+        <RequestAutocomplete
+          value='{ "category": "cat'
+          cursorPos={18}
+          schemaProperties={schemaProps}
+        />
+      );
+
+      expect(screen.queryByRole('listbox')).toBeNull();
+    });
+
+    it('allows keyboard navigation with Enter to select a schema property', () => {
+      const onChange = vi.fn();
+      const schemaProps: SchemaPropertyItem[] = [
+        { key: 'alpha', type: 'string' },
+        { key: 'beta', type: 'number' },
+      ];
+
+      const inputRef = React.createRef<HTMLInputElement>();
+
+      render(
+        <div>
+          <input ref={inputRef} defaultValue='{ "' />
+          <RequestAutocomplete
+            inputRef={inputRef}
+            value='{ "'
+            cursorPos={3}
+            schemaProperties={schemaProps}
+            onChange={onChange}
+          />
+        </div>
+      );
+
+      fireEvent.keyDown(inputRef.current!, { key: 'ArrowDown' });
+      fireEvent.keyDown(inputRef.current!, { key: 'Enter' });
+
+      expect(onChange).toHaveBeenCalledWith('{ "beta', 7);
+    });
+
+    it('prioritizes {{ variable autocomplete even when schemaProperties are provided', () => {
+      const schemaProps: SchemaPropertyItem[] = [
+        { key: 'category', type: 'string' },
+      ];
+      const variables = [
+        { key: 'myVar', value: '123' },
+      ];
+
+      render(
+        <RequestAutocomplete
+          value='{ "name": "{{'
+          cursorPos={13}
+          availableVariables={variables}
+          schemaProperties={schemaProps}
+        />
+      );
+
+      expect(screen.getByText('myVar')).toBeInTheDocument();
+      expect(screen.queryByText('category')).toBeNull();
+    });
   });
 });

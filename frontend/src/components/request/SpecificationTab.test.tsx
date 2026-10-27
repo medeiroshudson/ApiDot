@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   SpecificationTab,
   parseSchemaDefinition,
+  extractSchemaProperties,
   generateSampleFromProperties,
   treeToSchemaProperties,
   schemaPropertiesToTree,
@@ -242,5 +243,44 @@ describe('SpecificationTab', () => {
     const invalidJson = parseSchemaDefinition('not-json{');
     expect(invalidJson.summary).toBe('');
     expect(invalidJson.body?.type).toBe('object');
+  });
+
+  it('extractSchemaProperties extracts flattened list of properties from structured or legacy schema', () => {
+    const structuredSchema = JSON.stringify({
+      body: {
+        type: 'object',
+        properties: {
+          category: { type: 'string', description: 'Pet category name' },
+          tags: { type: 'array', description: 'Pet tags' },
+          owner: {
+            type: 'object',
+            properties: {
+              email: { type: 'string', description: 'Owner email' },
+            },
+          },
+        },
+      },
+    });
+
+    const props = extractSchemaProperties(structuredSchema);
+    expect(props).toEqual([
+      { key: 'category', type: 'string', description: 'Pet category name' },
+      { key: 'tags', type: 'array', description: 'Pet tags' },
+      { key: 'owner', type: 'object', description: undefined },
+      { key: 'email', type: 'string', description: 'Owner email' },
+    ]);
+
+    expect(extractSchemaProperties('')).toEqual([]);
+    expect(extractSchemaProperties('invalid-json')).toEqual([]);
+
+    const legacySchema = JSON.stringify({
+      type: 'object',
+      properties: {
+        id: { type: 'integer' },
+      },
+    });
+    expect(extractSchemaProperties(legacySchema)).toEqual([
+      { key: 'id', type: 'integer', description: undefined },
+    ]);
   });
 });
