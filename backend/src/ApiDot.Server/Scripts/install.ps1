@@ -6,6 +6,7 @@ $ServerUrl = $env:APIDOT_SERVER_URL
 if ([string]::IsNullOrWhiteSpace($ServerUrl)) {
     $ServerUrl = "__SERVER_URL__"
 }
+$ServerUrl = $ServerUrl.TrimEnd('/')
 
 Write-Host "==> Target platform: win/x64"
 
@@ -19,7 +20,11 @@ if (-not (Test-Path -Path $InstallDir)) {
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 }
 
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+} catch {
+}
+
 Invoke-WebRequest -Uri $DownloadUrl -OutFile $TargetFile -UseBasicParsing
 
 Write-Host ""

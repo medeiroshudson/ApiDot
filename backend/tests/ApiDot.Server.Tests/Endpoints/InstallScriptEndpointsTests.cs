@@ -97,6 +97,9 @@ public class InstallScriptEndpointsTests : IClassFixture<WebApplicationFactory<P
         content.Should().Contain("arm64");
         content.Should().Contain("~/.apidot/bin");
         content.Should().Contain("chmod +x");
+        content.Should().Contain("mv -f");
+        content.Should().Contain(".tmp.$");
+        content.Should().Contain("SERVER_URL=\"${SERVER_URL%/}\"");
         // Must have replaced __SERVER_URL__ with client base address
         content.Should().NotContain("__SERVER_URL__");
         content.Should().Contain("http://localhost");
@@ -114,8 +117,51 @@ public class InstallScriptEndpointsTests : IClassFixture<WebApplicationFactory<P
         content.Should().Contain("$env:USERPROFILE");
         content.Should().Contain(".apidot\\bin");
         content.Should().Contain("apidot-agent.exe");
+        content.Should().Contain("$ServerUrl = $ServerUrl.TrimEnd('/')");
+        content.Should().Contain("Tls12");
         content.Should().NotContain("__SERVER_URL__");
         content.Should().Contain("http://localhost");
+    }
+
+    [Theory]
+    [InlineData("evil.com\"; rm -rf /; echo \"")]
+    [InlineData("attacker.com; curl http://malicious.site")]
+    [InlineData("$(whoami).evil.com")]
+    [InlineData("`id`.attacker.com")]
+    [InlineData("evil.com\nrm -rf /")]
+    [InlineData("evil.com\r\nInjected-Header: value")]
+    [InlineData("attacker.com'")]
+    [InlineData("attacker.com|bash")]
+    public async Task Get_InstallSh_With_Malicious_Forwarded_Host_Falls_Back_Safely(string maliciousHost)
+    {
+        var client = _factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/install.sh");
+        request.Headers.TryAddWithoutValidation("X-Forwarded-Host", maliciousHost);
+        request.Headers.TryAddWithoutValidation("X-Forwarded-Proto", "https");
+
+        var response = await client.SendAsync(request);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().NotContain(maliciousHost);
+        content.Should().NotContain("rm -rf");
+        content.Should().NotContain("malicious");
+        content.Should().Contain("SERVER_URL=\"${APIDOT_SERVER_URL:-http://localhost}\"");
+    }
+
+    [Fact]
+    public async Task Get_InstallSh_With_Valid_Forwarded_Host_And_Proto_Uses_Forwarded_Values()
+    {
+        var client = _factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/install.sh");
+        request.Headers.TryAddWithoutValidation("X-Forwarded-Host", "apidot.mycompany.com");
+        request.Headers.TryAddWithoutValidation("X-Forwarded-Proto", "https");
+
+        var response = await client.SendAsync(request);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().Contain("SERVER_URL=\"${APIDOT_SERVER_URL:-https://apidot.mycompany.com}\"");
     }
 
     [Theory]

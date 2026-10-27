@@ -18,6 +18,8 @@ public static class InstallScriptEndpoints
         ["win/x64"] = "apidot-agent-win-x64.exe"
     };
 
+    private static readonly char[] DangerousHostChars = ['"', '\'', '`', ';', '\r', '\n', '$', '\t', ' ', '\\', '&', '|', '<', '>', '(', ')', '{', '}', '!', ','];
+
     public static IEndpointRouteBuilder MapInstallScriptEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/install.sh", (
@@ -84,21 +86,65 @@ public static class InstallScriptEndpoints
     private static string GetServerBaseUrl(HttpContext context, IConfiguration configuration)
     {
         var configuredUrl = configuration["Server:BaseUrl"];
-        if (!string.IsNullOrWhiteSpace(configuredUrl))
+        if (!string.IsNullOrWhiteSpace(configuredUrl) &&
+            Uri.TryCreate(configuredUrl, UriKind.Absolute, out var configuredUri) &&
+            (configuredUri.Scheme == Uri.UriSchemeHttp || configuredUri.Scheme == Uri.UriSchemeHttps))
         {
             return configuredUrl.TrimEnd('/');
         }
 
-        var proto = context.Request.Headers["X-Forwarded-Proto"].FirstOrDefault();
-        var scheme = !string.IsNullOrWhiteSpace(proto) ? proto : context.Request.Scheme;
+        var defaultBaseUrl = $"{context.Request.Scheme}://{context.Request.Host.Value}".TrimEnd('/');
 
-        var host = context.Request.Headers["X-Forwarded-Host"].FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(host))
+        var proto = context.Request.Headers["X-Forwarded-Proto"].FirstOrDefault();
+        var scheme = (!string.IsNullOrWhiteSpace(proto) &&
+                      (string.Equals(proto, "http", StringComparison.OrdinalIgnoreCase) ||
+                       string.Equals(proto, "https", StringComparison.OrdinalIgnoreCase)))
+            ? proto.ToLowerInvariant()
+            : context.Request.Scheme?.ToLowerInvariant();
+
+        if (scheme != "http" && scheme != "https")
         {
-            host = context.Request.Host.Value;
+            return defaultBaseUrl;
         }
 
-        return $"{scheme}://{host}".TrimEnd('/');
+        var candidateHost = context.Request.Headers["X-Forwarded-Host"].FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(candidateHost))
+        {
+            candidateHost = context.Request.Host.Value;
+        }
+
+        if (string.IsNullOrWhiteSpace(candidateHost))
+        {
+            return defaultBaseUrl;
+        }
+
+        candidateHost = candidateHost.Trim();
+
+        // 1. Check for dangerous characters (quotes, semicolons, backticks, newlines, dollar signs, spaces, etc.)
+        if (candidateHost.IndexOfAny(DangerousHostChars) >= 0)
+        {
+            return defaultBaseUrl;
+        }
+
+        // 2. Validate with Uri.TryCreate
+        if (!Uri.TryCreate($"{scheme}://{candidateHost}", UriKind.Absolute, out var uri))
+        {
+            return defaultBaseUrl;
+        }
+
+        // 3. Scheme must be strictly http or https
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+        {
+            return defaultBaseUrl;
+        }
+
+        // 4. Hostname type must not be Unknown
+        if (Uri.CheckHostName(uri.DnsSafeHost) == UriHostNameType.Unknown)
+        {
+            return defaultBaseUrl;
+        }
+
+        return $"{scheme}://{candidateHost}".TrimEnd('/');
     }
 
     private static string LoadScriptTemplate(string fileName, IWebHostEnvironment env)
@@ -143,8 +189,10 @@ public static class InstallScriptEndpoints
         set -euo pipefail
 
         # ApiDot Agent Installation Script
+        # Installs to ~/.apidot/bin
         # Injected server URL or override via environment variable
         SERVER_URL="${APIDOT_SERVER_URL:-__SERVER_URL__}"
+        SERVER_URL="${SERVER_URL%/}"
 
         echo "==> Detecting operating system and architecture..."
 
@@ -179,6 +227,12 @@ public static class InstallScriptEndpoints
         DOWNLOAD_URL="${SERVER_URL}/api/agent/download/${TARGET_OS}/${TARGET_ARCH}"
         INSTALL_DIR="${HOME}/.apidot/bin"
         TARGET_FILE="${INSTALL_DIR}/apidot-agent"
+        TMP_FILE="${TARGET_FILE}.tmp.$$"
+
+        cleanup() {
+            rm -f "${TMP_FILE}"
+        }
+        trap cleanup EXIT
 
         echo "==> Target platform: ${TARGET_OS}/${TARGET_ARCH}"
         echo "==> Downloading ApiDot Agent from: ${DOWNLOAD_URL}"
@@ -186,15 +240,17 @@ public static class InstallScriptEndpoints
         mkdir -p "${INSTALL_DIR}"
 
         if command -v curl >/dev/null 2>&1; then
-            curl -fsSL "${DOWNLOAD_URL}" -o "${TARGET_FILE}"
+            curl -fsSL "${DOWNLOAD_URL}" -o "${TMP_FILE}"
         elif command -v wget >/dev/null 2>&1; then
-            wget -qO "${TARGET_FILE}" "${DOWNLOAD_URL}"
+            wget -qO "${TMP_FILE}" "${DOWNLOAD_URL}"
         else
             echo "Error: Neither curl nor wget was found. Please install curl or wget to continue." >&2
             exit 1
         fi
 
-        chmod +x "${TARGET_FILE}"
+        chmod +x "${TMP_FILE}"
+        mv -f "${TMP_FILE}" "${TARGET_FILE}"
+        trap - EXIT
 
         echo ""
         echo "==> ApiDot Agent installed successfully to: ${TARGET_FILE}"
@@ -216,6 +272,7 @@ public static class InstallScriptEndpoints
         if ([string]::IsNullOrWhiteSpace($ServerUrl)) {
             $ServerUrl = "__SERVER_URL__"
         }
+        $ServerUrl = $ServerUrl.TrimEnd('/')
 
         Write-Host "==> Target platform: win/x64"
 
@@ -229,7 +286,11 @@ public static class InstallScriptEndpoints
             New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
         }
 
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        } catch {
+        }
+
         Invoke-WebRequest -Uri $DownloadUrl -OutFile $TargetFile -UseBasicParsing
 
         Write-Host ""
