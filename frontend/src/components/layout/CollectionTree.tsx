@@ -15,6 +15,7 @@ import {
   Settings,
   AlertTriangle,
   Briefcase,
+  Terminal,
 } from 'lucide-react';
 import {
   WorkspaceTreeDto,
@@ -66,6 +67,8 @@ export interface CollectionTreeProps {
   onSync?: (collection: CollectionNodeDto) => void;
   onOpenCollectionSettings?: (collection: CollectionNodeDto) => void;
   onOpenSettings?: (collection: CollectionNodeDto) => void;
+  onImportCurl?: (collectionId: string, folderId?: string | null) => void;
+  onCopyCurl?: (request: RequestItemNodeDto) => void;
   className?: string;
 
   // Workspace integration props
@@ -170,6 +173,8 @@ export function CollectionTree({
   onSync,
   onOpenCollectionSettings,
   onOpenSettings,
+  onImportCurl,
+  onCopyCurl,
   className = '',
   workspaces,
   activeWorkspaceId,
@@ -423,6 +428,12 @@ export function CollectionTree({
           onClick: () => handleStartCreate('request', col.id, col.id, null),
         },
         {
+          id: 'col-import-curl',
+          label: 'Importar cURL',
+          icon: <Terminal className="w-4 h-4 text-emerald-400" />,
+          onClick: () => onImportCurl?.(col.id, null),
+        },
+        {
           id: 'col-rename',
           label: 'Renomear',
           icon: <Pencil className="w-4 h-4 text-zinc-400" />,
@@ -480,6 +491,12 @@ export function CollectionTree({
           onClick: () => handleStartCreate('request', folder.id, folder.collectionId, folder.id),
         },
         {
+          id: 'folder-import-curl',
+          label: 'Importar cURL',
+          icon: <Terminal className="w-4 h-4 text-emerald-400" />,
+          onClick: () => onImportCurl?.(folder.collectionId, folder.id),
+        },
+        {
           id: 'folder-rename',
           label: 'Renomear',
           icon: <Pencil className="w-4 h-4 text-zinc-400" />,
@@ -499,6 +516,12 @@ export function CollectionTree({
     if (targetType === 'request' && targetItem) {
       const req = targetItem as RequestItemNodeDto;
       return [
+        {
+          id: 'req-copy-curl',
+          label: 'Copiar cURL',
+          icon: <Terminal className="w-4 h-4 text-emerald-400" />,
+          onClick: () => onCopyCurl?.(req),
+        },
         {
           id: 'req-duplicate',
           label: 'Duplicar',

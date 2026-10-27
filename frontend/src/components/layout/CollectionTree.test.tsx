@@ -137,6 +137,7 @@ describe('CollectionTree', () => {
     const reqNode = screen.getByText('Login');
     fireEvent.contextMenu(reqNode);
 
+    expect(screen.getByText(/copiar curl/i)).toBeInTheDocument();
     expect(screen.getByText(/duplicar/i)).toBeInTheDocument();
     expect(screen.getByText(/renomear/i)).toBeInTheDocument();
     expect(screen.getByText(/excluir/i)).toBeInTheDocument();
@@ -263,6 +264,7 @@ describe('CollectionTree', () => {
 
     expect(screen.getByText(/nova pasta/i)).toBeInTheDocument();
     expect(screen.getByText(/nova requisição/i)).toBeInTheDocument();
+    expect(screen.getByText(/importar curl/i)).toBeInTheDocument();
     expect(screen.getByText(/renomear/i)).toBeInTheDocument();
     expect(screen.getByText(/sincronizar openapi/i)).toBeInTheDocument();
     expect(screen.getByText(/excluir/i)).toBeInTheDocument();
@@ -281,6 +283,7 @@ describe('CollectionTree', () => {
 
     expect(screen.getByText(/nova pasta/i)).toBeInTheDocument();
     expect(screen.getByText(/nova requisição/i)).toBeInTheDocument();
+    expect(screen.getByText(/importar curl/i)).toBeInTheDocument();
     expect(screen.getByText(/renomear/i)).toBeInTheDocument();
     expect(screen.getByText(/excluir/i)).toBeInTheDocument();
 
@@ -324,6 +327,78 @@ describe('CollectionTree', () => {
 
     fireEvent.click(screen.getByText(/duplicar/i));
     expect(onDuplicateRequest).toHaveBeenCalledWith('req-1');
+  });
+
+  describe('cURL context menu actions', () => {
+    it('opens context menu on collection and triggers onImportCurl with collection id and null folder id', () => {
+      const onImportCurl = vi.fn();
+      render(<CollectionTree tree={mockTree} onImportCurl={onImportCurl} />);
+
+      const colNode = screen.getByText('Auth API');
+      fireEvent.contextMenu(colNode);
+
+      const importCurlItem = screen.getByText('Importar cURL');
+      expect(importCurlItem).toBeInTheDocument();
+
+      fireEvent.click(importCurlItem);
+      expect(onImportCurl).toHaveBeenCalledTimes(1);
+      expect(onImportCurl).toHaveBeenCalledWith('coll-1', null);
+    });
+
+    it('opens context menu on folder and triggers onImportCurl with collection id and folder id', () => {
+      const onImportCurl = vi.fn();
+      render(<CollectionTree tree={mockTree} onImportCurl={onImportCurl} />);
+
+      const folderNode = screen.getByText('V1');
+      fireEvent.contextMenu(folderNode);
+
+      const importCurlItem = screen.getByText('Importar cURL');
+      expect(importCurlItem).toBeInTheDocument();
+
+      fireEvent.click(importCurlItem);
+      expect(onImportCurl).toHaveBeenCalledTimes(1);
+      expect(onImportCurl).toHaveBeenCalledWith('coll-1', 'fold-1');
+    });
+
+    it('opens context menu on request and triggers onCopyCurl with request item', () => {
+      const onCopyCurl = vi.fn();
+      render(<CollectionTree tree={mockTree} onCopyCurl={onCopyCurl} />);
+
+      const reqNode = screen.getByText('Login');
+      fireEvent.contextMenu(reqNode);
+
+      const copyCurlItem = screen.getByText('Copiar cURL');
+      expect(copyCurlItem).toBeInTheDocument();
+
+      fireEvent.click(copyCurlItem);
+      expect(onCopyCurl).toHaveBeenCalledTimes(1);
+      expect(onCopyCurl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'req-1',
+          name: 'Login',
+          method: 'POST',
+          url: 'https://api.test/login',
+          collectionId: 'coll-1',
+          folderId: 'fold-1',
+        })
+      );
+    });
+
+    it('does not throw when clicking Importar cURL or Copiar cURL if callbacks are undefined', () => {
+      render(<CollectionTree tree={mockTree} />);
+
+      // Collection context menu
+      fireEvent.contextMenu(screen.getByText('Auth API'));
+      expect(() => fireEvent.click(screen.getByText('Importar cURL'))).not.toThrow();
+
+      // Folder context menu
+      fireEvent.contextMenu(screen.getByText('V1'));
+      expect(() => fireEvent.click(screen.getByText('Importar cURL'))).not.toThrow();
+
+      // Request context menu
+      fireEvent.contextMenu(screen.getByText('Login'));
+      expect(() => fireEvent.click(screen.getByText('Copiar cURL'))).not.toThrow();
+    });
   });
 
   it('handles inline renaming on a collection and commits on Enter', async () => {
