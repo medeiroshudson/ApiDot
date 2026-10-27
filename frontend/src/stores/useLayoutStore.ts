@@ -54,6 +54,7 @@ export const INITIAL_LAYOUT_STATE = {
 };
 
 function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
   return Math.min(max, Math.max(min, value));
 }
 
@@ -100,8 +101,9 @@ export const useLayoutStore = create<LayoutState>()(
       },
 
       adjustSidebarWidth: (deltaPx: number) => {
-        const current = get().sidebarWidth;
-        set({ sidebarWidth: clamp(current + deltaPx, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH) });
+        set((state) => ({
+          sidebarWidth: clamp(state.sidebarWidth + deltaPx, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH),
+        }));
       },
 
       setRequestResponseRatio: (ratio: number) => {
@@ -109,14 +111,13 @@ export const useLayoutStore = create<LayoutState>()(
       },
 
       adjustRequestResponseRatio: (deltaPct: number) => {
-        const current = get().requestResponseRatio;
-        set({
+        set((state) => ({
           requestResponseRatio: clamp(
-            current + deltaPct,
+            state.requestResponseRatio + deltaPct,
             MIN_REQUEST_RESPONSE_RATIO,
             MAX_REQUEST_RESPONSE_RATIO
           ),
-        });
+        }));
       },
 
       resetSidebarWidth: () => {
@@ -143,8 +144,6 @@ export const useLayoutStore = create<LayoutState>()(
         const mappedKey = MODAL_KEY_MAP[modal];
         if (mappedKey) {
           set({ [mappedKey]: isOpen } as unknown as Partial<LayoutState>);
-        } else if (modal in get()) {
-          set({ [modal]: isOpen } as unknown as Partial<LayoutState>);
         }
       },
 
