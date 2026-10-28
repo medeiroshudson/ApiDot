@@ -9,6 +9,7 @@ public static class DatabaseExtensions
 {
     public static IHost ApplyDatabaseMigrations(this IHost app)
     {
+        ArgumentNullException.ThrowIfNull(app);
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
         db.Database.Migrate();
