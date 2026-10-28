@@ -7,6 +7,8 @@ public static class EndpointRouteBuilderExtensions
 {
     public static IEndpointRouteBuilder MapApiEndpoints(this IEndpointRouteBuilder app)
     {
+        ArgumentNullException.ThrowIfNull(app);
+
         app.MapHealthEndpoints();
         app.MapAgentDeviceEndpoints();
         app.MapInstallScriptEndpoints();
