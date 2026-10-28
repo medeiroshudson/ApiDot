@@ -49,7 +49,7 @@ public class SpecFetcherService : ISpecFetcherService
                 ms.Write(buffer, 0, bytesRead);
             }
 
-            var content = Encoding.UTF8.GetString(ms.ToArray());
+            var content = Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length);
             return (true, content, null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

@@ -1,10 +1,11 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 
 namespace ApiDot.Server.Security;
 
 public static class SpecUrlValidator
 {
-    public static bool IsSafeSpecUrl(string? url, out Uri? validUri)
+    public static bool IsSafeSpecUrl(string? url, [NotNullWhen(true)] out Uri? validUri)
     {
         validUri = null;
         if (string.IsNullOrWhiteSpace(url) || url.Length > 2048)
@@ -73,6 +74,13 @@ public static class SpecUrlValidator
             else if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
             {
                 if (ip.Equals(IPAddress.IPv6Loopback) || ip.Equals(IPAddress.IPv6Any))
+                {
+                    return false;
+                }
+
+                // Block IPv6 Unique Local Addresses (fc00::/7), including AWS IMDSv6 (fd00:ec2::254)
+                var v6Bytes = ip.GetAddressBytes();
+                if ((v6Bytes[0] & 0xFE) == 0xFC)
                 {
                     return false;
                 }
