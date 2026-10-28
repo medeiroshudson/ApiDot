@@ -11,9 +11,10 @@ public static class AgentWebSocketEndpoints
     {
         app.MapMethods("/ws/agent", ["GET"], async (
             HttpContext context,
-            IAgentWebSocketHandler handler) =>
+            IAgentWebSocketHandler handler,
+            CancellationToken cancellationToken) =>
         {
-            return await handler.HandleAsync(context);
+            return await handler.HandleAsync(context, cancellationToken);
         });
 
         return app;
