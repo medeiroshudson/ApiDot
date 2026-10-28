@@ -1,3 +1,4 @@
+using ApiDot.Server.Security;
 using FluentAssertions;
 using Xunit;
 
@@ -12,7 +13,7 @@ public class SpecUrlValidatorTests
     [InlineData("https://my-service.domain.org:8443/docs/swagger.json")]
     public void IsSafeSpecUrl_ValidExternalHttpUrls_ReturnsTrue(string url)
     {
-        var isSafe = Program.IsSafeSpecUrl(url, out var validUri);
+        var isSafe = SpecUrlValidator.IsSafeSpecUrl(url, out var validUri);
 
         isSafe.Should().BeTrue();
         validUri.Should().NotBeNull();
@@ -25,7 +26,7 @@ public class SpecUrlValidatorTests
     [InlineData("   ")]
     public void IsSafeSpecUrl_NullOrWhitespace_ReturnsFalse(string? url)
     {
-        var isSafe = Program.IsSafeSpecUrl(url, out var validUri);
+        var isSafe = SpecUrlValidator.IsSafeSpecUrl(url, out var validUri);
 
         isSafe.Should().BeFalse();
         validUri.Should().BeNull();
@@ -36,7 +37,7 @@ public class SpecUrlValidatorTests
     {
         var longUrl = "https://example.com/api/" + new string('a', 2050);
 
-        var isSafe = Program.IsSafeSpecUrl(longUrl, out var validUri);
+        var isSafe = SpecUrlValidator.IsSafeSpecUrl(longUrl, out var validUri);
 
         isSafe.Should().BeFalse();
         validUri.Should().BeNull();
@@ -48,7 +49,7 @@ public class SpecUrlValidatorTests
     [InlineData("just-a-string")]
     public void IsSafeSpecUrl_RelativeOrMalformedUrl_ReturnsFalse(string url)
     {
-        var isSafe = Program.IsSafeSpecUrl(url, out var validUri);
+        var isSafe = SpecUrlValidator.IsSafeSpecUrl(url, out var validUri);
 
         isSafe.Should().BeFalse();
         validUri.Should().BeNull();
@@ -61,7 +62,7 @@ public class SpecUrlValidatorTests
     [InlineData("ws://example.com/socket")]
     public void IsSafeSpecUrl_NonHttpScheme_ReturnsFalse(string url)
     {
-        var isSafe = Program.IsSafeSpecUrl(url, out var validUri);
+        var isSafe = SpecUrlValidator.IsSafeSpecUrl(url, out var validUri);
 
         isSafe.Should().BeFalse();
     }
@@ -77,7 +78,7 @@ public class SpecUrlValidatorTests
     [InlineData("http://[::1]/spec.json")]
     public void IsSafeSpecUrl_LoopbackHost_ReturnsFalse(string url)
     {
-        var isSafe = Program.IsSafeSpecUrl(url, out var validUri);
+        var isSafe = SpecUrlValidator.IsSafeSpecUrl(url, out var validUri);
 
         isSafe.Should().BeFalse();
     }
@@ -90,7 +91,7 @@ public class SpecUrlValidatorTests
     [InlineData("http://[fe80::1]/spec.json")]
     public void IsSafeSpecUrl_LinkLocalOrCloudMetadata_ReturnsFalse(string url)
     {
-        var isSafe = Program.IsSafeSpecUrl(url, out var validUri);
+        var isSafe = SpecUrlValidator.IsSafeSpecUrl(url, out var validUri);
 
         isSafe.Should().BeFalse();
     }
