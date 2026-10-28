@@ -62,7 +62,7 @@ public static class AgentConfigManager
             }
         }
 
-        var json = JsonSerializer.Serialize(config, JsonOptions);
+        var json = JsonSerializer.Serialize(config, AgentJsonContext.Default.AgentConfig);
 
         var streamOptions = new FileStreamOptions
         {
@@ -107,7 +107,7 @@ public static class AgentConfigManager
         try
         {
             var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<AgentConfig>(json, JsonOptions);
+            return JsonSerializer.Deserialize(json, AgentJsonContext.Default.AgentConfig);
         }
         catch
         {

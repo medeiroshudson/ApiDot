@@ -92,10 +92,7 @@ public class AgentClient : IDisposable
     {
         try
         {
-            return JsonSerializer.Deserialize<HttpRequestDispatch>(jsonBytes, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
+            return JsonSerializer.Deserialize(jsonBytes, AgentJsonContext.Default.HttpRequestDispatch);
         }
         catch (JsonException ex)
         {
@@ -291,7 +288,7 @@ public class AgentClient : IDisposable
 
     private async Task SendPayloadAsync(WebSocket socket, HttpResponsePayload payload, CancellationToken cancellationToken)
     {
-        var json = JsonSerializer.SerializeToUtf8Bytes(payload);
+        var json = JsonSerializer.SerializeToUtf8Bytes(payload, AgentJsonContext.Default.HttpResponsePayload);
         await _sendLock.WaitAsync(cancellationToken);
         try
         {
