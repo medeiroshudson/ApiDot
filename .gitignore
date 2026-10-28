@@ -37,6 +37,7 @@ bld/
 
 # Local scratch directories
 .superpowers/
+.worktrees/
 backend/data/
 
 # Visual Studio 2015/2017 cache/options directory
