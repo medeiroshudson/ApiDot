@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+      - 'dev'
     branches:
       - dev
   workflow_dispatch:
@@ -76,6 +77,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=tag
+            type=raw,value=${{ steps.version.outputs.tag }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
@@ -90,6 +92,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             NEXT_PUBLIC_APP_VERSION=${{ steps.version.outputs.tag }}
+            APIDOT_VERSION=${{ steps.version.outputs.tag }}
           cache-from: type=gha,scope=${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
 
@@ -208,6 +211,7 @@ jobs:
           tag_name: ${{ steps.release-tag.outputs.tag }}
           files: artifacts/*
           generate_release_notes: true
+          prerelease: ${{ steps.release-tag.outputs.tag == 'dev' }}
           body: |
             ## Docker Container Images (GHCR)
             - `ghcr.io/${{ github.repository }}-server:${{ steps.release-tag.outputs.tag }}`

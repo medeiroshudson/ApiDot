@@ -382,8 +382,8 @@ test.describe('Request Editor and Execution Flow E2E', () => {
   });
 
   test('should sync collection via OpenAPI modal with non-destructive merge report and display audit banner', async ({ page }) => {
-    // Verify version badge shows v0.4.0
-    await expect(page.getByText('v0.4.0')).toBeVisible();
+    // Verify version badge shows dynamic version
+    await expect(page.locator('header').getByText(/(dev|v\d+\.\d+\.\d+)/)).toBeVisible();
 
     // Mock POST **/api/collections/**/sync to return SyncReport
     await page.route('**/api/collections/**/sync', async (route) => {
