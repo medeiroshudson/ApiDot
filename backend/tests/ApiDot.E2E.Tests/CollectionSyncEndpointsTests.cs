@@ -5,6 +5,7 @@ using ApiDot.Core.Enums;
 using ApiDot.Server.Data;
 using ApiDot.Server.Data.Entities;
 using ApiDot.Server.Models;
+using ApiDot.Server.Services;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -503,7 +504,7 @@ public class CollectionSyncEndpointsTests : IClassFixture<WebApplicationFactory<
     [Fact]
     public async Task PostSync_WhenRemoteSpecExceeds10MB_Returns_400_BadRequest()
     {
-        var oversizedSpec = new string('A', (int)(Program.MaxSpecSizeBytes + 1024));
+        var oversizedSpec = new string('A', (int)(SpecFetcherService.MaxSpecSizeBytes + 1024));
         var testResponse = new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(oversizedSpec, System.Text.Encoding.UTF8, "application/json")
