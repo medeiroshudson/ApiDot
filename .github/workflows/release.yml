@@ -74,11 +74,11 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ matrix.image }}
+          flavor: |
+            latest=false
           tags: |
-            type=ref,event=branch
-            type=ref,event=tag
             type=raw,value=${{ steps.version.outputs.tag }}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ steps.version.outputs.tag != 'dev' && startsWith(steps.version.outputs.tag, 'v') }}
 
       - name: Build and push Docker image
         id: build
