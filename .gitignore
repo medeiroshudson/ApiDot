@@ -489,6 +489,7 @@ $RECYCLE.BIN/
 
 # Artifacts
 screenshots/
+!docs/assets/screenshots/
 scripts/
 !backend/src/ApiDot.Server/Scripts/
 web/tsconfig.tsbuildinfo
