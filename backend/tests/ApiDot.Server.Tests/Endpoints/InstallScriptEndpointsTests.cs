@@ -78,7 +78,7 @@ public class InstallScriptEndpointsTests : IClassFixture<WebApplicationFactory<P
         downloadResponse.StatusCode.Should().Be(HttpStatusCode.Redirect);
         downloadResponse.Headers.Location.Should().NotBeNull();
         downloadResponse.Headers.Location!.ToString().Should().Be(
-            "https://github.com/medeiroshudson/ApiDot/releases/download/v0.4.0/apidot-agent-osx-arm64");
+            "https://github.com/medeiroshudson/ApiDot/releases/download/dev/apidot-agent-osx-arm64");
     }
 
     [Fact]
@@ -180,7 +180,7 @@ public class InstallScriptEndpointsTests : IClassFixture<WebApplicationFactory<P
         response.StatusCode.Should().Be(HttpStatusCode.Redirect);
         response.Headers.Location.Should().NotBeNull();
         response.Headers.Location!.ToString().Should().Be(
-            $"https://github.com/medeiroshudson/ApiDot/releases/download/v0.4.0/{expectedAsset}");
+            $"https://github.com/medeiroshudson/ApiDot/releases/download/dev/{expectedAsset}");
     }
 
     [Theory]
@@ -198,7 +198,7 @@ public class InstallScriptEndpointsTests : IClassFixture<WebApplicationFactory<P
         response.StatusCode.Should().Be(HttpStatusCode.Redirect);
         response.Headers.Location.Should().NotBeNull();
         response.Headers.Location!.ToString().Should().Be(
-            $"https://github.com/medeiroshudson/ApiDot/releases/download/v0.4.0/{expectedAsset}");
+            $"https://github.com/medeiroshudson/ApiDot/releases/download/dev/{expectedAsset}");
     }
 
     [Theory]

@@ -76,9 +76,10 @@ app.UseWebSockets(new WebSocketOptions
     KeepAliveInterval = TimeSpan.FromSeconds(15)
 });
 
-app.MapGet("/health", () => Results.Ok(new
+app.MapGet("/health", (IConfiguration configuration) => Results.Ok(new
 {
     status = "Healthy",
+    version = InstallScriptEndpoints.GetAppVersion(configuration),
     timestamp = DateTime.UtcNow
 }));
 

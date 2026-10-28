@@ -19,6 +19,22 @@ public static class InstallScriptEndpoints
 
     private static readonly char[] DangerousHostChars = ['"', '\'', '`', ';', '\r', '\n', '$', '\t', ' ', '\\', '&', '|', '<', '>', '(', ')', '{', '}', '!', ','];
 
+    public static string GetAppVersion(IConfiguration configuration)
+    {
+        var raw = configuration["APIDOT_VERSION"] ?? configuration["AgentRelease:Version"] ?? "dev";
+        return string.IsNullOrWhiteSpace(raw) ? "dev" : raw.Trim();
+    }
+
+    public static string GetNormalizedVersion(IConfiguration configuration)
+    {
+        var version = GetAppVersion(configuration);
+        if (string.Equals(version, "dev", StringComparison.OrdinalIgnoreCase))
+        {
+            return "dev";
+        }
+        return version.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? version : $"v{version}";
+    }
+
     public static IEndpointRouteBuilder MapInstallScriptEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/install.sh", (
@@ -67,10 +83,7 @@ public static class InstallScriptEndpoints
                     detail: $"The combination of OS '{os}' and architecture '{arch}' is not supported. Supported combinations: osx/arm64, linux/x64, linux/arm64, win/x64.");
             }
 
-            var version = configuration["AgentRelease:Version"] ?? "0.4.0";
-            var normalizedVersion = version.StartsWith("v", StringComparison.OrdinalIgnoreCase)
-                ? version
-                : $"v{version}";
+            var normalizedVersion = GetNormalizedVersion(configuration);
 
             var downloadBaseUrl = configuration["AgentRelease:BaseUrl"]
                 ?? "https://github.com/medeiroshudson/ApiDot/releases/download";
