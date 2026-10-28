@@ -5,6 +5,7 @@ import { GlobalSettingsModal } from './GlobalSettingsModal';
 import { useDeviceStore } from '@/stores/useDeviceStore';
 import { useLayoutStore, INITIAL_LAYOUT_STATE } from '@/stores/useLayoutStore';
 import { AgentDeviceDto } from '@/lib/deviceApi';
+import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
 
 const mockDevices: AgentDeviceDto[] = [
   {
@@ -180,7 +181,7 @@ describe('GlobalSettingsModal', () => {
     fireEvent.click(generalTab);
     expect(generalTab).toHaveAttribute('aria-selected', 'true');
     expect(agentsTab).toHaveAttribute('aria-selected', 'false');
-    expect(screen.getByText('ApiDot v0.4.0')).toBeInTheDocument();
+    expect(screen.getByText(`ApiDot ${formatDisplayVersion(APP_VERSION)}`)).toBeInTheDocument();
     expect(screen.getByText('Escuro (Padrão ApiDot)')).toBeInTheDocument();
     expect(screen.getByText(/30\.000 ms/i)).toBeInTheDocument();
   });

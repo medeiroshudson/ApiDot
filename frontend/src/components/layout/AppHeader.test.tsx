@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { AppHeader } from './AppHeader';
+import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
 
 describe('AppHeader', () => {
   it('renders workspace title and default fallback', () => {
@@ -11,9 +12,10 @@ describe('AppHeader', () => {
     expect(screen.getByText('ApiDot')).toBeDefined();
   });
 
-  it('renders version badge with v0.4.0', () => {
+  it('renders dynamic version badge based on APP_VERSION', () => {
     render(<AppHeader />);
-    expect(screen.getByText('v0.4.0')).toBeDefined();
+    const expectedBadge = formatDisplayVersion(APP_VERSION);
+    expect(screen.getByText(expectedBadge)).toBeDefined();
   });
 
   it('does not render agent status badge in header', () => {

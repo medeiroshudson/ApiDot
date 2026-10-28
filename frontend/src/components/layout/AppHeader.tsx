@@ -1,5 +1,6 @@
 import React from 'react';
 import { Menu, Settings, Sliders } from 'lucide-react';
+import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
 
 export interface AppHeaderProps {
   title?: string;
@@ -40,7 +41,7 @@ export function AppHeader({
         <div className="flex items-center gap-2">
           <span className="font-bold text-base tracking-tight text-white">{title}</span>
           <span className="hidden sm:inline-block text-xs px-2 py-0.5 rounded bg-neutral-800 text-neutral-400">
-            v0.4.0
+            {formatDisplayVersion(APP_VERSION)}
           </span>
         </div>
       </div>

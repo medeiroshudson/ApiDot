@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'ApiDot - Hybrid API Client',
-  description: 'Ergonomic, hybrid API client inspired by HTTPie and Yaak',
+  title: 'ApiDot - Test and debug any API, anywhere',
+  description: 'Test and debug any API, anywhere — from localhost to production',
 };
 
 export default function RootLayout({

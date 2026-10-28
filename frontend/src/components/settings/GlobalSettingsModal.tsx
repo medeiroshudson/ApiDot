@@ -23,6 +23,7 @@ import {
 import { useDeviceStore } from '@/stores/useDeviceStore';
 import { useLayoutStore } from '@/stores/useLayoutStore';
 import { AgentDeviceDto } from '@/lib/deviceApi';
+import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
 
 export type SettingsTab = 'agents' | 'general';
 
@@ -726,7 +727,9 @@ export function GlobalSettingsModal({
                   <div className="p-4 rounded-xl border border-neutral-800 bg-neutral-950/40 flex flex-col gap-1.5">
                     <span className="text-xs text-neutral-400">Versão da Plataforma</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-base font-semibold text-white">ApiDot v0.4.0</span>
+                      <span className="text-base font-semibold text-white">
+                        ApiDot {formatDisplayVersion(APP_VERSION)}
+                      </span>
                       <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                         Estável
                       </span>

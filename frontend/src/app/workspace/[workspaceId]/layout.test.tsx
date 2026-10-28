@@ -144,4 +144,68 @@ describe('WorkspaceLayout', () => {
     expect(shell).toHaveAttribute('data-workspace-id', 'ws-object-direct');
     expect(useWorkspaceStore.getState().activeWorkspaceId).toBe('ws-object-direct');
   });
+
+  describe('reactive document.title synchronization', () => {
+    it('sets document.title to "ApiDot - [Workspace Name]" when active workspace has name', () => {
+      useWorkspaceStore.setState({
+        workspaces: [
+          { id: 'ws-test', name: 'My Core API', createdAtUtc: '2026-10-27T00:00:00Z' },
+        ],
+        activeWorkspaceId: 'ws-test',
+      });
+      vi.mocked(useParams).mockReturnValue({ workspaceId: 'ws-test' });
+
+      render(
+        <WorkspaceLayout>
+          <div>Workspace Body</div>
+        </WorkspaceLayout>
+      );
+
+      expect(document.title).toBe('ApiDot - My Core API');
+    });
+
+    it('falls back to default title when workspace is not found', () => {
+      useWorkspaceStore.setState({
+        workspaces: [],
+        activeWorkspaceId: null,
+      });
+      vi.mocked(useParams).mockReturnValue({ workspaceId: 'unknown-ws' });
+
+      render(
+        <WorkspaceLayout>
+          <div>Workspace Body</div>
+        </WorkspaceLayout>
+      );
+
+      expect(document.title).toBe('ApiDot - Test and debug any API, anywhere');
+    });
+
+    it('reactively updates document.title when workspace name changes', () => {
+      useWorkspaceStore.setState({
+        workspaces: [
+          { id: 'ws-live', name: 'Old Name', createdAtUtc: '2026-10-27T00:00:00Z' },
+        ],
+        activeWorkspaceId: 'ws-live',
+      });
+      vi.mocked(useParams).mockReturnValue({ workspaceId: 'ws-live' });
+
+      render(
+        <WorkspaceLayout>
+          <div>Workspace Body</div>
+        </WorkspaceLayout>
+      );
+
+      expect(document.title).toBe('ApiDot - Old Name');
+
+      act(() => {
+        useWorkspaceStore.setState({
+          workspaces: [
+            { id: 'ws-live', name: 'New Staging Name', createdAtUtc: '2026-10-27T00:00:00Z' },
+          ],
+        });
+      });
+
+      expect(document.title).toBe('ApiDot - New Staging Name');
+    });
+  });
 });

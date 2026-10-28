@@ -21,11 +21,24 @@ export default function WorkspaceLayout({ children, params: propsParams }: Works
   const rawId = unwrappedParams?.workspaceId ?? routeParams?.workspaceId;
   const workspaceId = Array.isArray(rawId) ? rawId[0] : (typeof rawId === 'string' ? rawId : '');
 
+  const activeWorkspace = useWorkspaceStore((s) =>
+    s.workspaces.find((w) => w.id === (workspaceId || s.activeWorkspaceId))
+  );
+
   useEffect(() => {
     if (workspaceId) {
       useWorkspaceStore.getState().setActiveWorkspaceId(workspaceId);
     }
   }, [workspaceId]);
+
+  useEffect(() => {
+    const workspaceName = activeWorkspace?.name;
+    if (workspaceName) {
+      document.title = `ApiDot - ${workspaceName}`;
+    } else {
+      document.title = 'ApiDot - Test and debug any API, anywhere';
+    }
+  }, [activeWorkspace?.name]);
 
   return (
     <WorkspaceShell workspaceId={workspaceId}>
