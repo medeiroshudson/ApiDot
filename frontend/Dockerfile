@@ -18,6 +18,8 @@ FROM node:22-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . ./
+ARG NEXT_PUBLIC_APP_VERSION=dev
+ENV NEXT_PUBLIC_APP_VERSION=$NEXT_PUBLIC_APP_VERSION
 ENV NEXT_TELEMETRY_DISABLED=1 \
     API_BASE_URL="http://server:5000"
 RUN npm run build

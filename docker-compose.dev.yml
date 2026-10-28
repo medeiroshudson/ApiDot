@@ -10,6 +10,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Data Source=/app/data/apidot.db;Foreign Keys=True
       - DOTNET_USE_POLLING_FILE_WATCHER=1
+      - APIDOT_VERSION=${APIDOT_VERSION:-dev}
     volumes:
       - ./backend/data:/app/data
     develop:
@@ -38,6 +39,7 @@ services:
       - NODE_ENV=development
       - API_BASE_URL=http://server:5000
       - WATCHPACK_POLLING=true
+      - NEXT_PUBLIC_APP_VERSION=${APIDOT_VERSION:-dev}
     depends_on:
       - server
     develop:

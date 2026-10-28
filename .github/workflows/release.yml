@@ -4,10 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - dev
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release tag name (e.g. v0.4.0)'
+        description: 'Release tag name (e.g. v0.1.0 or dev)'
         required: false
         type: string
 
@@ -38,6 +40,20 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Resolve Release Version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            TAG="${{ github.event.inputs.tag_name }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          elif [ "${{ github.ref_name }}" = "dev" ]; then
+            TAG="dev"
+          else
+            TAG="dev"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -72,6 +88,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            NEXT_PUBLIC_APP_VERSION=${{ steps.version.outputs.tag }}
           cache-from: type=gha,scope=${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
 

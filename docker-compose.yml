@@ -8,6 +8,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Data Source=/app/data/apidot.db;Foreign Keys=True
+      - APIDOT_VERSION=${APIDOT_VERSION:-dev}
     volumes:
       - ./backend/data:/app/data
 
@@ -20,5 +21,6 @@ services:
     environment:
       - NODE_ENV=production
       - API_BASE_URL=http://server:5000
+      - NEXT_PUBLIC_APP_VERSION=${APIDOT_VERSION:-dev}
     depends_on:
       - server
