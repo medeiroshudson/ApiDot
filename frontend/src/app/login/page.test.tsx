@@ -266,6 +266,18 @@ describe('LoginPage (/login)', () => {
       window.history.pushState({}, '', '/login');
     });
 
+    it('displays error message from url query parameter when present on mount', () => {
+      window.history.pushState({}, '', '/login?error=Falha%20no%20provedor%20SSO');
+      useAuthStore.setState({ isAuthenticated: false });
+
+      render(<LoginPage />);
+
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByText('Falha no provedor SSO')).toBeInTheDocument();
+
+      window.history.pushState({}, '', '/login');
+    });
+
     it('calls fetchConfig on mount if config is not present', async () => {
       const fetchConfigSpy = vi.fn().mockResolvedValue(mockConfigEnabled);
       useAuthStore.setState({ config: null, fetchConfig: fetchConfigSpy });

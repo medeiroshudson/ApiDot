@@ -56,6 +56,21 @@ export default function LoginPage() {
     }
   }, [config, fetchConfig]);
 
+  // Check for error query parameter from SSO redirect (e.g. /login?error=...)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const urlError = params.get('error');
+        if (urlError) {
+          setError(decodeURIComponent(urlError));
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
   const isOidcEnabled = config === null || config.oidcEnabled === true;
 
   const handleLocalSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -96,6 +111,17 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {/* Global Error Banner (SSO redirects or Form errors) */}
+        {error && (
+          <div
+            role="alert"
+            className="flex items-start gap-2.5 p-3.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs animate-in fade-in duration-150 leading-relaxed"
+          >
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+            <span>{error}</span>
+          </div>
+        )}
+
         {/* SSO Button & Divider */}
         {isOidcEnabled && (
           <div className="flex flex-col gap-5">
@@ -128,16 +154,6 @@ export default function LoginPage() {
 
         {/* Local Login Form */}
         <form onSubmit={handleLocalSubmit} className="flex flex-col gap-4">
-          {error && (
-            <div
-              role="alert"
-              className="flex items-start gap-2.5 p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs animate-in fade-in duration-150"
-            >
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
-              <span>{error}</span>
-            </div>
-          )}
-
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="email"
