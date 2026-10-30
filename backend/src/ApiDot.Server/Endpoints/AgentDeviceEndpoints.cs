@@ -26,8 +26,7 @@ public static class AgentDeviceEndpoints
         {
             var query = db.AgentDevices.AsNoTracking();
 
-            var isAuthDisabled = string.Equals(configuration["APIDOT_AUTH_ENABLED"], "false", StringComparison.OrdinalIgnoreCase);
-            if (!isAuthDisabled && !currentUserContext.IsRoot)
+            if (!AgentDeviceAuthorization.IsAuthDisabled(configuration) && !currentUserContext.IsRoot)
             {
                 if (currentUserContext.UserId.HasValue && currentUserContext.UserId.Value != Guid.Empty)
                 {
@@ -63,7 +62,7 @@ public static class AgentDeviceEndpoints
                 .AsNoTracking()
                 .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
 
-            if (device is null || !HasDeviceAccess(device, currentUserContext, configuration))
+            if (device is null || !AgentDeviceAuthorization.HasAccess(device, currentUserContext, configuration))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status404NotFound,
@@ -78,8 +77,20 @@ public static class AgentDeviceEndpoints
             CreateAgentDeviceRequest? request,
             ApiDotDbContext db,
             ICurrentUserContext currentUserContext,
+            IConfiguration configuration,
             CancellationToken cancellationToken) =>
         {
+            if (!AgentDeviceAuthorization.IsAuthDisabled(configuration) && !currentUserContext.IsRoot)
+            {
+                if (!currentUserContext.UserId.HasValue || currentUserContext.UserId.Value == Guid.Empty)
+                {
+                    return Results.Problem(
+                        statusCode: StatusCodes.Status401Unauthorized,
+                        title: "Unauthorized",
+                        detail: "Authentication is required to register an agent device.");
+                }
+            }
+
             if (request is null || string.IsNullOrWhiteSpace(request.Name))
             {
                 return Results.Problem(
@@ -148,7 +159,7 @@ public static class AgentDeviceEndpoints
                     detail: $"Agent device with ID '{id}' was not found.");
             }
 
-            if (!HasDeviceAccess(device, currentUserContext, configuration))
+            if (!AgentDeviceAuthorization.HasAccess(device, currentUserContext, configuration))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status403Forbidden,
@@ -185,7 +196,7 @@ public static class AgentDeviceEndpoints
                     detail: $"Agent device with ID '{id}' was not found.");
             }
 
-            if (!HasDeviceAccess(device, currentUserContext, configuration))
+            if (!AgentDeviceAuthorization.HasAccess(device, currentUserContext, configuration))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status403Forbidden,
@@ -216,16 +227,5 @@ public static class AgentDeviceEndpoints
         });
 
         return app;
-    }
-
-    private static bool HasDeviceAccess(AgentDevice device, ICurrentUserContext currentUserContext, IConfiguration? configuration)
-    {
-        var isAuthDisabled = string.Equals(configuration?["APIDOT_AUTH_ENABLED"], "false", StringComparison.OrdinalIgnoreCase);
-        if (isAuthDisabled || currentUserContext.IsRoot)
-        {
-            return true;
-        }
-
-        return currentUserContext.UserId.HasValue && device.UserId == currentUserContext.UserId.Value;
     }
 }

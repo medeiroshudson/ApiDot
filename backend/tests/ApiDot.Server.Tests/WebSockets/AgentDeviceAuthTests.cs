@@ -140,6 +140,22 @@ public class AgentDeviceAuthTests : IClassFixture<WebApplicationFactory<Program>
     }
 
     [Fact]
+    public async Task CreateDevice_Unauthenticated_When_Auth_Enabled_Returns_401_Unauthorized()
+    {
+        await EnsureUsersSeededAsync();
+        var unauthenticatedClient = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = false
+        });
+
+        var request = new CreateAgentDeviceRequest { Name = "Orphan Device Attempt" };
+        var response = await unauthenticatedClient.PostAsJsonAsync("/api/agent/devices", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task CreateDevice_Associates_Authenticated_User_With_Device()
     {
         var (userA, _) = await EnsureUsersSeededAsync();

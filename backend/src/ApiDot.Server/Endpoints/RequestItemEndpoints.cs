@@ -504,14 +504,13 @@ public static class RequestItemEndpoints
                         detail: "O cabeçalho X-Device-Id é obrigatório para execução via Agent.");
                 }
 
-                var isAuthDisabled = string.Equals(configuration["APIDOT_AUTH_ENABLED"], "false", StringComparison.OrdinalIgnoreCase);
-                if (!isAuthDisabled && !currentUserContext.IsRoot)
+                if (!AgentDeviceAuthorization.IsAuthDisabled(configuration) && !currentUserContext.IsRoot)
                 {
                     var targetDevice = await dbContext.AgentDevices
                         .AsNoTracking()
                         .FirstOrDefaultAsync(d => d.Id == deviceId, cancellationToken);
 
-                    if (targetDevice == null || !currentUserContext.UserId.HasValue || targetDevice.UserId != currentUserContext.UserId.Value)
+                    if (!AgentDeviceAuthorization.HasAccess(targetDevice, currentUserContext, configuration))
                     {
                         return Results.Problem(
                             statusCode: StatusCodes.Status403Forbidden,
