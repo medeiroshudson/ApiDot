@@ -22,7 +22,7 @@ namespace ApiDot.Server.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Email = table.Column<string>(type: "TEXT", maxLength: 256, nullable: false),
+                    Email = table.Column<string>(type: "TEXT", maxLength: 256, nullable: false, collation: "NOCASE"),
                     DisplayName = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
                     PasswordHash = table.Column<string>(type: "TEXT", maxLength: 256, nullable: true),
                     PasswordSalt = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
@@ -78,6 +78,11 @@ namespace ApiDot.Server.Migrations
                 name: "IX_Users_OidcSubject",
                 table: "Users",
                 column: "OidcSubject");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Users_OidcIssuer_OidcSubject",
+                table: "Users",
+                columns: new[] { "OidcIssuer", "OidcSubject" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_WorkspaceMembers_UserId",

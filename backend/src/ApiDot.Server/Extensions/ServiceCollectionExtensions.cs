@@ -2,6 +2,7 @@ using ApiDot.Core.Import;
 using ApiDot.Core.Variables;
 using ApiDot.Server.Data;
 using ApiDot.Server.Execution;
+using ApiDot.Server.Security;
 using ApiDot.Server.Services;
 using ApiDot.Server.WebSockets;
 using Microsoft.EntityFrameworkCore;
@@ -17,11 +18,16 @@ public static class ServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        services.AddDbContext<ApiDotDbContext>(options =>
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
+        services.AddScoped<WorkspaceScopeInterceptor>();
+
+        services.AddDbContext<ApiDotDbContext>((sp, options) =>
         {
             var connectionString = configuration.GetConnectionString("DefaultConnection")
                 ?? "Data Source=apidot.db;Foreign Keys=True";
             options.UseSqlite(connectionString);
+            options.AddInterceptors(sp.GetRequiredService<WorkspaceScopeInterceptor>());
         });
 
         return services;

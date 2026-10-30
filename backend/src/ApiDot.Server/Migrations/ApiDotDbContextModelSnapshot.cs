@@ -328,6 +328,7 @@ namespace ApiDot.Server.Migrations
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(256)
+                        .UseCollation("NOCASE")
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsRoot")
@@ -358,6 +359,8 @@ namespace ApiDot.Server.Migrations
                         .IsUnique();
 
                     b.HasIndex("OidcSubject");
+
+                    b.HasIndex("OidcIssuer", "OidcSubject");
 
                     b.ToTable("Users");
                 });
