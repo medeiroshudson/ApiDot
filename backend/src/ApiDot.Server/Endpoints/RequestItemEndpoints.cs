@@ -5,12 +5,14 @@ using ApiDot.Server.Data;
 using ApiDot.Server.Data.Entities;
 using ApiDot.Server.Execution;
 using ApiDot.Server.Models;
+using ApiDot.Server.Security;
 using ApiDot.Server.Services;
 using ApiDot.Server.WebSockets;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace ApiDot.Server.Endpoints;
 
@@ -394,6 +396,8 @@ public static class RequestItemEndpoints
             IVariableResolver variableResolver,
             ApiDotDbContext dbContext,
             IResponseHistoryProvider historyProvider,
+            ICurrentUserContext currentUserContext,
+            IConfiguration configuration,
             CancellationToken cancellationToken) =>
         {
             if (string.IsNullOrWhiteSpace(request.Url))
@@ -498,6 +502,22 @@ public static class RequestItemEndpoints
                         statusCode: StatusCodes.Status409Conflict,
                         title: "Device Header Missing",
                         detail: "O cabeçalho X-Device-Id é obrigatório para execução via Agent.");
+                }
+
+                var isAuthDisabled = string.Equals(configuration["APIDOT_AUTH_ENABLED"], "false", StringComparison.OrdinalIgnoreCase);
+                if (!isAuthDisabled && !currentUserContext.IsRoot)
+                {
+                    var targetDevice = await dbContext.AgentDevices
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(d => d.Id == deviceId, cancellationToken);
+
+                    if (targetDevice == null || !currentUserContext.UserId.HasValue || targetDevice.UserId != currentUserContext.UserId.Value)
+                    {
+                        return Results.Problem(
+                            statusCode: StatusCodes.Status403Forbidden,
+                            title: "Forbidden",
+                            detail: $"You do not have permission to execute requests on device '{deviceId}'.");
+                    }
                 }
 
                 if (!agentHub.IsAgentOnline(deviceId))
