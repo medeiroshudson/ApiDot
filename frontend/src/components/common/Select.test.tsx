@@ -265,6 +265,17 @@ describe('Select Component', () => {
       expect(select).not.toHaveClass('text-neutral-200');
     });
 
+    it('preserves default border-neutral-800 and bg-neutral-900 when only pseudo-class variants are passed', () => {
+      render(
+        <Select className="hover:border-neutral-700 hover:bg-neutral-800" aria-label="Variant Select">
+          <option value="1">1</option>
+        </Select>
+      );
+      const select = screen.getByRole('combobox', { name: 'Variant Select' });
+      expect(select).toHaveClass('border-neutral-800');
+      expect(select).toHaveClass('bg-neutral-900');
+    });
+
     it('avoids default text-neutral-400 on icon when custom text color is passed via iconClassName', () => {
       render(
         <Select iconClassName="text-current opacity-70" aria-label="Inherited Icon Color">

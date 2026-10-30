@@ -25,10 +25,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         ? 'h-9 text-xs pl-2.5 pr-8'
         : 'h-[30px] py-1.5 text-xs pl-2.5 pr-8';
 
-    const hasCustomBg = /\bbg-/.test(className);
-    const hasCustomBorder = /\bborder-/.test(className);
-    const hasCustomTextColor = /\btext-(?!xs\b|sm\b|base\b|lg\b|xl\b|2xl\b|3xl\b|4xl\b|left\b|center\b|right\b|justify\b)\S+/.test(className);
-    const hasShrink0 = /\bshrink-0\b/.test(className);
+    const hasCustomBg = /(?:^|\s)bg-\S+/.test(className);
+    const hasCustomBorder = /(?:^|\s)border-\S+/.test(className);
+    const hasCustomTextColor = /(?:^|\s)text-(?!xs\b|sm\b|base\b|lg\b|xl\b|2xl\b|3xl\b|4xl\b|left\b|center\b|right\b|justify\b)\S+/.test(className);
+    const hasShrink0 = /(?:^|\s)shrink-0(?:\s|$)/.test(className);
 
     const defaultBg = hasCustomBg ? '' : 'bg-neutral-900';
     const defaultBorder = hasCustomBorder ? '' : 'border-neutral-800';
@@ -53,7 +53,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
       .filter(Boolean)
       .join(' ');
 
-    const hasCustomIconColor = /\btext-/.test(iconClassName);
+    const hasCustomIconColor = /(?:^|\s)text-\S+/.test(iconClassName);
     const defaultIconColor = hasCustomIconColor ? '' : 'text-neutral-400';
 
     const iconClasses = [
