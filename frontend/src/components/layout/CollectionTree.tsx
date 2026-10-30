@@ -987,7 +987,7 @@ export function CollectionTree({
         <div
           role="tree"
           aria-label="Árvore de Coleções"
-          className="flex-1 flex flex-col overflow-y-auto space-y-0.5 min-h-[120px] focus:outline-none"
+          className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden space-y-0.5 min-h-[120px] focus:outline-none"
         >
           {displayedTree && displayedTree.collections.length > 0 ? (
             displayedTree.collections.map(renderCollection)

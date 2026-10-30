@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using ApiDot.Server.Extensions;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,6 +8,13 @@ builder.Services.AddProblemDetails();
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
 });
 
 builder.Services.AddServerDatabase(builder.Configuration);
@@ -18,6 +26,7 @@ var app = builder.Build();
 
 app.ApplyDatabaseMigrations();
 
+app.UseForwardedHeaders();
 app.UseExceptionHandler();
 app.UseWebSockets(new WebSocketOptions
 {

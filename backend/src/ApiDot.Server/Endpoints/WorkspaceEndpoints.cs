@@ -2,7 +2,9 @@ using ApiDot.Core.Enums;
 using ApiDot.Core.Variables;
 using ApiDot.Server.Data;
 using ApiDot.Server.Data.Entities;
+using ApiDot.Server.Enums;
 using ApiDot.Server.Models;
+using ApiDot.Server.Security;
 using ApiDot.Server.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -33,6 +35,7 @@ public static class WorkspaceEndpoints
         group.MapPost("/", async (
             CreateWorkspaceRequest? request,
             ApiDotDbContext db,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
             if (request is null || string.IsNullOrWhiteSpace(request.Name))
@@ -54,6 +57,19 @@ public static class WorkspaceEndpoints
 
             var ws = new Workspace { Name = trimmedName };
             db.Workspaces.Add(ws);
+
+            if (currentUserContext.UserId.HasValue && currentUserContext.UserId.Value != Guid.Empty)
+            {
+                var member = new WorkspaceMember
+                {
+                    WorkspaceId = ws.Id,
+                    UserId = currentUserContext.UserId.Value,
+                    Role = WorkspaceRole.Owner,
+                    JoinedAtUtc = DateTime.UtcNow
+                };
+                db.WorkspaceMembers.Add(member);
+            }
+
             await db.SaveChangesAsync(cancellationToken);
 
             return Results.Created($"/api/workspaces/{ws.Id}", new WorkspaceDto(ws.Id, ws.Name, ws.CreatedAtUtc));

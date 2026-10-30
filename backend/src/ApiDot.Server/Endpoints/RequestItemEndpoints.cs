@@ -26,6 +26,7 @@ public static class RequestItemEndpoints
             CreateRequestItemRequest? request,
             ApiDotDbContext db,
             IWorkspaceTreeBuilder treeBuilder,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
             if (request is null)
@@ -75,7 +76,7 @@ public static class RequestItemEndpoints
             }
 
             var workspaceExists = await db.Workspaces.AnyAsync(w => w.Id == request.WorkspaceId, cancellationToken);
-            if (!workspaceExists)
+            if (!workspaceExists || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, request.WorkspaceId, cancellationToken))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status404NotFound,
@@ -163,13 +164,14 @@ public static class RequestItemEndpoints
             Guid id,
             ApiDotDbContext db,
             IWorkspaceTreeBuilder treeBuilder,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
             var requestItem = await db.RequestItems
                 .AsNoTracking()
                 .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
 
-            if (requestItem is null)
+            if (requestItem is null || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, requestItem.WorkspaceId, cancellationToken))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status404NotFound,
@@ -185,6 +187,7 @@ public static class RequestItemEndpoints
             UpdateRequestItemRequest? request,
             ApiDotDbContext db,
             IWorkspaceTreeBuilder treeBuilder,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
             if (request is null)
@@ -241,7 +244,7 @@ public static class RequestItemEndpoints
             var requestItem = await db.RequestItems
                 .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
 
-            if (requestItem is null)
+            if (requestItem is null || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, requestItem.WorkspaceId, cancellationToken))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status404NotFound,
@@ -323,13 +326,14 @@ public static class RequestItemEndpoints
             Guid id,
             ApiDotDbContext db,
             IWorkspaceTreeBuilder treeBuilder,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
             var existing = await db.RequestItems
                 .AsNoTracking()
                 .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
 
-            if (existing is null)
+            if (existing is null || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, existing.WorkspaceId, cancellationToken))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status404NotFound,
@@ -367,12 +371,13 @@ public static class RequestItemEndpoints
         group.MapDelete("/{id:guid}", async (
             Guid id,
             ApiDotDbContext db,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
             var requestItem = await db.RequestItems
                 .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
 
-            if (requestItem is null)
+            if (requestItem is null || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, requestItem.WorkspaceId, cancellationToken))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status404NotFound,
@@ -414,6 +419,14 @@ public static class RequestItemEndpoints
 
             if (request.WorkspaceId.HasValue && request.WorkspaceId.Value != Guid.Empty)
             {
+                if (!await WorkspaceAuthorization.CanAccessWorkspaceAsync(dbContext, currentUserContext, request.WorkspaceId.Value, cancellationToken))
+                {
+                    return Results.Problem(
+                        statusCode: StatusCodes.Status404NotFound,
+                        title: "Workspace Not Found",
+                        detail: $"Workspace with ID '{request.WorkspaceId.Value}' was not found.");
+                }
+
                 var workspaceVars = await dbContext.EnvironmentVariables
                     .AsNoTracking()
                     .Where(v => v.WorkspaceId == request.WorkspaceId.Value)

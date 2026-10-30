@@ -245,6 +245,38 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
     }
 
     [Fact]
+    public async Task GetMe_WhenAuthDisabled_Returns200WithSyntheticRootUser()
+    {
+        var factoryWithAuthDisabled = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, config) =>
+            {
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["APIDOT_AUTH_ENABLED"] = "false"
+                });
+            });
+        });
+
+        var client = factoryWithAuthDisabled.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = false
+        });
+
+        var res = await client.GetAsync("/api/auth/me");
+        res.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var me = await res.Content.ReadFromJsonAsync<AuthUserDto>();
+        me.Should().NotBeNull();
+        me!.Id.Should().Be(Guid.Empty);
+        me.Email.Should().Be("root@local");
+        me.DisplayName.Should().Be("Root (Dev/Test)");
+        me.IsRoot.Should().BeTrue();
+        me.Workspaces.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task PostLogout_RevokesSessionCookie_AndSubsequentGetMeReturns401()
     {
         var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
