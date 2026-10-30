@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 export default function Home() {
@@ -13,6 +14,7 @@ export default function Home() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const fetchWorkspaces = useWorkspaceStore((s) => s.fetchWorkspaces);
   const createWorkspace = useWorkspaceStore((s) => s.createWorkspace);
+  const checkAuth = useAuthStore((s) => s.checkAuth);
 
   const redirectedRef = useRef(false);
   const [hasError, setHasError] = useState(false);
@@ -30,11 +32,47 @@ export default function Home() {
       setHasError(false);
       setErrorMessage(null);
 
+      // Check auth status on mount via checkAuth()
+      const user = await checkAuth();
+      const authState = useAuthStore.getState();
+
+      if (!authState.isLoading && !authState.isAuthenticated) {
+        if (authState.error) {
+          throw new Error(authState.error);
+        }
+        if (!redirectedRef.current) {
+          redirectedRef.current = true;
+          routerRef.current.replace('/login');
+        }
+        return;
+      }
+
+      // If active workspace already present in store, redirect directly
       if (activeWorkspaceId) {
         executeRedirect(activeWorkspaceId);
         return;
       }
 
+      // Check legacy / preferred localStorage active workspace if it exists in user's workspaces
+      let legacyId: string | null = null;
+      try {
+        legacyId =
+          typeof window !== 'undefined'
+            ? localStorage.getItem('apidot_active_workspace_id')
+            : null;
+      } catch {
+        legacyId = null;
+      }
+
+      // If authenticated on "/", redirect to preferred or first available workspace
+      if (user?.workspaces && user.workspaces.length > 0) {
+        const preferredWs = legacyId ? user.workspaces.find((w) => w.id === legacyId) : null;
+        const targetId = preferredWs ? preferredWs.id : user.workspaces[0].id;
+        executeRedirect(targetId);
+        return;
+      }
+
+      // Fallback: fetch workspaces list from API
       const list = await fetchWorkspaces();
       const storeError = useWorkspaceStore.getState().error;
       if (storeError) {
@@ -57,7 +95,7 @@ export default function Home() {
         error instanceof Error ? error.message : 'Falha ao carregar workspaces'
       );
     }
-  }, [activeWorkspaceId, fetchWorkspaces, createWorkspace, executeRedirect]);
+  }, [activeWorkspaceId, fetchWorkspaces, createWorkspace, executeRedirect, checkAuth]);
 
   useEffect(() => {
     let isMounted = true;
@@ -76,6 +114,7 @@ export default function Home() {
 
   const handleRetry = () => {
     useWorkspaceStore.setState({ error: null });
+    useAuthStore.setState({ error: null });
     redirectedRef.current = false;
     setRetryCount((prev) => prev + 1);
   };

@@ -1,9 +1,24 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AppHeader } from './AppHeader';
 import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
+import { useAuthStore } from '@/stores/useAuthStore';
+import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
+
+const mockReplace = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    replace: mockReplace,
+    push: vi.fn(),
+  }),
+}));
 
 describe('AppHeader', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAuthStore.getState().reset();
+    useWorkspaceStore.getState().reset();
+  });
   it('renders workspace title and default fallback', () => {
     const { rerender } = render(<AppHeader title="My Custom Workspace" />);
     expect(screen.getByText('My Custom Workspace')).toBeDefined();
@@ -134,5 +149,113 @@ describe('AppHeader', () => {
     const select = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' }) as HTMLSelectElement;
     const options = Array.from(select.options).map((opt) => opt.text);
     expect(options).toEqual(['Sem Ambiente', 'Dev', 'Dev']);
+  });
+
+  describe('User Profile Menu and Authentication', () => {
+    it('degrades gracefully without rendering user menu when user is unauthenticated or loading', () => {
+      useAuthStore.setState({ isAuthenticated: false, isLoading: false, user: null });
+      render(<AppHeader />);
+      expect(screen.queryByTestId('user-avatar')).toBeNull();
+      expect(screen.queryByTestId('user-role-badge')).toBeNull();
+    });
+
+    it('renders user initials, email, and role badge for active workspace', () => {
+      useAuthStore.setState({
+        isAuthenticated: true,
+        isLoading: false,
+        user: {
+          id: 'u-1',
+          email: 'hudson@example.com',
+          displayName: 'Hudson Medeiros',
+          isRoot: false,
+          workspaces: [{ id: 'ws-main', name: 'Main Workspace', role: 'Owner' }],
+        },
+      });
+      useWorkspaceStore.setState({ activeWorkspaceId: 'ws-main' });
+
+      render(<AppHeader />);
+
+      expect(screen.getByText('HM')).toBeInTheDocument();
+      expect(screen.getByText('hudson@example.com')).toBeInTheDocument();
+      expect(screen.getByText('Owner')).toBeInTheDocument();
+    });
+
+    it('renders Admin and Member role badges correctly based on active workspace membership', () => {
+      useAuthStore.setState({
+        isAuthenticated: true,
+        isLoading: false,
+        user: {
+          id: 'u-2',
+          email: 'member@example.com',
+          displayName: 'Collab User',
+          isRoot: false,
+          workspaces: [
+            { id: 'ws-admin', name: 'Admin WS', role: 'Admin' },
+            { id: 'ws-member', name: 'Member WS', role: 'Member' },
+          ],
+        },
+      });
+
+      const { rerender } = render(<AppHeader activeWorkspaceId="ws-admin" />);
+      expect(screen.getByText('Admin')).toBeInTheDocument();
+
+      rerender(<AppHeader activeWorkspaceId="ws-member" />);
+      expect(screen.getByText('Member')).toBeInTheDocument();
+    });
+
+    it('calls logout action and redirects to /login on clicking logout', async () => {
+      const mockLogout = vi.fn().mockResolvedValue(undefined);
+      useAuthStore.setState({
+        isAuthenticated: true,
+        isLoading: false,
+        logout: mockLogout,
+        user: {
+          id: 'u-1',
+          email: 'hudson@example.com',
+          displayName: 'Hudson Medeiros',
+          isRoot: false,
+          workspaces: [{ id: 'ws-main', name: 'Main Workspace', role: 'Owner' }],
+        },
+      });
+      useWorkspaceStore.setState({ activeWorkspaceId: 'ws-main' });
+
+      render(<AppHeader />);
+
+      const userTrigger = screen.getByRole('button', { name: /menu do usuário/i });
+      fireEvent.click(userTrigger);
+
+      const logoutBtn = screen.getByRole('button', { name: /sair/i });
+      fireEvent.click(logoutBtn);
+
+      await waitFor(() => {
+        expect(mockLogout).toHaveBeenCalledTimes(1);
+        expect(mockReplace).toHaveBeenCalledWith('/login');
+      });
+    });
+
+    it('toggles dropdown menu on click and closes on Escape', () => {
+      useAuthStore.setState({
+        isAuthenticated: true,
+        isLoading: false,
+        user: {
+          id: 'u-1',
+          email: 'hudson@example.com',
+          displayName: 'Hudson Medeiros',
+          isRoot: false,
+          workspaces: [{ id: 'ws-main', name: 'Main Workspace', role: 'Owner' }],
+        },
+      });
+
+      render(<AppHeader />);
+
+      const userTrigger = screen.getByRole('button', { name: /menu do usuário/i });
+      expect(screen.queryByTestId('user-dropdown-menu')).toBeNull();
+
+      fireEvent.click(userTrigger);
+      expect(screen.getByTestId('user-dropdown-menu')).toBeInTheDocument();
+
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(screen.queryByTestId('user-dropdown-menu')).toBeNull();
+    });
   });
 });

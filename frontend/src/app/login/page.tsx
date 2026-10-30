@@ -22,10 +22,25 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // If already authenticated, redirect to "/"
+  const getReturnUrl = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const returnUrl = params.get('returnUrl');
+        if (returnUrl && returnUrl.startsWith('/')) {
+          return returnUrl;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return '/';
+  };
+
+  // If already authenticated, redirect to returnUrl or "/"
   useEffect(() => {
     if (isAuthenticated) {
-      routerRef.current.replace('/');
+      routerRef.current.replace(getReturnUrl());
     }
   }, [isAuthenticated]);
 
@@ -52,7 +67,7 @@ export default function LoginPage() {
 
     try {
       await loginLocal(email.trim(), password);
-      routerRef.current.replace('/');
+      routerRef.current.replace(getReturnUrl());
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Falha na autenticação';
       setError(message);
@@ -80,12 +95,12 @@ export default function LoginPage() {
         {isOidcEnabled && (
           <div className="flex flex-col gap-5">
             <a
-              href="/api/auth/login"
+              href={`/api/auth/login${getReturnUrl() !== '/' ? `?returnUrl=${encodeURIComponent(getReturnUrl())}` : ''}`}
               role="button"
               onKeyDown={(e) => {
                 if (e.key === ' ' || e.key === 'Spacebar') {
                   e.preventDefault();
-                  window.location.href = '/api/auth/login';
+                  window.location.href = `/api/auth/login${getReturnUrl() !== '/' ? `?returnUrl=${encodeURIComponent(getReturnUrl())}` : ''}`;
                 }
               }}
               aria-label="Entrar com SSO"

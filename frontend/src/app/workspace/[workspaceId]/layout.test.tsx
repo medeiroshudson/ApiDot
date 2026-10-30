@@ -1,15 +1,17 @@
 import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import WorkspaceLayout from './layout';
 import { useParams } from 'next/navigation';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
+import { useAuthStore } from '@/stores/useAuthStore';
 
+const mockReplace = vi.fn();
 vi.mock('next/navigation', () => ({
   useParams: vi.fn(),
   useRouter: () => ({
     push: vi.fn(),
-    replace: vi.fn(),
+    replace: mockReplace,
     prefetch: vi.fn(),
     back: vi.fn(),
   }),
@@ -33,6 +35,33 @@ describe('WorkspaceLayout', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useWorkspaceStore.getState().reset();
+    useAuthStore.getState().reset();
+
+    vi.spyOn(global, 'fetch').mockImplementation(async (input: any) => {
+      const url = String(input);
+      if (url.includes('/api/auth/me')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'user-default',
+            email: 'test@example.com',
+            displayName: 'Test User',
+            isRoot: false,
+            workspaces: [{ id: 'ws-123', name: 'Default', role: 'Owner' }],
+          }),
+        } as any;
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [],
+      } as any;
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('reads workspaceId from useParams and passes it to WorkspaceShell with children', () => {
@@ -206,6 +235,33 @@ describe('WorkspaceLayout', () => {
       });
 
       expect(document.title).toBe('ApiDot - New Staging Name');
+    });
+  });
+
+  describe('Route Guard and Authentication', () => {
+    it('redirects to /login?returnUrl=... when user is unauthenticated', async () => {
+      vi.mocked(useParams).mockReturnValue({ workspaceId: 'ws-protected' });
+      vi.spyOn(global, 'fetch').mockImplementation(async (input: any) => {
+        const url = String(input);
+        if (url.includes('/api/auth/me')) {
+          return {
+            ok: false,
+            status: 401,
+            json: async () => ({ message: 'Unauthorized' }),
+          } as any;
+        }
+        return { ok: true, json: async () => ({}) } as any;
+      });
+
+      render(
+        <WorkspaceLayout>
+          <div>Guarded Content</div>
+        </WorkspaceLayout>
+      );
+
+      await waitFor(() => {
+        expect(mockReplace).toHaveBeenCalledWith('/login?returnUrl=%2Fworkspace%2Fws-protected');
+      });
     });
   });
 });

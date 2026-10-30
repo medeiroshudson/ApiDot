@@ -9,6 +9,7 @@ import { useLayoutStore, INITIAL_LAYOUT_STATE } from '@/stores/useLayoutStore';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
 import { useRequestStore } from '@/stores/useRequestStore';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 const mockReplace = vi.fn();
 const mockPush = vi.fn();
@@ -29,7 +30,33 @@ beforeEach(() => {
   useWorkspaceStore.getState().reset();
   useEnvironmentStore.getState().reset();
   useRequestStore.getState().reset();
+  useAuthStore.getState().reset();
   localStorage.clear();
+
+  vi.spyOn(global, 'fetch').mockImplementation(async (input: any) => {
+    const url = String(input);
+    if (url.includes('/api/auth/me')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 'user-default',
+          email: 'test@example.com',
+          displayName: 'Test User',
+          isRoot: false,
+          workspaces: [
+            { id: 'ws-1', name: 'Primeiro Workspace', role: 'Owner' },
+            { id: 'ws-2', name: 'Segundo Workspace', role: 'Owner' },
+          ],
+        }),
+      } as any;
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => [],
+    } as any;
+  });
 });
 
 describe('page variable resolution and interpolation helpers', () => {
@@ -358,5 +385,54 @@ describe('Root Redirector (app/page.tsx)', () => {
     });
 
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('redirects to /login when user is unauthenticated', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async (input: any) => {
+      const url = String(input);
+      if (url.includes('/api/auth/me')) {
+        return {
+          ok: false,
+          status: 401,
+          json: async () => ({ message: 'Unauthorized' }),
+        } as any;
+      }
+      return { ok: true, json: async () => ({}) } as any;
+    });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/login');
+    });
+  });
+
+  it('redirects to first available workspace in user.workspaces when authenticated on /', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async (input: any) => {
+      const url = String(input);
+      if (url.includes('/api/auth/me')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'user-first-ws',
+            email: 'first@example.com',
+            displayName: 'First User',
+            isRoot: false,
+            workspaces: [
+              { id: 'ws-from-auth-1', name: 'First Auth WS', role: 'Owner' },
+              { id: 'ws-from-auth-2', name: 'Second Auth WS', role: 'Member' },
+            ],
+          }),
+        } as any;
+      }
+      return { ok: true, json: async () => ({}) } as any;
+    });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/workspace/ws-from-auth-1');
+    });
   });
 });
