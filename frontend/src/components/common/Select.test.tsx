@@ -123,7 +123,7 @@ describe('Select Component', () => {
   });
 
   describe('Size Variants', () => {
-    it('applies sizeVariant="sm" by default with h-7.5, py-1.5, text-xs, pl-2.5, pr-8', () => {
+    it('applies sizeVariant="sm" by default with h-[30px], py-1.5, text-xs, pl-2.5, pr-8', () => {
       render(
         <Select aria-label="Default Size">
           <option value="1">1</option>
@@ -131,7 +131,7 @@ describe('Select Component', () => {
       );
 
       const select = screen.getByRole('combobox', { name: 'Default Size' });
-      expect(select).toHaveClass('h-7.5');
+      expect(select).toHaveClass('h-[30px]');
       expect(select).toHaveClass('py-1.5');
       expect(select).toHaveClass('text-xs');
       expect(select).toHaveClass('pl-2.5');
@@ -147,7 +147,7 @@ describe('Select Component', () => {
       );
 
       const select = screen.getByRole('combobox', { name: 'Small Size' });
-      expect(select).toHaveClass('h-7.5');
+      expect(select).toHaveClass('h-[30px]');
       expect(select).toHaveClass('py-1.5');
       expect(select).toHaveClass('text-xs');
       expect(select).toHaveClass('pl-2.5');
@@ -167,7 +167,7 @@ describe('Select Component', () => {
       expect(select).toHaveClass('text-xs');
       expect(select).toHaveClass('pl-2.5');
       expect(select).toHaveClass('pr-8');
-      expect(select).not.toHaveClass('h-7.5');
+      expect(select).not.toHaveClass('h-[30px]');
     });
   });
 

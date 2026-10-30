@@ -23,7 +23,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     const sizeClasses =
       sizeVariant === 'md'
         ? 'h-9 text-xs pl-2.5 pr-8'
-        : 'h-7.5 py-1.5 text-xs pl-2.5 pr-8';
+        : 'h-[30px] py-1.5 text-xs pl-2.5 pr-8';
 
     const selectClasses = [
       'appearance-none bg-neutral-900 border border-neutral-800 text-neutral-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50',
