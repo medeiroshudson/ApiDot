@@ -8,7 +8,9 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 {
     public void Configure(EntityTypeBuilder<User> builder)
     {
-        builder.Property(u => u.Email).HasMaxLength(256);
+        builder.Property(u => u.Email)
+            .HasMaxLength(256)
+            .UseCollation("NOCASE");
         builder.Property(u => u.DisplayName).HasMaxLength(200);
         builder.Property(u => u.PasswordHash).HasMaxLength(256);
         builder.Property(u => u.PasswordSalt).HasMaxLength(128);
@@ -17,6 +19,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.HasIndex(u => u.Email).IsUnique();
         builder.HasIndex(u => u.OidcSubject);
+        builder.HasIndex(u => new { u.OidcIssuer, u.OidcSubject });
 
         builder.HasMany(u => u.WorkspaceMemberships)
             .WithOne(m => m.User)

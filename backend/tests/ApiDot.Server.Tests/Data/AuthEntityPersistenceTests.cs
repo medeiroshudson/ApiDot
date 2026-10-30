@@ -250,4 +250,34 @@ public class AuthEntityPersistenceTests
         (await context.WorkspaceMembers.AnyAsync(m => m.UserId == user.Id)).Should().BeFalse();
         (await context.Workspaces.AnyAsync(w => w.Id == workspace.Id)).Should().BeTrue();
     }
+
+    [Fact]
+    public async Task Deleting_User_With_Associated_AgentDevice_Throws_DbUpdateException_Due_To_Restrict()
+    {
+        using var context = CreateInMemoryContext();
+
+        var user = new User
+        {
+            Email = "restrict_owner@example.com",
+            DisplayName = "Restrict Owner"
+        };
+        var device = new AgentDevice
+        {
+            Name = "Protected Agent",
+            TokenHash = "hash_restrict",
+            TokenPrefix = "apidot_dev_res",
+            User = user
+        };
+
+        context.Users.Add(user);
+        context.AgentDevices.Add(device);
+        await context.SaveChangesAsync();
+
+        context.ChangeTracker.Clear();
+
+        var userToDelete = await context.Users.SingleAsync(u => u.Id == user.Id);
+        context.Users.Remove(userToDelete);
+        var act = () => context.SaveChangesAsync();
+        await act.Should().ThrowAsync<DbUpdateException>();
+    }
 }
