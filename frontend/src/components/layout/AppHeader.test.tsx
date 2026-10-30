@@ -4,6 +4,7 @@ import { AppHeader } from './AppHeader';
 import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
+import { useRequestStore } from '@/stores/useRequestStore';
 
 const mockReplace = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -218,19 +219,24 @@ describe('AppHeader', () => {
         },
       });
       useWorkspaceStore.setState({ activeWorkspaceId: 'ws-main' });
+      useRequestStore.setState({ activeRequestId: 'req-active-123' });
 
       render(<AppHeader />);
 
       const userTrigger = screen.getByRole('button', { name: /menu do usuário/i });
       fireEvent.click(userTrigger);
 
-      const logoutBtn = screen.getByRole('button', { name: /sair/i });
+      const logoutBtn = screen.getByRole('menuitem', { name: /sair/i });
+      expect(logoutBtn).toHaveAttribute('role', 'menuitem');
       fireEvent.click(logoutBtn);
 
       await waitFor(() => {
         expect(mockLogout).toHaveBeenCalledTimes(1);
         expect(mockReplace).toHaveBeenCalledWith('/login');
       });
+
+      expect(useWorkspaceStore.getState().activeWorkspaceId).toBeNull();
+      expect(useRequestStore.getState().activeRequestId).toBeNull();
     });
 
     it('toggles dropdown menu on click and closes on Escape', () => {

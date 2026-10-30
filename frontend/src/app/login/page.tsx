@@ -27,7 +27,12 @@ export default function LoginPage() {
       try {
         const params = new URLSearchParams(window.location.search);
         const returnUrl = params.get('returnUrl');
-        if (returnUrl && returnUrl.startsWith('/')) {
+        if (
+          returnUrl &&
+          returnUrl.startsWith('/') &&
+          !returnUrl.startsWith('//') &&
+          !returnUrl.startsWith('/\\')
+        ) {
           return returnUrl;
         }
       } catch {

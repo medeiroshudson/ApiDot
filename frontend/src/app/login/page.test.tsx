@@ -231,6 +231,41 @@ describe('LoginPage (/login)', () => {
       expect(mockReplace).toHaveBeenCalledWith('/');
     });
 
+    it('redirects to safe returnUrl when already authenticated', () => {
+      window.history.pushState({}, '', '/login?returnUrl=/workspace/ws-safe');
+      useAuthStore.setState({ isAuthenticated: true });
+
+      render(<LoginPage />);
+
+      expect(mockReplace).toHaveBeenCalledWith('/workspace/ws-safe');
+      window.history.pushState({}, '', '/login');
+    });
+
+    it('sanitizes malicious protocol-relative and external returnUrl parameters to "/"', () => {
+      // Test //evil.com
+      window.history.pushState({}, '', '/login?returnUrl=//attacker.com');
+      useAuthStore.setState({ isAuthenticated: true });
+
+      const { unmount } = render(<LoginPage />);
+      expect(mockReplace).toHaveBeenCalledWith('/');
+      unmount();
+
+      // Test /\\attacker.com
+      mockReplace.mockClear();
+      window.history.pushState({}, '', '/login?returnUrl=/\\\\attacker.com');
+      const { unmount: unmount2 } = render(<LoginPage />);
+      expect(mockReplace).toHaveBeenCalledWith('/');
+      unmount2();
+
+      // Test https://evil.com
+      mockReplace.mockClear();
+      window.history.pushState({}, '', '/login?returnUrl=https://evil.com');
+      render(<LoginPage />);
+      expect(mockReplace).toHaveBeenCalledWith('/');
+
+      window.history.pushState({}, '', '/login');
+    });
+
     it('calls fetchConfig on mount if config is not present', async () => {
       const fetchConfigSpy = vi.fn().mockResolvedValue(mockConfigEnabled);
       useAuthStore.setState({ config: null, fetchConfig: fetchConfigSpy });

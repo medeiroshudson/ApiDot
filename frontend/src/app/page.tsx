@@ -47,13 +47,7 @@ export default function Home() {
         return;
       }
 
-      // If active workspace already present in store, redirect directly
-      if (activeWorkspaceId) {
-        executeRedirect(activeWorkspaceId);
-        return;
-      }
-
-      // Check legacy / preferred localStorage active workspace if it exists in user's workspaces
+      // Check legacy / preferred localStorage active workspace
       let legacyId: string | null = null;
       try {
         legacyId =
@@ -64,9 +58,11 @@ export default function Home() {
         legacyId = null;
       }
 
-      // If authenticated on "/", redirect to preferred or first available workspace
+      // If authenticated on "/", redirect to preferred active workspace or first available workspace
       if (user?.workspaces && user.workspaces.length > 0) {
-        const preferredWs = legacyId ? user.workspaces.find((w) => w.id === legacyId) : null;
+        const preferredWs = user.isRoot && activeWorkspaceId
+          ? user.workspaces.find((w) => (activeWorkspaceId && w.id === activeWorkspaceId) || (legacyId && w.id === legacyId)) || { id: activeWorkspaceId }
+          : user.workspaces.find((w) => (activeWorkspaceId && w.id === activeWorkspaceId) || (legacyId && w.id === legacyId));
         const targetId = preferredWs ? preferredWs.id : user.workspaces[0].id;
         executeRedirect(targetId);
         return;

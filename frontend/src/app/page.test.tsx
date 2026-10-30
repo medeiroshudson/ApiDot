@@ -43,7 +43,7 @@ beforeEach(() => {
           id: 'user-default',
           email: 'test@example.com',
           displayName: 'Test User',
-          isRoot: false,
+          isRoot: true,
           workspaces: [
             { id: 'ws-1', name: 'Primeiro Workspace', role: 'Owner' },
             { id: 'ws-2', name: 'Segundo Workspace', role: 'Owner' },
@@ -433,6 +433,37 @@ describe('Root Redirector (app/page.tsx)', () => {
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith('/workspace/ws-from-auth-1');
+    });
+  });
+
+  it('ignores activeWorkspaceId and redirects to user first workspace if non-root user does not belong to it', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async (input: any) => {
+      const url = String(input);
+      if (url.includes('/api/auth/me')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'user-regular',
+            email: 'regular@example.com',
+            displayName: 'Regular User',
+            isRoot: false,
+            workspaces: [
+              { id: 'ws-allowed-1', name: 'Allowed WS 1', role: 'Member' },
+            ],
+          }),
+        } as any;
+      }
+      return { ok: true, json: async () => ({}) } as any;
+    });
+
+    // An unauthorized workspace ID left in store from previous session/user
+    useWorkspaceStore.setState({ activeWorkspaceId: 'ws-unauthorized-999' });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/workspace/ws-allowed-1');
     });
   });
 });

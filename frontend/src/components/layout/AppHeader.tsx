@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
+import { useRequestStore } from '@/stores/useRequestStore';
 
 export interface AppHeaderProps {
   title?: string;
@@ -107,6 +108,8 @@ export function AppHeader({
     } catch {
       // fallback
     } finally {
+      useWorkspaceStore.getState().reset();
+      useRequestStore.getState().reset();
       router.replace('/login');
     }
   };
@@ -250,6 +253,7 @@ export function AppHeader({
                 <div className="pt-1">
                   <button
                     type="button"
+                    role="menuitem"
                     onClick={handleLogout}
                     aria-label="Sair da conta"
                     className="w-full flex items-center gap-2 px-3.5 py-2 text-xs text-rose-400 hover:text-rose-300 hover:bg-neutral-800/80 transition-colors text-left cursor-pointer"
