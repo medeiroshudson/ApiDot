@@ -28,16 +28,9 @@ import { filterTree, ActiveTreeItem, ActiveTreeItemType } from '@/hooks/useColle
 import { ContextMenu, ContextMenuItem, ContextMenuPosition } from '@/components/common/ContextMenu';
 import { InlineNodeInput } from './InlineNodeInput';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
+import { MethodBadge, HTTP_METHOD_BADGES } from '@/components/common/MethodBadge';
 
-export const HTTP_METHOD_BADGES: Record<string, string> = {
-  GET: 'text-emerald-400 bg-emerald-950/60 border-emerald-800/80',
-  POST: 'text-blue-400 bg-blue-950/60 border-blue-800/80',
-  PUT: 'text-amber-400 bg-amber-950/60 border-amber-800/80',
-  PATCH: 'text-purple-400 bg-purple-950/60 border-purple-800/80',
-  DELETE: 'text-rose-400 bg-rose-950/60 border-rose-800/80',
-  HEAD: 'text-neutral-400 bg-neutral-900 border-neutral-700',
-  OPTIONS: 'text-cyan-400 bg-cyan-950/60 border-cyan-800/80',
-};
+export { HTTP_METHOD_BADGES };
 
 export interface CollectionTreeProps {
   tree: WorkspaceTreeDto | null;
@@ -600,9 +593,6 @@ export function CollectionTree({
   function renderRequest(req: RequestItemNodeDto, depth: number) {
     const isSelected = selectedId === req.id || activeItem?.id === req.id;
     const isEditing = inlineEditing?.id === req.id;
-    const methodUpper = req.method ? req.method.toUpperCase() : 'GET';
-    const badgeClass =
-      HTTP_METHOD_BADGES[methodUpper] || 'text-neutral-400 bg-neutral-900 border-neutral-700';
 
     return (
       <div
@@ -619,11 +609,7 @@ export function CollectionTree({
         }`}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span
-            className={`px-1.5 py-0.5 text-[10px] font-mono font-semibold rounded border shrink-0 ${badgeClass}`}
-          >
-            {methodUpper}
-          </span>
+          <MethodBadge method={req.method} />
 
           {isEditing ? (
             <InlineNodeInput
