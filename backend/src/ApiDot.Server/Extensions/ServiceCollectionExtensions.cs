@@ -37,6 +37,8 @@ public static class ServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        services.AddSingleton<IPasswordHasher, PasswordHasher>();
+        services.AddScoped<IUserSeeder, UserSeeder>();
         services.AddSingleton<ITargetResolver, TargetResolver>();
         services.AddSingleton<InMemoryResponseHistoryProvider>();
         services.AddSingleton<IResponseHistoryProvider>(sp => sp.GetRequiredService<InMemoryResponseHistoryProvider>());
