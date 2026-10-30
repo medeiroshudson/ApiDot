@@ -597,6 +597,7 @@ function WorkspaceShellContent({
         onSelectEnvironment={setActiveEnvironment}
         onOpenEnvironmentSettings={() => setModalOpen('env', true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        activeWorkspaceId={workspaceId}
       />
 
       {/* Audit Summary Banner */}

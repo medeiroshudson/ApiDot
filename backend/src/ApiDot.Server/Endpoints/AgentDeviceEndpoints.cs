@@ -1,11 +1,13 @@
 using ApiDot.Server.Data;
 using ApiDot.Server.Data.Entities;
 using ApiDot.Server.Models;
+using ApiDot.Server.Security;
 using ApiDot.Server.WebSockets;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace ApiDot.Server.Endpoints;
 
@@ -18,10 +20,26 @@ public static class AgentDeviceEndpoints
         group.MapGet("/", async (
             ApiDotDbContext db,
             IAgentHub agentHub,
+            ICurrentUserContext currentUserContext,
+            IConfiguration configuration,
             CancellationToken cancellationToken) =>
         {
-            var devices = await db.AgentDevices
-                .AsNoTracking()
+            var query = db.AgentDevices.AsNoTracking();
+
+            if (!AgentDeviceAuthorization.IsAuthDisabled(configuration) && !currentUserContext.IsRoot)
+            {
+                if (currentUserContext.UserId.HasValue && currentUserContext.UserId.Value != Guid.Empty)
+                {
+                    var currentUserId = currentUserContext.UserId.Value;
+                    query = query.Where(d => d.UserId == currentUserId);
+                }
+                else
+                {
+                    query = query.Where(d => false);
+                }
+            }
+
+            var devices = await query
                 .OrderByDescending(d => d.CreatedAtUtc)
                 .ToListAsync(cancellationToken);
 
@@ -36,13 +54,15 @@ public static class AgentDeviceEndpoints
             Guid id,
             ApiDotDbContext db,
             IAgentHub agentHub,
+            ICurrentUserContext currentUserContext,
+            IConfiguration configuration,
             CancellationToken cancellationToken) =>
         {
             var device = await db.AgentDevices
                 .AsNoTracking()
                 .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
 
-            if (device is null)
+            if (device is null || !AgentDeviceAuthorization.HasAccess(device, currentUserContext, configuration))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status404NotFound,
@@ -56,8 +76,21 @@ public static class AgentDeviceEndpoints
         group.MapPost("/", async (
             CreateAgentDeviceRequest? request,
             ApiDotDbContext db,
+            ICurrentUserContext currentUserContext,
+            IConfiguration configuration,
             CancellationToken cancellationToken) =>
         {
+            if (!AgentDeviceAuthorization.IsAuthDisabled(configuration) && !currentUserContext.IsRoot)
+            {
+                if (!currentUserContext.UserId.HasValue || currentUserContext.UserId.Value == Guid.Empty)
+                {
+                    return Results.Problem(
+                        statusCode: StatusCodes.Status401Unauthorized,
+                        title: "Unauthorized",
+                        detail: "Authentication is required to register an agent device.");
+                }
+            }
+
             if (request is null || string.IsNullOrWhiteSpace(request.Name))
             {
                 return Results.Problem(
@@ -77,13 +110,20 @@ public static class AgentDeviceEndpoints
 
             var (rawToken, tokenHash, tokenPrefix) = DeviceTokenHelper.GenerateToken();
 
+            var assignedUserId = currentUserContext.UserId;
+            if (assignedUserId == Guid.Empty)
+            {
+                assignedUserId = null;
+            }
+
             var device = new AgentDevice
             {
                 Name = trimmedName,
                 TokenHash = tokenHash,
                 TokenPrefix = tokenPrefix,
                 CreatedAtUtc = DateTime.UtcNow,
-                IsRevoked = false
+                IsRevoked = false,
+                UserId = assignedUserId
             };
 
             db.AgentDevices.Add(device);
@@ -106,6 +146,8 @@ public static class AgentDeviceEndpoints
             Guid id,
             ApiDotDbContext db,
             IAgentHub agentHub,
+            ICurrentUserContext currentUserContext,
+            IConfiguration configuration,
             CancellationToken cancellationToken) =>
         {
             var device = await db.AgentDevices.FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
@@ -115,6 +157,14 @@ public static class AgentDeviceEndpoints
                     statusCode: StatusCodes.Status404NotFound,
                     title: "Device Not Found",
                     detail: $"Agent device with ID '{id}' was not found.");
+            }
+
+            if (!AgentDeviceAuthorization.HasAccess(device, currentUserContext, configuration))
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status403Forbidden,
+                    title: "Forbidden",
+                    detail: $"You do not have permission to revoke agent device with ID '{id}'.");
             }
 
             device.IsRevoked = true;
@@ -133,6 +183,8 @@ public static class AgentDeviceEndpoints
             Guid id,
             ApiDotDbContext db,
             IAgentHub agentHub,
+            ICurrentUserContext currentUserContext,
+            IConfiguration configuration,
             CancellationToken cancellationToken) =>
         {
             var device = await db.AgentDevices.FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
@@ -142,6 +194,14 @@ public static class AgentDeviceEndpoints
                     statusCode: StatusCodes.Status404NotFound,
                     title: "Device Not Found",
                     detail: $"Agent device with ID '{id}' was not found.");
+            }
+
+            if (!AgentDeviceAuthorization.HasAccess(device, currentUserContext, configuration))
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status403Forbidden,
+                    title: "Forbidden",
+                    detail: $"You do not have permission to regenerate token for agent device with ID '{id}'.");
             }
 
             var (rawToken, tokenHash, tokenPrefix) = DeviceTokenHelper.GenerateToken();

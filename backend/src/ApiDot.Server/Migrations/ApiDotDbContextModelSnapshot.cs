@@ -63,10 +63,15 @@ namespace ApiDot.Server.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("TokenHash")
                         .IsUnique();
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("AgentDevices");
                 });
@@ -306,6 +311,60 @@ namespace ApiDot.Server.Migrations
                     b.ToTable("RequestItems");
                 });
 
+            modelBuilder.Entity("ApiDot.Server.Data.Entities.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .UseCollation("NOCASE")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsRoot")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("LastLoginAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OidcIssuer")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OidcSubject")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PasswordHash")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PasswordSalt")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("OidcSubject");
+
+                    b.HasIndex("OidcIssuer", "OidcSubject");
+
+                    b.ToTable("Users");
+                });
+
             modelBuilder.Entity("ApiDot.Server.Data.Entities.Workspace", b =>
                 {
                     b.Property<Guid>("Id")
@@ -323,6 +382,37 @@ namespace ApiDot.Server.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Workspaces");
+                });
+
+            modelBuilder.Entity("ApiDot.Server.Data.Entities.WorkspaceMember", b =>
+                {
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("JoinedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("WorkspaceId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("WorkspaceMembers");
+                });
+
+            modelBuilder.Entity("ApiDot.Server.Data.Entities.AgentDevice", b =>
+                {
+                    b.HasOne("ApiDot.Server.Data.Entities.User", "User")
+                        .WithMany("Devices")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("ApiDot.Server.Data.Entities.Collection", b =>
@@ -422,6 +512,25 @@ namespace ApiDot.Server.Migrations
                     b.Navigation("Workspace");
                 });
 
+            modelBuilder.Entity("ApiDot.Server.Data.Entities.WorkspaceMember", b =>
+                {
+                    b.HasOne("ApiDot.Server.Data.Entities.User", "User")
+                        .WithMany("WorkspaceMemberships")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ApiDot.Server.Data.Entities.Workspace", "Workspace")
+                        .WithMany("Members")
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+
+                    b.Navigation("Workspace");
+                });
+
             modelBuilder.Entity("ApiDot.Server.Data.Entities.Collection", b =>
                 {
                     b.Navigation("Folders");
@@ -443,6 +552,13 @@ namespace ApiDot.Server.Migrations
                     b.Navigation("ExecutionHistories");
                 });
 
+            modelBuilder.Entity("ApiDot.Server.Data.Entities.User", b =>
+                {
+                    b.Navigation("Devices");
+
+                    b.Navigation("WorkspaceMemberships");
+                });
+
             modelBuilder.Entity("ApiDot.Server.Data.Entities.Workspace", b =>
                 {
                     b.Navigation("Collections");
@@ -452,6 +568,8 @@ namespace ApiDot.Server.Migrations
                     b.Navigation("ExecutionHistories");
 
                     b.Navigation("Folders");
+
+                    b.Navigation("Members");
 
                     b.Navigation("Requests");
                 });

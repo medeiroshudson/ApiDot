@@ -1,7 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
 using ApiDot.Server.Data;
+using ApiDot.Server.Data.Entities;
+using ApiDot.Server.Enums;
 using ApiDot.Server.Models;
+using ApiDot.Server.Security;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -86,5 +89,65 @@ public class WorkspaceEndpointsTests : IClassFixture<WebApplicationFactory<Progr
 
         var resLong = await client.PostAsJsonAsync("/api/workspaces", new CreateWorkspaceRequest(new string('a', 201)));
         resLong.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task CreateWorkspace_WhenUserAuthenticated_AssociatesWorkspaceMemberAsOwner()
+    {
+        var testUserId = Guid.NewGuid();
+        var customFactory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
+            {
+                var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(ICurrentUserContext));
+                if (descriptor != null) services.Remove(descriptor);
+                services.AddScoped<ICurrentUserContext>(_ => new TestCurrentUserContext(false, true, testUserId));
+            });
+        });
+
+        using (var scope = customFactory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
+            var user = new User
+            {
+                Id = testUserId,
+                Email = "creator@test.com",
+                DisplayName = "Creator",
+                PasswordHash = "hash"
+            };
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
+        }
+
+        var client = customFactory.CreateClient();
+        var res = await client.PostAsJsonAsync("/api/workspaces", new CreateWorkspaceRequest("Owned Workspace"));
+        res.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var created = await res.Content.ReadFromJsonAsync<WorkspaceDto>();
+        created.Should().NotBeNull();
+
+        using (var scope = customFactory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
+            var member = await db.WorkspaceMembers.FirstOrDefaultAsync(m => m.WorkspaceId == created!.Id && m.UserId == testUserId);
+            member.Should().NotBeNull();
+            member!.Role.Should().Be(WorkspaceRole.Owner);
+        }
+    }
+
+    private sealed class TestCurrentUserContext : ICurrentUserContext
+    {
+        public TestCurrentUserContext(bool isRoot, bool isAuthenticated, Guid? userId = null)
+        {
+            IsRoot = isRoot;
+            IsAuthenticated = isAuthenticated;
+            UserId = userId;
+        }
+
+        public bool IsAuthenticated { get; }
+        public Guid? UserId { get; }
+        public string? Email => null;
+        public string? DisplayName => null;
+        public bool IsRoot { get; }
     }
 }

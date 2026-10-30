@@ -11,6 +11,7 @@ public class Workspace
 
     public DateTime CreatedAtUtc { get; init; } = DateTime.UtcNow;
 
+    public ICollection<WorkspaceMember> Members { get; init; } = [];
     public ICollection<Collection> Collections { get; init; } = [];
     public ICollection<Folder> Folders { get; init; } = [];
     public ICollection<RequestItem> Requests { get; init; } = [];

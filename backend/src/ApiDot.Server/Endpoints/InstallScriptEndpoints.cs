@@ -105,7 +105,7 @@ public static class InstallScriptEndpoints
             return configuredUrl.TrimEnd('/');
         }
 
-        var defaultBaseUrl = $"{context.Request.Scheme}://{context.Request.Host.Value}".TrimEnd('/');
+        const string fallbackBaseUrl = "http://localhost";
 
         var proto = context.Request.Headers["X-Forwarded-Proto"].FirstOrDefault();
         var scheme = (!string.IsNullOrWhiteSpace(proto) &&
@@ -116,7 +116,7 @@ public static class InstallScriptEndpoints
 
         if (scheme != "http" && scheme != "https")
         {
-            return defaultBaseUrl;
+            return fallbackBaseUrl;
         }
 
         var candidateHost = context.Request.Headers["X-Forwarded-Host"].FirstOrDefault();
@@ -127,7 +127,7 @@ public static class InstallScriptEndpoints
 
         if (string.IsNullOrWhiteSpace(candidateHost))
         {
-            return defaultBaseUrl;
+            return fallbackBaseUrl;
         }
 
         candidateHost = candidateHost.Trim();
@@ -135,25 +135,25 @@ public static class InstallScriptEndpoints
         // 1. Check for dangerous characters (quotes, semicolons, backticks, newlines, dollar signs, spaces, etc.)
         if (candidateHost.IndexOfAny(DangerousHostChars) >= 0)
         {
-            return defaultBaseUrl;
+            return fallbackBaseUrl;
         }
 
         // 2. Validate with Uri.TryCreate
         if (!Uri.TryCreate($"{scheme}://{candidateHost}", UriKind.Absolute, out var uri))
         {
-            return defaultBaseUrl;
+            return fallbackBaseUrl;
         }
 
         // 3. Scheme must be strictly http or https
         if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
         {
-            return defaultBaseUrl;
+            return fallbackBaseUrl;
         }
 
         // 4. Hostname type must not be Unknown
         if (Uri.CheckHostName(uri.DnsSafeHost) == UriHostNameType.Unknown)
         {
-            return defaultBaseUrl;
+            return fallbackBaseUrl;
         }
 
         return $"{scheme}://{candidateHost}".TrimEnd('/');

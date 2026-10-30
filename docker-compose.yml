@@ -9,6 +9,13 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Data Source=/app/data/apidot.db;Foreign Keys=True
       - APIDOT_VERSION=${APIDOT_VERSION:-dev}
+      - APIDOT_AUTH_ENABLED=${APIDOT_AUTH_ENABLED:-true}
+      - APIDOT_ROOT_EMAIL=${APIDOT_ROOT_EMAIL:-contato@hmedeiros.dev}
+      - APIDOT_ROOT_PASSWORD=${APIDOT_ROOT_PASSWORD:-}
+      - OIDC_AUTHORITY=${OIDC_AUTHORITY:-}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-}
+      - OIDC_SCOPES=${OIDC_SCOPES:-openid profile email}
     volumes:
       - ./backend/data:/app/data
 

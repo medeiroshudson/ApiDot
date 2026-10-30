@@ -21,6 +21,7 @@ public static class CollectionEndpoints
         group.MapPost("/", async (
             CreateCollectionRequest? request,
             ApiDotDbContext db,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
             if (request is null)
@@ -49,7 +50,7 @@ public static class CollectionEndpoints
             }
 
             var workspaceExists = await db.Workspaces.AnyAsync(w => w.Id == request.WorkspaceId, cancellationToken);
-            if (!workspaceExists)
+            if (!workspaceExists || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, request.WorkspaceId, cancellationToken))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status404NotFound,
@@ -83,6 +84,7 @@ public static class CollectionEndpoints
             UpdateCollectionRequest? request,
             ApiDotDbContext db,
             IWorkspaceTreeBuilder treeBuilder,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
             if (request is null)
@@ -113,7 +115,7 @@ public static class CollectionEndpoints
             var collection = await db.Collections
                 .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
 
-            if (collection is null)
+            if (collection is null || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, collection.WorkspaceId, cancellationToken))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status404NotFound,
@@ -144,12 +146,13 @@ public static class CollectionEndpoints
         group.MapDelete("/{id:guid}", async (
             Guid id,
             ApiDotDbContext db,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
             var collection = await db.Collections
                 .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
 
-            if (collection is null)
+            if (collection is null || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, collection.WorkspaceId, cancellationToken))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status404NotFound,
@@ -166,13 +169,14 @@ public static class CollectionEndpoints
         group.MapGet("/{id:guid}/openapi", async (
             Guid id,
             ApiDotDbContext db,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
             var collection = await db.Collections
                 .AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
 
-            if (collection is null)
+            if (collection is null || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, collection.WorkspaceId, cancellationToken))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status404NotFound,
@@ -191,6 +195,7 @@ public static class CollectionEndpoints
             Guid id,
             UpdateCollectionOpenApiRequest? request,
             ApiDotDbContext db,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
             if (request is null)
@@ -204,7 +209,7 @@ public static class CollectionEndpoints
             var collection = await db.Collections
                 .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
 
-            if (collection is null)
+            if (collection is null || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, collection.WorkspaceId, cancellationToken))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status404NotFound,
@@ -241,13 +246,14 @@ public static class CollectionEndpoints
             ISpecImportStrategy strategy,
             ICollectionMerger merger,
             ISpecFetcherService specFetcher,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
             var collection = await db.Collections
                 .Include(c => c.Requests)
                 .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
 
-            if (collection is null)
+            if (collection is null || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, collection.WorkspaceId, cancellationToken))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status404NotFound,
@@ -361,6 +367,7 @@ public static class CollectionEndpoints
             ICollectionMerger merger,
             ISpecFetcherService specFetcher,
             IWorkspaceTreeBuilder treeBuilder,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
             if (request is null)
@@ -380,7 +387,7 @@ public static class CollectionEndpoints
             }
 
             var workspaceExists = await db.Workspaces.AnyAsync(w => w.Id == request.WorkspaceId, cancellationToken);
-            if (!workspaceExists)
+            if (!workspaceExists || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, request.WorkspaceId, cancellationToken))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status404NotFound,

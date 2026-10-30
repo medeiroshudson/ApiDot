@@ -1,6 +1,7 @@
 using ApiDot.Server.Data;
 using ApiDot.Server.Data.Entities;
 using ApiDot.Server.Models;
+using ApiDot.Server.Security;
 using ApiDot.Server.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -18,6 +19,7 @@ public static class FolderEndpoints
         group.MapPost("/", async (
             CreateFolderRequest? request,
             ApiDotDbContext db,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
             if (request is null)
@@ -46,7 +48,7 @@ public static class FolderEndpoints
             }
 
             var workspaceExists = await db.Workspaces.AnyAsync(w => w.Id == request.WorkspaceId, cancellationToken);
-            if (!workspaceExists)
+            if (!workspaceExists || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, request.WorkspaceId, cancellationToken))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status404NotFound,
@@ -124,6 +126,7 @@ public static class FolderEndpoints
             UpdateFolderRequest? request,
             ApiDotDbContext db,
             IWorkspaceTreeBuilder treeBuilder,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
             if (request is null)
@@ -154,7 +157,7 @@ public static class FolderEndpoints
             var folder = await db.Folders
                 .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
 
-            if (folder is null)
+            if (folder is null || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, folder.WorkspaceId, cancellationToken))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status404NotFound,
@@ -251,12 +254,13 @@ public static class FolderEndpoints
         group.MapDelete("/{id:guid}", async (
             Guid id,
             ApiDotDbContext db,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
             var folder = await db.Folders
                 .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
 
-            if (folder is null)
+            if (folder is null || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, folder.WorkspaceId, cancellationToken))
             {
                 return Results.Problem(
                     statusCode: StatusCodes.Status404NotFound,
