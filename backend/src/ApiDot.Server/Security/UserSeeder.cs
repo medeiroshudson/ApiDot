@@ -14,7 +14,7 @@ public class UserSeeder(
     ILogger<UserSeeder>? logger = null) : IUserSeeder
 {
     private const string DefaultRootEmail = "contato@hmedeiros.dev";
-    private const string DefaultDisplayName = "Root Administrator";
+    private const string DefaultDisplayName = "Administrator";
 
     public async Task SeedRootUserAndOrphanWorkspacesAsync(CancellationToken cancellationToken = default)
     {
@@ -68,7 +68,7 @@ public class UserSeeder(
         {
             rootUser.IsRoot = true;
 
-            if (string.IsNullOrWhiteSpace(rootUser.DisplayName))
+            if (string.IsNullOrWhiteSpace(rootUser.DisplayName) || rootUser.DisplayName == "Root Administrator")
             {
                 rootUser.DisplayName = DefaultDisplayName;
             }

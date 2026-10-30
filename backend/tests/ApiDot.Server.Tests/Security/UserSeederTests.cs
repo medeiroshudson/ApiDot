@@ -61,7 +61,7 @@ public class UserSeederTests : IDisposable
 
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == "admin@example.com");
         user.Should().NotBeNull();
-        user!.DisplayName.Should().Be("Root Administrator");
+        user!.DisplayName.Should().Be("Administrator");
         user.IsRoot.Should().BeTrue();
         user.PasswordHash.Should().NotBeNullOrWhiteSpace();
         user.PasswordSalt.Should().NotBeNullOrWhiteSpace();
@@ -112,7 +112,7 @@ public class UserSeederTests : IDisposable
         var rootUser = new User
         {
             Email = "admin@example.com",
-            DisplayName = "Root Administrator",
+            DisplayName = "Administrator",
             PasswordHash = originalHash,
             PasswordSalt = originalSalt,
             IsRoot = true

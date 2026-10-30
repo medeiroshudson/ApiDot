@@ -160,7 +160,7 @@ describe('AppHeader', () => {
       expect(screen.queryByTestId('user-role-badge')).toBeNull();
     });
 
-    it('renders user initials, email, and role badge for active workspace', () => {
+    it('renders user initials and email without role badge in navbar', () => {
       useAuthStore.setState({
         isAuthenticated: true,
         isLoading: false,
@@ -178,30 +178,8 @@ describe('AppHeader', () => {
 
       expect(screen.getByText('HM')).toBeInTheDocument();
       expect(screen.getByText('hudson@example.com')).toBeInTheDocument();
-      expect(screen.getByText('Owner')).toBeInTheDocument();
-    });
-
-    it('renders Admin and Member role badges correctly based on active workspace membership', () => {
-      useAuthStore.setState({
-        isAuthenticated: true,
-        isLoading: false,
-        user: {
-          id: 'u-2',
-          email: 'member@example.com',
-          displayName: 'Collab User',
-          isRoot: false,
-          workspaces: [
-            { id: 'ws-admin', name: 'Admin WS', role: 'Admin' },
-            { id: 'ws-member', name: 'Member WS', role: 'Member' },
-          ],
-        },
-      });
-
-      const { rerender } = render(<AppHeader activeWorkspaceId="ws-admin" />);
-      expect(screen.getByText('Admin')).toBeInTheDocument();
-
-      rerender(<AppHeader activeWorkspaceId="ws-member" />);
-      expect(screen.getByText('Member')).toBeInTheDocument();
+      expect(screen.queryByTestId('user-role-badge')).toBeNull();
+      expect(screen.queryByText('Owner')).toBeNull();
     });
 
     it('calls logout action and redirects to /login on clicking logout', async () => {

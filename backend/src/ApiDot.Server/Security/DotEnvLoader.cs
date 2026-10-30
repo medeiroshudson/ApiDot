@@ -4,6 +4,12 @@ public static class DotEnvLoader
 {
     public static void Load()
     {
+        // Do not load root .env during unit or integration test runs
+        if (AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name?.Contains("Test", StringComparison.OrdinalIgnoreCase) == true))
+        {
+            return;
+        }
+
         try
         {
             var dir = new DirectoryInfo(Directory.GetCurrentDirectory());

@@ -200,15 +200,6 @@ export function AppHeader({
                 </span>
               </div>
 
-              {role && (
-                <span
-                  data-testid="user-role-badge"
-                  className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${getRoleBadgeClasses(role)}`}
-                >
-                  {role}
-                </span>
-              )}
-
               <ChevronDown
                 className={`w-3.5 h-3.5 text-neutral-400 transition-transform duration-150 ${
                   isUserMenuOpen ? 'rotate-180' : ''
@@ -237,15 +228,6 @@ export function AppHeader({
                     <span className="text-[11px] text-neutral-400 truncate">
                       {user.email}
                     </span>
-                    {role && (
-                      <span className="mt-1 inline-flex items-center self-start">
-                        <span
-                          className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${getRoleBadgeClasses(role)}`}
-                        >
-                          {role}
-                        </span>
-                      </span>
-                    )}
                   </div>
                 </div>
 
