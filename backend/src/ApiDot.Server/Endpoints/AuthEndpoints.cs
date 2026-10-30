@@ -31,12 +31,14 @@ public static class AuthEndpoints
             var config = await authService.GetAuthConfigAsync(ct);
             if (!config.OidcEnabled)
             {
-                return Results.Redirect(string.IsNullOrWhiteSpace(returnUrl) ? "/login" : returnUrl);
+                var redirectTarget = IsLocalUrl(returnUrl) ? returnUrl! : "/login";
+                return Results.Redirect(redirectTarget);
             }
 
+            var safeReturnUrl = IsLocalUrl(returnUrl) ? returnUrl! : "/";
             var properties = new AuthenticationProperties
             {
-                RedirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl
+                RedirectUri = safeReturnUrl
             };
 
             return Results.Challenge(properties, [OpenIdConnectDefaults.AuthenticationScheme]);
@@ -48,6 +50,16 @@ public static class AuthEndpoints
             HttpContext httpContext,
             CancellationToken ct) =>
         {
+            var config = await authService.GetAuthConfigAsync(ct);
+            if (!config.LocalAuthEnabled)
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status401Unauthorized,
+                    title: "Unauthorized",
+                    detail: "Local authentication is disabled.",
+                    extensions: new Dictionary<string, object?> { ["message"] = "Local authentication is disabled." });
+            }
+
             if (request == null || string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
             {
                 return Results.Problem(
@@ -105,4 +117,10 @@ public static class AuthEndpoints
 
         return app;
     }
+
+    private static bool IsLocalUrl(string? url) =>
+        !string.IsNullOrWhiteSpace(url)
+        && url.StartsWith('/')
+        && !url.StartsWith("//", StringComparison.Ordinal)
+        && !url.StartsWith("/\\", StringComparison.Ordinal);
 }

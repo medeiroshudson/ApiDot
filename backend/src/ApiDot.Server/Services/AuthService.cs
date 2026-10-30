@@ -20,6 +20,8 @@ public class AuthService(
     ILogger<AuthService>? logger = null) : IAuthService
 {
     private const string ScopeMarker = "/* __ws_scope__ */";
+    private const string DummySalt = "AAAAAAAAAAAAAAAAAAAAAA==";
+    private const string DummyHash = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 
     public Task<AuthConfigResponse> GetAuthConfigAsync(CancellationToken cancellationToken = default)
     {
@@ -27,10 +29,8 @@ public class AuthService(
             ?? configuration["Apidot:OidcAuthority"]
             ?? configuration["Oidc:Authority"];
 
-        bool oidcExplicitTrue = string.Equals(configuration["OIDC_ENABLED"], "true", StringComparison.OrdinalIgnoreCase);
-        bool oidcExplicitFalse = string.Equals(configuration["OIDC_ENABLED"], "false", StringComparison.OrdinalIgnoreCase);
-
-        bool oidcEnabled = oidcExplicitTrue || (!string.IsNullOrWhiteSpace(oidcAuthority) && !oidcExplicitFalse);
+        bool oidcDisabled = string.Equals(configuration["OIDC_ENABLED"], "false", StringComparison.OrdinalIgnoreCase);
+        bool oidcEnabled = !string.IsNullOrWhiteSpace(oidcAuthority) && !oidcDisabled;
 
         bool localExplicitTrue = string.Equals(configuration["APIDOT_LOCAL_AUTH_ENABLED"], "true", StringComparison.OrdinalIgnoreCase)
             || string.Equals(configuration["LOCAL_AUTH_ENABLED"], "true", StringComparison.OrdinalIgnoreCase);
@@ -68,6 +68,7 @@ public class AuthService(
 
         if (user == null || string.IsNullOrEmpty(user.PasswordHash) || string.IsNullOrEmpty(user.PasswordSalt))
         {
+            passwordHasher.VerifyPassword(password, DummyHash, DummySalt);
             return null;
         }
 
@@ -90,6 +91,12 @@ public class AuthService(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
+
+        var config = await GetAuthConfigAsync(cancellationToken);
+        if (!config.LocalAuthEnabled)
+        {
+            return (false, null, "Local authentication is disabled.");
+        }
 
         var user = await ValidateLocalCredentialsAsync(email, password, cancellationToken);
         if (user == null)

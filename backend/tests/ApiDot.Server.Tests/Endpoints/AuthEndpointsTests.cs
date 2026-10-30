@@ -406,4 +406,130 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
             }
         }
     }
+
+    [Theory]
+    [InlineData("https://evil.com")]
+    [InlineData("http://attacker.com")]
+    [InlineData("//evil.com")]
+    [InlineData("/\\evil.com")]
+    public async Task GetLogin_WithUntrustedReturnUrl_SanitizesToSafeLocalUrl(string untrustedUrl)
+    {
+        var disabledDb = "InMemoryAuthLoginOpenRedirect_" + Guid.NewGuid();
+        using var customFactory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, config) =>
+            {
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["OIDC_AUTHORITY"] = "",
+                    ["OIDC_ENABLED"] = "false"
+                });
+            });
+
+            builder.ConfigureServices(services =>
+            {
+                var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<ApiDotDbContext>));
+                if (descriptor != null)
+                {
+                    services.Remove(descriptor);
+                }
+
+                services.AddDbContext<ApiDotDbContext>((sp, options) =>
+                {
+                    options.UseSqlite($"Data Source={disabledDb}.db;Foreign Keys=True");
+                    options.AddInterceptors(sp.GetRequiredService<WorkspaceScopeInterceptor>());
+                });
+            });
+        });
+
+        try
+        {
+            var client = customFactory.CreateClient(new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false
+            });
+
+            var response = await client.GetAsync($"/api/auth/login?returnUrl={Uri.EscapeDataString(untrustedUrl)}");
+            response.StatusCode.Should().Be(HttpStatusCode.Redirect);
+            response.Headers.Location.Should().NotBeNull();
+            response.Headers.Location!.ToString().Should().Be("/login");
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists($"{disabledDb}.db"))
+                {
+                    File.Delete($"{disabledDb}.db");
+                }
+            }
+            catch
+            {
+                // Ignore
+            }
+        }
+    }
+
+    [Fact]
+    public async Task PostLocalLogin_WhenLocalAuthDisabled_Returns401()
+    {
+        var disabledDb = "InMemoryAuthLocalDisabled_" + Guid.NewGuid();
+        using var customFactory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, config) =>
+            {
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["APIDOT_ROOT_EMAIL"] = TestRootEmail,
+                    ["APIDOT_ROOT_PASSWORD"] = TestRootPassword,
+                    ["APIDOT_LOCAL_AUTH_ENABLED"] = "false"
+                });
+            });
+
+            builder.ConfigureServices(services =>
+            {
+                var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<ApiDotDbContext>));
+                if (descriptor != null)
+                {
+                    services.Remove(descriptor);
+                }
+
+                services.AddDbContext<ApiDotDbContext>((sp, options) =>
+                {
+                    options.UseSqlite($"Data Source={disabledDb}.db;Foreign Keys=True");
+                    options.AddInterceptors(sp.GetRequiredService<WorkspaceScopeInterceptor>());
+                });
+            });
+        });
+
+        try
+        {
+            var client = customFactory.CreateClient(new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false,
+                HandleCookies = true
+            });
+
+            var loginPayload = new LocalLoginRequest(TestRootEmail, TestRootPassword);
+            var response = await client.PostAsJsonAsync("/api/auth/local", loginPayload);
+
+            response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+            var content = await response.Content.ReadAsStringAsync();
+            content.Should().Contain("Local authentication is disabled");
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists($"{disabledDb}.db"))
+                {
+                    File.Delete($"{disabledDb}.db");
+                }
+            }
+            catch
+            {
+                // Ignore
+            }
+        }
+    }
 }

@@ -101,26 +101,29 @@ public static class ServiceCollectionExtensions
                         ?? principal?.FindFirst("preferred_username")?.Value;
                     var iss = principal?.FindFirst("iss")?.Value ?? oidcAuthority;
 
-                    if (!string.IsNullOrWhiteSpace(sub) && !string.IsNullOrWhiteSpace(email))
+                    if (string.IsNullOrWhiteSpace(sub) || string.IsNullOrWhiteSpace(email))
                     {
-                        var user = await authService.ProcessOidcLoginAsync(
-                            sub,
-                            email,
-                            name,
-                            iss,
-                            context.HttpContext.RequestAborted);
-
-                        var claims = new List<Claim>
-                        {
-                            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                            new(ClaimTypes.Email, user.Email),
-                            new(ClaimTypes.Name, user.DisplayName),
-                            new("IsRoot", user.IsRoot ? "true" : "false"),
-                            new("is_root", user.IsRoot ? "true" : "false")
-                        };
-                        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-                        context.Principal = new ClaimsPrincipal(identity);
+                        context.Fail("Required claims (sub, email) were not provided by the identity provider.");
+                        return;
                     }
+
+                    var user = await authService.ProcessOidcLoginAsync(
+                        sub,
+                        email,
+                        name,
+                        iss,
+                        context.HttpContext.RequestAborted);
+
+                    var claims = new List<Claim>
+                    {
+                        new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                        new(ClaimTypes.Email, user.Email),
+                        new(ClaimTypes.Name, user.DisplayName),
+                        new("IsRoot", user.IsRoot ? "true" : "false"),
+                        new("is_root", user.IsRoot ? "true" : "false")
+                    };
+                    var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+                    context.Principal = new ClaimsPrincipal(identity);
                 };
             });
         }
