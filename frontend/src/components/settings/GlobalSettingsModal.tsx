@@ -15,8 +15,6 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
-  Link,
-  Unlink,
   Loader2,
   ShieldAlert,
 } from 'lucide-react';
@@ -36,7 +34,7 @@ export interface GlobalSettingsModalProps {
 export function GlobalSettingsModal({
   isOpen,
   onClose,
-  defaultTab = 'agents',
+  defaultTab = 'general',
 }: GlobalSettingsModalProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(defaultTab);
 
@@ -188,11 +186,6 @@ export function GlobalSettingsModal({
     return devices.filter((d) => d.isOnline && !d.isRevoked).length;
   }, [devices]);
 
-  const activeDevice = useMemo(() => {
-    if (!activeDeviceId) return null;
-    return devices.find((d) => d.id === activeDeviceId) || null;
-  }, [activeDeviceId, devices]);
-
   const originUrl = useMemo(() => {
     if (typeof window !== 'undefined' && window.location?.origin) {
       return window.location.origin;
@@ -287,14 +280,6 @@ export function GlobalSettingsModal({
     }
   };
 
-  const handleToggleLinkDevice = (device: AgentDeviceDto) => {
-    if (activeDeviceId === device.id) {
-      setActiveDeviceId(null);
-    } else {
-      setActiveDeviceId(device.id);
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -339,13 +324,30 @@ export function GlobalSettingsModal({
         </div>
 
         {/* Modal Body: Left Sidebar Tabs + Right Content Panel */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
           {/* Sidebar Tabs */}
           <nav
             role="tablist"
             aria-label="Abas de configurações globais"
-            className="w-56 border-r border-neutral-800 bg-neutral-950/40 p-3 flex flex-col gap-1.5 shrink-0 select-none"
+            className="w-full md:w-56 border-b md:border-b-0 md:border-r border-neutral-800 bg-neutral-950/40 p-2 md:p-3 flex flex-row md:flex-col gap-1.5 shrink-0 select-none overflow-x-auto md:overflow-visible"
           >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'general'}
+              aria-controls="tabpanel-general"
+              id="tab-general"
+              onClick={() => setActiveTab('general')}
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all text-left ${
+                activeTab === 'general'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800/60'
+              }`}
+            >
+              <Sliders className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span>Geral & Interface</span>
+            </button>
+
             <button
               type="button"
               role="tab"
@@ -353,10 +355,10 @@ export function GlobalSettingsModal({
               aria-controls="tabpanel-agents"
               id="tab-agents"
               onClick={() => setActiveTab('agents')}
-              className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-all text-left ${
+              className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all text-left ${
                 activeTab === 'agents'
                   ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-neutral-300 hover:bg-neutral-800 hover:text-white'
+                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800/60'
               }`}
             >
               <div className="flex items-center gap-2.5">
@@ -373,27 +375,10 @@ export function GlobalSettingsModal({
                 <span className="text-[11px] font-semibold opacity-90">{onlineAgentsCount}</span>
               </div>
             </button>
-
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'general'}
-              aria-controls="tabpanel-general"
-              id="tab-general"
-              onClick={() => setActiveTab('general')}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium transition-all text-left ${
-                activeTab === 'general'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-neutral-300 hover:bg-neutral-800 hover:text-white'
-              }`}
-            >
-              <Sliders className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span>Geral & Interface</span>
-            </button>
           </nav>
 
           {/* Right Content Area */}
-          <main className="flex-1 overflow-y-auto p-6 bg-neutral-900/60 flex flex-col">
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-neutral-900/60 flex flex-col">
             {/* Global Errors Banner */}
             {(storeError || actionError) && (
               <div
@@ -413,7 +398,99 @@ export function GlobalSettingsModal({
               </div>
             )}
 
-            {/* TAB 1: LOCAL AGENTS */}
+            {/* TAB 1: GERAL & INTERFACE */}
+            {activeTab === 'general' && (
+              <div
+                role="tabpanel"
+                id="tabpanel-general"
+                aria-labelledby="tab-general"
+                className="flex flex-col gap-6"
+              >
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Geral & Interface</h3>
+                  <p className="text-xs text-neutral-400">
+                    Aparência da aplicação e preferências dos painéis de trabalho.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-neutral-800 bg-neutral-950/40 divide-y divide-neutral-800/60 overflow-hidden text-xs">
+                  {/* Versão da Aplicação */}
+                  <div className="flex items-center justify-between p-3.5 sm:p-4">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-semibold text-white">Versão da Aplicação</span>
+                      <span className="text-neutral-400">Canal oficial de atualizações e suporte da plataforma</span>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-neutral-900 border border-neutral-800 text-blue-400">
+                      ApiDot {formatDisplayVersion(APP_VERSION)} • Estável
+                    </span>
+                  </div>
+
+                  {/* Tema Visual */}
+                  <div className="flex items-center justify-between p-3.5 sm:p-4">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-semibold text-white">Tema Visual</span>
+                      <span className="text-neutral-400">Esquema de cores da interface de edição e requisições</span>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-neutral-900 border border-neutral-800 text-neutral-200">
+                      Escuro (Padrão)
+                    </span>
+                  </div>
+
+                  {/* Largura da Barra Lateral */}
+                  <div className="flex items-center justify-between p-3.5 sm:p-4">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-semibold text-white">Largura da Barra Lateral</span>
+                      <span className="text-neutral-400">Tamanho padrão de 256px para a árvore de workspaces e coleções</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-1 rounded bg-neutral-900 border border-neutral-800 font-mono text-[11px] text-blue-400">
+                        {sidebarWidth} px
+                      </span>
+                      <button
+                        type="button"
+                        onClick={resetSidebarWidth}
+                        className="h-7 px-2.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors text-[11px] inline-flex items-center cursor-pointer"
+                      >
+                        Restaurar Padrão
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Divisão Requisição / Resposta */}
+                  <div className="flex items-center justify-between p-3.5 sm:p-4">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-semibold text-white">Divisão Requisição / Resposta</span>
+                      <span className="text-neutral-400">Proporção horizontal entre o editor de código e o visualizador de resposta</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-1 rounded bg-neutral-900 border border-neutral-800 font-mono text-[11px] text-blue-400">
+                        {requestResponseRatio}% / {100 - requestResponseRatio}%
+                      </span>
+                      <button
+                        type="button"
+                        onClick={resetRequestResponseRatio}
+                        className="h-7 px-2.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors text-[11px] inline-flex items-center cursor-pointer"
+                      >
+                        Restaurar Padrão
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Timeout de Execução */}
+                  <div className="flex items-center justify-between p-3.5 sm:p-4">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-semibold text-white">Timeout de Execução</span>
+                      <span className="text-neutral-400">Tempo limite antes de cancelar requisições remotas ou locais</span>
+                    </div>
+                    <span className="text-neutral-300 font-mono text-[11px]">
+                      30.000 ms (30s)
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: LOCAL AGENTS */}
             {activeTab === 'agents' && (
               <div
                 role="tabpanel"
@@ -426,17 +503,17 @@ export function GlobalSettingsModal({
                   <div>
                     <h3 className="text-sm font-semibold text-white">Dispositivos & Local Agents</h3>
                     <p className="text-xs text-neutral-400">
-                      Instale o agent no seu computador para executar requisições locais e acessar redes privadas.
+                      Dispositivos autorizados para execução local de chamadas HTTP
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => fetchDevices()}
+                      onClick={() => void fetchDevices()}
                       disabled={isLoading}
                       aria-label="Atualizar lista de dispositivos"
                       title="Atualizar lista de dispositivos"
-                      className="p-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors disabled:opacity-50"
+                      className="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-neutral-800 bg-neutral-950/60 hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors disabled:opacity-50 cursor-pointer shrink-0"
                     >
                       <RefreshCw
                         className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`}
@@ -446,89 +523,13 @@ export function GlobalSettingsModal({
                     <button
                       type="button"
                       onClick={handleOpenCreateDialog}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 cursor-pointer"
+                      className="h-8 inline-flex items-center gap-1.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 cursor-pointer shrink-0"
                     >
                       <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>+ Cadastrar Dispositivo</span>
+                      <span>Cadastrar Dispositivo</span>
                     </button>
                   </div>
                 </div>
-
-                {/* Banner: Active Device Linked to this Browser */}
-                {activeDeviceId ? (
-                  <div
-                    data-testid="active-device-banner"
-                    className="p-4 rounded-xl border border-blue-500/30 bg-blue-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="p-2 rounded-lg bg-blue-500/20 text-blue-400 shrink-0">
-                        <Link className="w-4 h-4" aria-hidden="true" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-white">
-                            Dispositivo vinculado a este navegador:
-                          </span>
-                          <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-medium">
-                            {activeDevice?.name || activeDeviceId}
-                          </span>
-                          {activeDevice && (
-                            <span
-                              className={`flex items-center gap-1 font-medium ${
-                                activeDevice.isRevoked
-                                  ? 'text-rose-400'
-                                  : activeDevice.isOnline
-                                  ? 'text-emerald-400'
-                                  : 'text-neutral-400'
-                              }`}
-                            >
-                              <span
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                  activeDevice.isRevoked
-                                    ? 'bg-rose-500'
-                                    : activeDevice.isOnline
-                                    ? 'bg-emerald-400 animate-pulse'
-                                    : 'bg-neutral-500'
-                                }`}
-                              />
-                              {activeDevice.isRevoked
-                                ? 'Revogado'
-                                : activeDevice.isOnline
-                                ? 'Online'
-                                : 'Offline'}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-neutral-400 mt-1">
-                          {activeDevice?.lastConnectedHostname
-                            ? `Host: ${activeDevice.lastConnectedHostname} (${activeDevice.lastConnectedOs || 'OS'})`
-                            : 'Aguardando primeira conexão do agente local'}
-                          {activeDevice?.tokenPrefix && ` • Prefixo: ${activeDevice.tokenPrefix}`}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setActiveDeviceId(null)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white border border-neutral-700 transition-colors shrink-0"
-                    >
-                      <Unlink className="w-3.5 h-3.5 text-neutral-400" aria-hidden="true" />
-                      <span>Desvincular</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div
-                    data-testid="no-active-device-banner"
-                    className="p-4 rounded-xl border border-neutral-800 bg-neutral-950/40 flex items-center justify-between text-xs text-neutral-400"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Laptop className="w-4 h-4 text-neutral-500" aria-hidden="true" />
-                      <span>
-                        Nenhum agente vinculado a este navegador. Vincule um dispositivo abaixo para executar requisições locais.
-                      </span>
-                    </div>
-                  </div>
-                )}
 
                 {/* Registered Devices List */}
                 <div className="flex flex-col gap-2">
@@ -548,7 +549,7 @@ export function GlobalSettingsModal({
                       <button
                         type="button"
                         onClick={handleOpenCreateDialog}
-                        className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors"
+                        className="mt-2 h-8 inline-flex items-center gap-1.5 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Cadastrar Dispositivo</span>
@@ -564,11 +565,9 @@ export function GlobalSettingsModal({
                           <div
                             key={device.id}
                             data-testid={`device-card-${device.id}`}
-                            className={`p-4 rounded-xl border transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs ${
+                            className={`p-3.5 sm:p-4 rounded-xl border transition-colors flex flex-col gap-3 text-xs ${
                               device.isRevoked
                                 ? 'border-rose-900/30 bg-rose-950/10 opacity-75'
-                                : isThisActive
-                                ? 'border-blue-500/40 bg-neutral-950/70 shadow-sm'
                                 : 'border-neutral-800 bg-neutral-950/40 hover:border-neutral-700'
                             }`}
                           >
@@ -586,9 +585,9 @@ export function GlobalSettingsModal({
                                 <Laptop className="w-4 h-4" aria-hidden="true" />
                               </div>
 
-                              <div className="flex flex-col gap-1 min-w-0">
+                              <div className="flex flex-col gap-1 min-w-0 flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-semibold text-white text-xs truncate max-w-[200px] sm:max-w-none">
+                                  <span className="font-semibold text-white text-xs">
                                     {device.name}
                                   </span>
 
@@ -608,22 +607,12 @@ export function GlobalSettingsModal({
                                       Offline
                                     </span>
                                   )}
-
-                                  {isThisActive && (
-                                    <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                                      Vinculado
-                                    </span>
-                                  )}
                                 </div>
 
-                                <div className="flex items-center gap-3 text-neutral-400 flex-wrap">
-                                  <span className="font-mono text-[11px] text-neutral-300">
-                                    {device.tokenPrefix}
-                                  </span>
-                                  <span>•</span>
+                                <div className="flex items-center gap-2 sm:gap-3 text-neutral-400 text-[11px] flex-wrap">
                                   <span>
                                     {device.lastConnectedHostname
-                                      ? `${device.lastConnectedHostname} (${device.lastConnectedOs || 'OS'})`
+                                      ? `Host: ${device.lastConnectedHostname} (${device.lastConnectedOs || 'OS'})`
                                       : 'Nunca conectado'}
                                   </span>
                                   {device.agentVersion && (
@@ -636,24 +625,24 @@ export function GlobalSettingsModal({
                               </div>
                             </div>
 
-                            {/* Actions Buttons */}
-                            <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
-                              <button
-                                type="button"
-                                onClick={() => setInstructionsDevice(device)}
-                                className="px-2.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white transition-colors"
-                              >
-                                Instruções
-                              </button>
+                            {/* Actions Toolbar */}
+                            <div className="flex items-center justify-between sm:justify-end gap-1.5 pt-2.5 border-t border-neutral-800/60 flex-wrap">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => setInstructionsDevice(device)}
+                                  className="h-7 px-2.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white transition-colors text-[11px] inline-flex items-center cursor-pointer"
+                                >
+                                  Instruções
+                                </button>
 
-                              {!device.isRevoked && (
-                                <>
+                                {!device.isRevoked && (
                                   <button
                                     type="button"
                                     onClick={() => handleRegenerate(device)}
                                     disabled={isBusy}
                                     title="Regenerar Token"
-                                    className="px-2.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white transition-colors disabled:opacity-50 flex items-center gap-1"
+                                    className="h-7 px-2.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white transition-colors disabled:opacity-50 inline-flex items-center gap-1 text-[11px] cursor-pointer"
                                   >
                                     {isBusy ? (
                                       <Loader2 className="w-3 h-3 animate-spin" />
@@ -662,125 +651,25 @@ export function GlobalSettingsModal({
                                     )}
                                     <span>Regenerar Token</span>
                                   </button>
+                                )}
+                              </div>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleLinkDevice(device)}
-                                    className={`px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 font-medium ${
-                                      isThisActive
-                                        ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30 hover:bg-blue-600/30'
-                                        : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white'
-                                    }`}
-                                  >
-                                    {isThisActive ? (
-                                      <>
-                                        <Unlink className="w-3 h-3 text-blue-400" />
-                                        <span>Desvincular</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Link className="w-3 h-3 text-neutral-400" />
-                                        <span>Vincular a este Navegador</span>
-                                      </>
-                                    )}
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRevoke(device)}
-                                    disabled={isBusy}
-                                    title="Revogar Dispositivo"
-                                    className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors disabled:opacity-50 flex items-center gap-1"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                    <span>Revogar</span>
-                                  </button>
-                                </>
-                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRevoke(device)}
+                                disabled={device.isRevoked || isBusy}
+                                title="Revogar Dispositivo"
+                                className="h-7 px-2.5 rounded-lg text-neutral-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors disabled:opacity-40 disabled:hover:text-neutral-400 disabled:hover:bg-transparent text-[11px] inline-flex items-center gap-1 ml-auto sm:ml-0 cursor-pointer"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>{device.isRevoked ? 'Revogado' : 'Revogar'}</span>
+                              </button>
                             </div>
                           </div>
                         );
                       })}
                     </div>
                   )}
-                </div>
-              </div>
-            )}
-
-            {/* TAB 2: GERAL & INTERFACE */}
-            {activeTab === 'general' && (
-              <div
-                role="tabpanel"
-                id="tabpanel-general"
-                aria-labelledby="tab-general"
-                className="flex flex-col gap-6"
-              >
-                <div>
-                  <h3 className="text-sm font-semibold text-white">Configurações Gerais & Interface</h3>
-                  <p className="text-xs text-neutral-400">
-                    Preferências do sistema, versões e layout dos painéis de edição.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* System Version */}
-                  <div className="p-4 rounded-xl border border-neutral-800 bg-neutral-950/40 flex flex-col gap-1.5">
-                    <span className="text-xs text-neutral-400">Versão da Plataforma</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-base font-semibold text-white">
-                        ApiDot {formatDisplayVersion(APP_VERSION)}
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        Estável
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-neutral-500">
-                      Motor de execução híbrido .NET 9 + Next.js 15
-                    </span>
-                  </div>
-
-                  {/* Theme */}
-                  <div className="p-4 rounded-xl border border-neutral-800 bg-neutral-950/40 flex flex-col gap-1.5">
-                    <span className="text-xs text-neutral-400">Tema da Interface</span>
-                    <span className="text-sm font-semibold text-white">Escuro (Padrão ApiDot)</span>
-                    <span className="text-[11px] text-neutral-500">
-                      Otimizado para alto contraste e inspeção de payloads
-                    </span>
-                  </div>
-
-                  {/* Request Timeout */}
-                  <div className="p-4 rounded-xl border border-neutral-800 bg-neutral-950/40 flex flex-col gap-1.5">
-                    <span className="text-xs text-neutral-400">Timeout Padrão de Execução</span>
-                    <span className="text-sm font-semibold text-white">30.000 ms (30s)</span>
-                    <span className="text-[11px] text-neutral-500">
-                      Limite de tempo máximo para requisições Cloud e Agent
-                    </span>
-                  </div>
-
-                  {/* Layout Reset Controls */}
-                  <div className="p-4 rounded-xl border border-neutral-800 bg-neutral-950/40 flex flex-col gap-2.5">
-                    <span className="text-xs text-neutral-400">Painéis & Layout</span>
-                    <div className="flex items-center justify-between text-xs text-neutral-300">
-                      <span>Barra Lateral: {sidebarWidth}px</span>
-                      <button
-                        type="button"
-                        onClick={resetSidebarWidth}
-                        className="px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors"
-                      >
-                        Restaurar Padrão
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-neutral-300">
-                      <span>Divisão Requisição: {requestResponseRatio}%</span>
-                      <button
-                        type="button"
-                        onClick={resetRequestResponseRatio}
-                        className="px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors"
-                      >
-                        Restaurar Padrão
-                      </button>
-                    </div>
-                  </div>
                 </div>
               </div>
             )}

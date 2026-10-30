@@ -21,6 +21,18 @@ public class AgentHub : IAgentHub
         return _agents.TryGetValue(userId, out var agent) && agent.Socket.State == WebSocketState.Open;
     }
 
+    public Guid? GetFirstOnlineAgentId()
+    {
+        foreach (var (id, agent) in _agents)
+        {
+            if (agent.Socket.State == WebSocketState.Open)
+            {
+                return id;
+            }
+        }
+        return null;
+    }
+
     public void RegisterAgent(Guid userId, string agentName, WebSocket socket)
     {
         ValidateUserId(userId);

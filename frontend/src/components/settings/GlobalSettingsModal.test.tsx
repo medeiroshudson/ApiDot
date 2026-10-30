@@ -80,20 +80,20 @@ describe('GlobalSettingsModal', () => {
       createdAtUtc: '2026-10-27T12:00:00Z',
     });
 
-    render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} />);
+    render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="agents" />);
 
     // 1. Valida abas laterais "Local Agents" e "Geral & Interface"
     expect(screen.getByRole('tab', { name: /local agents/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /geral & interface/i })).toBeInTheDocument();
 
-    // 2. Valida listagem de dispositivos
-    expect(screen.getAllByText('MacBook Pro Hudson').length).toBeGreaterThanOrEqual(1);
+    // 2. Valida listagem de dispositivos (sem exibição de token)
+    expect(screen.getByText('MacBook Pro Hudson')).toBeInTheDocument();
     expect(screen.getByText('Home Server Linux')).toBeInTheDocument();
     expect(screen.getByText('Old Workstation')).toBeInTheDocument();
-    expect(screen.getByText('apidot_dev_12345678')).toBeInTheDocument();
+    expect(screen.queryByText('apidot_dev_12345678')).toBeNull();
 
     // 3. Cadastra novo dispositivo
-    const registerBtn = screen.getByRole('button', { name: /\+? ?cadastrar dispositivo/i });
+    const registerBtn = screen.getByRole('button', { name: /cadastrar dispositivo/i });
     fireEvent.click(registerBtn);
 
     const nameInput = screen.getByLabelText(/nome do dispositivo/i);
@@ -167,72 +167,24 @@ describe('GlobalSettingsModal', () => {
     expect(stopPollingSpy).toHaveBeenCalledTimes(2);
   });
 
-  it('switches between Local Agents and Geral & Interface tabs', () => {
+  it('switches between Geral & Interface and Local Agents tabs with Geral as default', () => {
     render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} />);
 
-    const agentsTab = screen.getByRole('tab', { name: /local agents/i });
     const generalTab = screen.getByRole('tab', { name: /geral & interface/i });
+    const agentsTab = screen.getByRole('tab', { name: /local agents/i });
 
+    // Geral & Interface is the default 1st tab
+    expect(generalTab).toHaveAttribute('aria-selected', 'true');
+    expect(agentsTab).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByText(`ApiDot ${formatDisplayVersion(APP_VERSION)} • Estável`)).toBeInTheDocument();
+    expect(screen.getByText('Escuro (Padrão)')).toBeInTheDocument();
+    expect(screen.getByText(/30\.000 ms/i)).toBeInTheDocument();
+
+    // Switch to Local Agents tab
+    fireEvent.click(agentsTab);
     expect(agentsTab).toHaveAttribute('aria-selected', 'true');
     expect(generalTab).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByText(/dispositivos & local agents/i)).toBeInTheDocument();
-
-    // Switch to General tab
-    fireEvent.click(generalTab);
-    expect(generalTab).toHaveAttribute('aria-selected', 'true');
-    expect(agentsTab).toHaveAttribute('aria-selected', 'false');
-    expect(screen.getByText(`ApiDot ${formatDisplayVersion(APP_VERSION)}`)).toBeInTheDocument();
-    expect(screen.getByText('Escuro (Padrão ApiDot)')).toBeInTheDocument();
-    expect(screen.getByText(/30\.000 ms/i)).toBeInTheDocument();
-  });
-
-  it('displays active device banner and allows unlinking', () => {
-    useDeviceStore.setState({
-      devices: mockDevices,
-      activeDeviceId: 'device-1',
-    });
-
-    render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} />);
-
-    const banner = screen.getByTestId('active-device-banner');
-    expect(banner).toBeInTheDocument();
-    expect(banner).toHaveTextContent(/dispositivo vinculado a este navegador:/i);
-    expect(banner).toHaveTextContent('MacBook Pro Hudson');
-    expect(banner).toHaveTextContent('macbook.local');
-
-    const unlinkBtn = within(banner).getByRole('button', { name: /desvincular/i });
-    fireEvent.click(unlinkBtn);
-
-    expect(useDeviceStore.getState().activeDeviceId).toBeNull();
-  });
-
-  it('displays empty banner when no device is active', () => {
-    useDeviceStore.setState({
-      devices: mockDevices,
-      activeDeviceId: null,
-    });
-
-    render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} />);
-
-    expect(screen.getByTestId('no-active-device-banner')).toBeInTheDocument();
-    expect(
-      screen.getByText(/nenhum agente vinculado a este navegador/i)
-    ).toBeInTheDocument();
-  });
-
-  it('allows linking a device to this browser by clicking "Vincular a este Navegador"', () => {
-    useDeviceStore.setState({
-      devices: mockDevices,
-      activeDeviceId: null,
-    });
-
-    render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} />);
-
-    const linkButtons = screen.getAllByRole('button', { name: /vincular a este navegador/i });
-    expect(linkButtons.length).toBeGreaterThan(0);
-
-    fireEvent.click(linkButtons[0]);
-    expect(useDeviceStore.getState().activeDeviceId).toBe('device-1');
   });
 
   it('allows revoking a device and clears activeDeviceId if revoked device was active', async () => {
@@ -247,7 +199,7 @@ describe('GlobalSettingsModal', () => {
       isOnline: false,
     });
 
-    render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} />);
+    render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="agents" />);
 
     const revokeButtons = screen.getAllByRole('button', { name: /revogar/i });
     await act(async () => {
@@ -270,7 +222,7 @@ describe('GlobalSettingsModal', () => {
       tokenPrefix: 'apidot_dev_regen999',
     });
 
-    render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} />);
+    render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="agents" />);
 
     const regenButtons = screen.getAllByRole('button', { name: /regenerar token/i });
     await act(async () => {
@@ -300,9 +252,9 @@ describe('GlobalSettingsModal', () => {
       createdAtUtc: '2026-10-27T12:00:00Z',
     });
 
-    render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} />);
+    render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="agents" />);
 
-    fireEvent.click(screen.getByRole('button', { name: /\+? ?cadastrar dispositivo/i }));
+    fireEvent.click(screen.getByRole('button', { name: /cadastrar dispositivo/i }));
     fireEvent.change(screen.getByLabelText(/nome do dispositivo/i), {
       target: { value: 'Agent Test' },
     });
@@ -340,7 +292,7 @@ describe('GlobalSettingsModal', () => {
       devices: mockDevices,
     });
 
-    render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} />);
+    render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="agents" />);
 
     const instructionButtons = screen.getAllByRole('button', { name: /instruções/i });
     fireEvent.click(instructionButtons[0]);
@@ -363,8 +315,8 @@ describe('GlobalSettingsModal', () => {
 
     render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
 
-    expect(screen.getByText('Barra Lateral: 380px')).toBeInTheDocument();
-    expect(screen.getByText('Divisão Requisição: 70%')).toBeInTheDocument();
+    expect(screen.getByText('380 px')).toBeInTheDocument();
+    expect(screen.getByText('70% / 30%')).toBeInTheDocument();
 
     const resetButtons = screen.getAllByRole('button', { name: /restaurar padrão/i });
     expect(resetButtons.length).toBe(2);
@@ -382,7 +334,7 @@ describe('GlobalSettingsModal', () => {
       activeDeviceId: null,
     });
 
-    render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} />);
+    render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="agents" />);
 
     expect(screen.getByText('Nenhum agente local cadastrado.')).toBeInTheDocument();
   });

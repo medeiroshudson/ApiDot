@@ -15,5 +15,6 @@ public interface IAgentHub
     bool TryCompleteDispatch(HttpResponsePayload response) => false;
     void RecordHeartbeat(Guid userId, double latencyMs) { }
     double? GetAgentLatency(Guid userId) => null;
+    Guid? GetFirstOnlineAgentId() => null;
     int PendingDispatchCount { get; }
 }

@@ -509,12 +509,33 @@ public static class RequestItemEndpoints
             if (resolvedTarget == ExecutionTarget.Agent)
             {
                 var rawDeviceId = httpContext.Request.Headers["X-Device-Id"].ToString();
-                if (string.IsNullOrWhiteSpace(rawDeviceId) || !Guid.TryParse(rawDeviceId, out var deviceId) || deviceId == Guid.Empty)
+                Guid deviceId;
+
+                if (!string.IsNullOrWhiteSpace(rawDeviceId))
                 {
-                    return Results.Problem(
-                        statusCode: StatusCodes.Status409Conflict,
-                        title: "Device Header Missing",
-                        detail: "O cabeçalho X-Device-Id é obrigatório para execução via Agent.");
+                    if (!Guid.TryParse(rawDeviceId, out var parsedId) || parsedId == Guid.Empty)
+                    {
+                        return Results.Problem(
+                            statusCode: StatusCodes.Status409Conflict,
+                            title: "Device Header Missing",
+                            detail: "O cabeçalho X-Device-Id é obrigatório para execução via Agent.");
+                    }
+                    deviceId = parsedId;
+                }
+                else
+                {
+                    var fallbackOnlineId = agentHub.GetFirstOnlineAgentId();
+                    if (fallbackOnlineId.HasValue)
+                    {
+                        deviceId = fallbackOnlineId.Value;
+                    }
+                    else
+                    {
+                        return Results.Problem(
+                            statusCode: StatusCodes.Status409Conflict,
+                            title: "Device Header Missing",
+                            detail: "O cabeçalho X-Device-Id é obrigatório para execução via Agent.");
+                    }
                 }
 
                 if (!AgentDeviceAuthorization.IsAuthDisabled(configuration) && !currentUserContext.IsRoot)
