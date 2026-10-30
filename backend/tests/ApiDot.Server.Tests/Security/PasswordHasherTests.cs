@@ -82,4 +82,33 @@ public class PasswordHasherTests
 
         result.Should().BeFalse();
     }
+
+    [Fact]
+    public void VerifyPassword_WithTruncatedBase64Hash_ReturnsFalse()
+    {
+        var (_, salt) = _hasher.HashPassword("ValidPassword123!");
+        const string truncatedHash = "AQ=="; // 1-byte Base64 string
+
+        var result = _hasher.VerifyPassword("ValidPassword123!", truncatedHash, salt);
+
+        result.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("AQ==", "validSalt")]
+    [InlineData("AAAAAAAAAAAAAAAAAAAAAA==", "validSalt")]
+    [InlineData("validHash", "AQ==")]
+    [InlineData("validHash", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")]
+    public void VerifyPassword_WithMalformedHashOrSaltLength_ReturnsFalseWithoutThrowing(string hash, string salt)
+    {
+        var (validHash, validSalt) = _hasher.HashPassword("ValidPassword123!");
+
+        var testHash = hash == "validHash" ? validHash : hash;
+        var testSalt = salt == "validSalt" ? validSalt : salt;
+
+        var act = () => _hasher.VerifyPassword("ValidPassword123!", testHash, testSalt);
+
+        act.Should().NotThrow();
+        act().Should().BeFalse();
+    }
 }

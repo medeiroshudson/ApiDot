@@ -37,7 +37,7 @@ public class UserSeeder(
         var normalizedEmail = rootEmail.ToLowerInvariant();
 
         var rootUser = await dbContext.Users
-            .FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail, cancellationToken);
+            .FirstOrDefaultAsync(u => u.Email == normalizedEmail, cancellationToken);
 
         if (rootUser == null)
         {

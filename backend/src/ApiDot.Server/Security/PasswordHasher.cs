@@ -21,7 +21,15 @@ public class PasswordHasher : IPasswordHasher
             Algorithm,
             HashSizeBytes);
 
-        return (Convert.ToBase64String(hashBytes), Convert.ToBase64String(saltBytes));
+        try
+        {
+            return (Convert.ToBase64String(hashBytes), Convert.ToBase64String(saltBytes));
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(hashBytes);
+            CryptographicOperations.ZeroMemory(saltBytes);
+        }
     }
 
     public bool VerifyPassword(string password, string hash, string salt)
@@ -31,23 +39,47 @@ public class PasswordHasher : IPasswordHasher
             return false;
         }
 
+        byte[]? saltBytes = null;
+        byte[]? expectedHashBytes = null;
+        byte[]? actualHashBytes = null;
+
         try
         {
-            byte[] saltBytes = Convert.FromBase64String(salt);
-            byte[] expectedHashBytes = Convert.FromBase64String(hash);
+            saltBytes = Convert.FromBase64String(salt);
+            expectedHashBytes = Convert.FromBase64String(hash);
 
-            byte[] actualHashBytes = Rfc2898DeriveBytes.Pbkdf2(
+            if (saltBytes.Length != SaltSizeBytes || expectedHashBytes.Length != HashSizeBytes)
+            {
+                return false;
+            }
+
+            actualHashBytes = Rfc2898DeriveBytes.Pbkdf2(
                 password,
                 saltBytes,
                 Iterations,
                 Algorithm,
-                expectedHashBytes.Length);
+                HashSizeBytes);
 
             return CryptographicOperations.FixedTimeEquals(actualHashBytes, expectedHashBytes);
         }
         catch (FormatException)
         {
             return false;
+        }
+        finally
+        {
+            if (actualHashBytes != null)
+            {
+                CryptographicOperations.ZeroMemory(actualHashBytes);
+            }
+            if (expectedHashBytes != null)
+            {
+                CryptographicOperations.ZeroMemory(expectedHashBytes);
+            }
+            if (saltBytes != null)
+            {
+                CryptographicOperations.ZeroMemory(saltBytes);
+            }
         }
     }
 }
