@@ -325,6 +325,7 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
 
         linkedUser.Id.Should().Be(originalId);
         linkedUser.Email.Should().Be(TestRootEmail.ToLowerInvariant());
+        linkedUser.DisplayName.Should().Be("Hudson Medeiros");
         linkedUser.IsRoot.Should().BeTrue();
         linkedUser.OidcSubject.Should().Be(oidcSub);
         linkedUser.OidcIssuer.Should().Be(oidcIssuer);

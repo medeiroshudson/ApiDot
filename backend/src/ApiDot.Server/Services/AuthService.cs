@@ -154,7 +154,7 @@ public class AuthService(
             {
                 user.OidcIssuer = issuer;
             }
-            if (!string.IsNullOrWhiteSpace(displayName) && string.IsNullOrWhiteSpace(user.DisplayName))
+            if (!string.IsNullOrWhiteSpace(displayName))
             {
                 user.DisplayName = displayName.Trim();
             }
