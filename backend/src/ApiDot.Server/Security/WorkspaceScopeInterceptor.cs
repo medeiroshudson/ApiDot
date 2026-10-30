@@ -7,9 +7,14 @@ namespace ApiDot.Server.Security;
 public class WorkspaceScopeInterceptor(ICurrentUserContext currentUserContext) : DbCommandInterceptor
 {
     private const string ScopeMarker = "/* __ws_scope__ */";
+    private const string SqlClauses = "WHERE|JOIN|LEFT|RIGHT|INNER|CROSS|FULL|OUTER|ON|ORDER|GROUP|LIMIT|HAVING|UNION|WINDOW|SET";
+
+    private static readonly Regex SelectOrWithCommandRegex = new(
+        @"^\s*(?:(?:--[^\r\n]*[\r\n]+|/\*[\s\S]*?\*/\s*)*)(?:SELECT|WITH)\b",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex WorkspaceTableRegex = new(
-        @"(?<prefix>\b(?:FROM|(?:LEFT\s+|RIGHT\s+|INNER\s+|CROSS\s+)?JOIN)\s+)(?:""Workspaces""|\[Workspaces\]|`Workspaces`|\bWorkspaces\b)(?:\s+(?:AS\s+)?(?<alias>""[^""]+""|\[[^\]]+\]|`[^`]+`|\w+))?",
+        @"(?<prefix>\b(?:FROM|(?:LEFT\s+|RIGHT\s+|INNER\s+|CROSS\s+)?JOIN)\s+)(?:""Workspaces""|\[Workspaces\]|`Workspaces`|\bWorkspaces\b)(?:\s+(?:AS\s+(?<alias>""[^""]+""|\[[^\]]+\]|`[^`]+`|\w+)|(?!(?:" + SqlClauses + @")\b)(?<alias>""[^""]+""|\[[^\]]+\]|`[^`]+`|\w+)))?",
         RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.Multiline);
 
     public override InterceptionResult<DbDataReader> ReaderExecuting(
@@ -67,9 +72,7 @@ public class WorkspaceScopeInterceptor(ICurrentUserContext currentUserContext) :
             return;
         }
 
-        var trimmed = command.CommandText.TrimStart();
-        if (!trimmed.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase) &&
-            !trimmed.StartsWith("WITH", StringComparison.OrdinalIgnoreCase))
+        if (!SelectOrWithCommandRegex.IsMatch(command.CommandText))
         {
             return;
         }

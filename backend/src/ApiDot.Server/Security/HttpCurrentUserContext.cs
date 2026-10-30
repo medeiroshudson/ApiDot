@@ -5,40 +5,43 @@ using Microsoft.Extensions.Hosting;
 
 namespace ApiDot.Server.Security;
 
-public class HttpCurrentUserContext(
-    IHttpContextAccessor httpContextAccessor,
-    IConfiguration? configuration = null,
-    IHostEnvironment? environment = null) : ICurrentUserContext
+public class HttpCurrentUserContext : ICurrentUserContext
 {
-    private bool IsBypassOrTestMode
+    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly bool _isBypassOrTestMode;
+
+    public HttpCurrentUserContext(
+        IHttpContextAccessor httpContextAccessor,
+        IConfiguration? configuration = null,
+        IHostEnvironment? environment = null)
     {
-        get
+        _httpContextAccessor = httpContextAccessor;
+
+        var authEnabledConfig = configuration?["APIDOT_AUTH_ENABLED"];
+        if (string.Equals(authEnabledConfig, "false", StringComparison.OrdinalIgnoreCase))
         {
-            var authEnabledConfig = configuration?["APIDOT_AUTH_ENABLED"];
-            if (string.Equals(authEnabledConfig, "false", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            if (string.Equals(authEnabledConfig, "true", StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            return environment?.IsDevelopment() == true
+            _isBypassOrTestMode = true;
+        }
+        else if (string.Equals(authEnabledConfig, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            _isBypassOrTestMode = false;
+        }
+        else
+        {
+            _isBypassOrTestMode = environment?.IsDevelopment() == true
                 || environment?.IsEnvironment("Test") == true
                 || AppDomain.CurrentDomain.GetAssemblies().Any(a =>
                     a.GetName().Name?.StartsWith("ApiDot.Server.Tests", StringComparison.OrdinalIgnoreCase) == true);
         }
     }
 
-    public bool IsAuthenticated => httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
+    public bool IsAuthenticated => _httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
 
     public Guid? UserId
     {
         get
         {
-            var user = httpContextAccessor.HttpContext?.User;
+            var user = _httpContextAccessor.HttpContext?.User;
             if (user?.Identity?.IsAuthenticated == true)
             {
                 var idClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value
@@ -53,7 +56,7 @@ public class HttpCurrentUserContext(
                 return null;
             }
 
-            if (IsBypassOrTestMode)
+            if (_isBypassOrTestMode)
             {
                 return Guid.Empty;
             }
@@ -66,14 +69,14 @@ public class HttpCurrentUserContext(
     {
         get
         {
-            var user = httpContextAccessor.HttpContext?.User;
+            var user = _httpContextAccessor.HttpContext?.User;
             if (user?.Identity?.IsAuthenticated == true)
             {
                 return user.FindFirst(ClaimTypes.Email)?.Value
                     ?? user.FindFirst("email")?.Value;
             }
 
-            if (IsBypassOrTestMode)
+            if (_isBypassOrTestMode)
             {
                 return "root@local";
             }
@@ -86,7 +89,7 @@ public class HttpCurrentUserContext(
     {
         get
         {
-            var user = httpContextAccessor.HttpContext?.User;
+            var user = _httpContextAccessor.HttpContext?.User;
             if (user?.Identity?.IsAuthenticated == true)
             {
                 return user.FindFirst(ClaimTypes.Name)?.Value
@@ -94,7 +97,7 @@ public class HttpCurrentUserContext(
                     ?? user.FindFirst("display_name")?.Value;
             }
 
-            if (IsBypassOrTestMode)
+            if (_isBypassOrTestMode)
             {
                 return "Root (Dev/Test)";
             }
@@ -107,7 +110,7 @@ public class HttpCurrentUserContext(
     {
         get
         {
-            var user = httpContextAccessor.HttpContext?.User;
+            var user = _httpContextAccessor.HttpContext?.User;
             if (user?.Identity?.IsAuthenticated == true)
             {
                 var isRootClaim = user.FindFirst(c =>
@@ -118,7 +121,7 @@ public class HttpCurrentUserContext(
                 return isRootClaim != null;
             }
 
-            return IsBypassOrTestMode;
+            return _isBypassOrTestMode;
         }
     }
 }

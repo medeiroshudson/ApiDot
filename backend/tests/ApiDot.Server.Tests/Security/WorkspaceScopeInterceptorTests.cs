@@ -231,6 +231,103 @@ public class WorkspaceScopeInterceptorTests : IDisposable
         results.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task When_Query_Uses_TagWith_Filters_Workspaces_Correctly_For_Regular_User()
+    {
+        var user1Id = Guid.NewGuid();
+        var user2Id = Guid.NewGuid();
+        var ws1Id = Guid.NewGuid();
+        var ws2Id = Guid.NewGuid();
+
+        using (var setupContext = CreateContext(new TestCurrentUserContext(isRoot: true, isAuthenticated: true)))
+        {
+            var u1 = new User { Id = user1Id, Email = "u1_tag@example.com", DisplayName = "User 1 Tag" };
+            var u2 = new User { Id = user2Id, Email = "u2_tag@example.com", DisplayName = "User 2 Tag" };
+            var ws1 = new Workspace { Id = ws1Id, Name = "Tagged Workspace 1" };
+            var ws2 = new Workspace { Id = ws2Id, Name = "Tagged Workspace 2" };
+
+            setupContext.Users.AddRange(u1, u2);
+            setupContext.Workspaces.AddRange(ws1, ws2);
+            setupContext.WorkspaceMembers.Add(new WorkspaceMember
+            {
+                WorkspaceId = ws1Id,
+                UserId = user1Id,
+                Role = WorkspaceRole.Owner,
+                JoinedAtUtc = DateTime.UtcNow
+            });
+            setupContext.WorkspaceMembers.Add(new WorkspaceMember
+            {
+                WorkspaceId = ws2Id,
+                UserId = user2Id,
+                Role = WorkspaceRole.Owner,
+                JoinedAtUtc = DateTime.UtcNow
+            });
+            await setupContext.SaveChangesAsync();
+        }
+
+        // Query with TagWith as user 1
+        using var u1Context = CreateContext(new TestCurrentUserContext(isRoot: false, isAuthenticated: true, userId: user1Id));
+        var taggedWorkspaces = await u1Context.Workspaces
+            .TagWith("audit_tag_operation")
+            .ToListAsync();
+
+        taggedWorkspaces.Should().ContainSingle();
+        taggedWorkspaces[0].Id.Should().Be(ws1Id);
+        taggedWorkspaces[0].Name.Should().Be("Tagged Workspace 1");
+    }
+
+    [Fact]
+    public async Task When_Query_Omits_Explicit_As_Alias_Scopes_Without_Syntax_Corruption()
+    {
+        var user1Id = Guid.NewGuid();
+        var user2Id = Guid.NewGuid();
+        var ws1Id = Guid.NewGuid();
+        var ws2Id = Guid.NewGuid();
+
+        using (var setupContext = CreateContext(new TestCurrentUserContext(isRoot: true, isAuthenticated: true)))
+        {
+            var u1 = new User { Id = user1Id, Email = "u1_raw@example.com", DisplayName = "User 1 Raw" };
+            var u2 = new User { Id = user2Id, Email = "u2_raw@example.com", DisplayName = "User 2 Raw" };
+            var ws1 = new Workspace { Id = ws1Id, Name = "Raw Workspace 1" };
+            var ws2 = new Workspace { Id = ws2Id, Name = "Raw Workspace 2" };
+
+            setupContext.Users.AddRange(u1, u2);
+            setupContext.Workspaces.AddRange(ws1, ws2);
+            setupContext.WorkspaceMembers.Add(new WorkspaceMember
+            {
+                WorkspaceId = ws1Id,
+                UserId = user1Id,
+                Role = WorkspaceRole.Owner,
+                JoinedAtUtc = DateTime.UtcNow
+            });
+            setupContext.WorkspaceMembers.Add(new WorkspaceMember
+            {
+                WorkspaceId = ws2Id,
+                UserId = user2Id,
+                Role = WorkspaceRole.Owner,
+                JoinedAtUtc = DateTime.UtcNow
+            });
+            await setupContext.SaveChangesAsync();
+        }
+
+        using var u1Context = CreateContext(new TestCurrentUserContext(isRoot: false, isAuthenticated: true, userId: user1Id));
+
+        // Execute raw SQL where FROM "Workspaces" is followed directly by WHERE (no AS alias)
+        var allowedResults = await u1Context.Workspaces
+            .FromSql($"SELECT * FROM \"Workspaces\" WHERE \"Id\" = {ws1Id.ToString().ToUpperInvariant()}")
+            .ToListAsync();
+
+        allowedResults.Should().ContainSingle();
+        allowedResults[0].Id.Should().Be(ws1Id);
+
+        // Raw SQL for unauthorized workspace without AS alias
+        var forbiddenResults = await u1Context.Workspaces
+            .FromSql($"SELECT * FROM \"Workspaces\" WHERE \"Id\" = {ws2Id.ToString().ToUpperInvariant()}")
+            .ToListAsync();
+
+        forbiddenResults.Should().BeEmpty();
+    }
+
     private sealed class TestCurrentUserContext : ICurrentUserContext
     {
         public Guid? UserId { get; }
