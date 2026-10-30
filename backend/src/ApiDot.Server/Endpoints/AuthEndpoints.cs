@@ -1,0 +1,108 @@
+using ApiDot.Server.Models;
+using ApiDot.Server.Security;
+using ApiDot.Server.Services;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+
+namespace ApiDot.Server.Endpoints;
+
+public static class AuthEndpoints
+{
+    public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+
+        var group = app.MapGroup("/api/auth").WithTags("Auth");
+
+        group.MapGet("/config", async (IAuthService authService, CancellationToken ct) =>
+        {
+            var config = await authService.GetAuthConfigAsync(ct);
+            return Results.Ok(config);
+        });
+
+        group.MapGet("/login", async (
+            string? returnUrl,
+            IAuthService authService,
+            CancellationToken ct) =>
+        {
+            var config = await authService.GetAuthConfigAsync(ct);
+            if (!config.OidcEnabled)
+            {
+                return Results.Redirect(string.IsNullOrWhiteSpace(returnUrl) ? "/login" : returnUrl);
+            }
+
+            var properties = new AuthenticationProperties
+            {
+                RedirectUri = string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl
+            };
+
+            return Results.Challenge(properties, [OpenIdConnectDefaults.AuthenticationScheme]);
+        });
+
+        group.MapPost("/local", async (
+            LocalLoginRequest? request,
+            IAuthService authService,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status401Unauthorized,
+                    title: "Unauthorized",
+                    detail: "Invalid email or password.",
+                    extensions: new Dictionary<string, object?> { ["message"] = "Invalid email or password." });
+            }
+
+            var (success, userDto, errorMessage) = await authService.LoginLocalAsync(
+                request.Email,
+                request.Password,
+                httpContext,
+                ct);
+
+            if (!success || userDto == null)
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status401Unauthorized,
+                    title: "Unauthorized",
+                    detail: errorMessage ?? "Invalid email or password.",
+                    extensions: new Dictionary<string, object?> { ["message"] = errorMessage ?? "Invalid email or password." });
+            }
+
+            return Results.Ok(userDto);
+        });
+
+        group.MapGet("/me", async (
+            HttpContext httpContext,
+            ICurrentUserContext currentUserContext,
+            IAuthService authService,
+            CancellationToken ct) =>
+        {
+            if (httpContext.User.Identity?.IsAuthenticated != true || !currentUserContext.UserId.HasValue)
+            {
+                return Results.Unauthorized();
+            }
+
+            var userDto = await authService.GetUserDtoByIdAsync(currentUserContext.UserId.Value, ct);
+            if (userDto == null)
+            {
+                return Results.Unauthorized();
+            }
+
+            return Results.Ok(userDto);
+        }).RequireAuthorization();
+
+        group.MapPost("/logout", async (
+            HttpContext httpContext,
+            IAuthService authService) =>
+        {
+            await authService.SignOutAsync(httpContext);
+            return Results.Ok(new { message = "Logged out successfully" });
+        });
+
+        return app;
+    }
+}

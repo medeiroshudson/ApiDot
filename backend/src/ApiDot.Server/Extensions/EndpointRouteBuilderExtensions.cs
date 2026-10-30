@@ -9,6 +9,7 @@ public static class EndpointRouteBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(app);
 
+        app.MapAuthEndpoints();
         app.MapHealthEndpoints();
         app.MapAgentDeviceEndpoints();
         app.MapInstallScriptEndpoints();

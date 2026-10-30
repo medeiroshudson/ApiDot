@@ -10,6 +10,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 builder.Services.AddServerDatabase(builder.Configuration);
+builder.Services.AddServerAuthentication(builder.Configuration);
 builder.Services.AddServerServices(builder.Configuration);
 builder.Services.AddServerHttpClients();
 
@@ -22,6 +23,8 @@ app.UseWebSockets(new WebSocketOptions
 {
     KeepAliveInterval = TimeSpan.FromSeconds(15)
 });
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapApiEndpoints();
 
