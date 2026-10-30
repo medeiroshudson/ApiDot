@@ -243,6 +243,51 @@ describe('Select Component', () => {
       expect(chevron).toHaveClass('text-emerald-400');
       expect(chevron).toHaveClass('pointer-events-none');
     });
+
+    it('avoids duplicate background, border, and text classes when custom color classes are passed', () => {
+      render(
+        <Select
+          className="bg-emerald-950/60 border-emerald-800/80 text-emerald-400 font-bold"
+          aria-label="Custom Method Style"
+        >
+          <option value="1">1</option>
+        </Select>
+      );
+
+      const select = screen.getByRole('combobox', { name: 'Custom Method Style' });
+      expect(select).toHaveClass('bg-emerald-950/60');
+      expect(select).toHaveClass('border-emerald-800/80');
+      expect(select).toHaveClass('text-emerald-400');
+      expect(select).toHaveClass('font-bold');
+      expect(select).toHaveClass('border');
+      expect(select).not.toHaveClass('bg-neutral-900');
+      expect(select).not.toHaveClass('border-neutral-800');
+      expect(select).not.toHaveClass('text-neutral-200');
+    });
+
+    it('avoids default text-neutral-400 on icon when custom text color is passed via iconClassName', () => {
+      render(
+        <Select iconClassName="text-current opacity-70" aria-label="Inherited Icon Color">
+          <option value="1">1</option>
+        </Select>
+      );
+
+      const chevron = screen.getByTestId('select-chevron');
+      expect(chevron).toHaveClass('text-current');
+      expect(chevron).toHaveClass('opacity-70');
+      expect(chevron).not.toHaveClass('text-neutral-400');
+    });
+
+    it('propagates shrink-0 to wrapper when shrink-0 is passed in className', () => {
+      const { container } = render(
+        <Select className="shrink-0 font-bold" aria-label="Shrink Wrapper">
+          <option value="1">1</option>
+        </Select>
+      );
+
+      const wrapper = container.firstChild as HTMLElement;
+      expect(wrapper).toHaveClass('shrink-0');
+    });
   });
 
   describe('Standard HTML Attributes Forwarding', () => {

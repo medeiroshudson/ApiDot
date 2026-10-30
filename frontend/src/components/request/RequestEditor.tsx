@@ -8,7 +8,6 @@ import {
   AutocompleteVariable,
   CursorCoords,
   AutocompleteNavigationHandle,
-  METHOD_COLORS,
 } from './RequestAutocomplete';
 import {
   DependencyLinkerModal,
@@ -16,6 +15,8 @@ import {
 } from './DependencyLinkerModal';
 import { CodeEditor } from '../common/CodeEditor';
 import { Input } from '../common/Input';
+import { Select } from '@/components/common/Select';
+import { HTTP_METHOD_BADGES } from '@/components/common/MethodBadge';
 import { ParamsTab } from './ParamsTab';
 import { SpecificationTab, extractSchemaProperties } from './SpecificationTab';
 
@@ -481,21 +482,23 @@ export function RequestEditor({
       <div className="p-2.5 sm:p-3 border-b border-neutral-800 bg-neutral-900/40 flex flex-col gap-1.5 shrink-0">
         <div className="flex flex-col sm:flex-row gap-2 items-start w-full">
           <div className="flex items-start gap-2 flex-1 min-w-0">
-            <select
+            <Select
+              sizeVariant="md"
               aria-label="Método HTTP"
               value={method}
               disabled={isLoading}
               onChange={(e) => handleMethodChange(e.target.value)}
-              className={`h-9 px-2.5 font-bold text-xs rounded-md border focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 ${
-                METHOD_COLORS[method] || 'text-blue-400 bg-neutral-800 border-neutral-700'
+              className={`font-bold text-xs shrink-0 cursor-pointer ${
+                HTTP_METHOD_BADGES[method] || 'text-blue-400 bg-neutral-800 border-neutral-700'
               }`}
+              iconClassName="text-current opacity-70"
             >
               {HTTP_METHODS.map((m) => (
                 <option key={m} value={m} className="bg-neutral-900 text-neutral-200 font-semibold">
                   {m}
                 </option>
               ))}
-            </select>
+            </Select>
 
             <div className="flex-1 min-w-0 relative">
               <Input

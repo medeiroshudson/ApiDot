@@ -25,8 +25,20 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         ? 'h-9 text-xs pl-2.5 pr-8'
         : 'h-[30px] py-1.5 text-xs pl-2.5 pr-8';
 
+    const hasCustomBg = /\bbg-/.test(className);
+    const hasCustomBorder = /\bborder-/.test(className);
+    const hasCustomTextColor = /\btext-(?!xs\b|sm\b|base\b|lg\b|xl\b|2xl\b|3xl\b|4xl\b|left\b|center\b|right\b|justify\b)\S+/.test(className);
+    const hasShrink0 = /\bshrink-0\b/.test(className);
+
+    const defaultBg = hasCustomBg ? '' : 'bg-neutral-900';
+    const defaultBorder = hasCustomBorder ? '' : 'border-neutral-800';
+    const defaultText = hasCustomTextColor ? '' : 'text-neutral-200';
+
     const selectClasses = [
-      'appearance-none bg-neutral-900 border border-neutral-800 text-neutral-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50',
+      'appearance-none border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50',
+      defaultBg,
+      defaultBorder,
+      defaultText,
       sizeClasses,
       className,
     ]
@@ -35,13 +47,18 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
 
     const wrapperClasses = [
       'relative inline-flex items-center',
+      hasShrink0 ? 'shrink-0' : '',
       wrapperClassName,
     ]
       .filter(Boolean)
       .join(' ');
 
+    const hasCustomIconColor = /\btext-/.test(iconClassName);
+    const defaultIconColor = hasCustomIconColor ? '' : 'text-neutral-400';
+
     const iconClasses = [
-      'w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400 transition-opacity',
+      'w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none transition-opacity',
+      defaultIconColor,
       disabled ? 'opacity-50' : '',
       iconClassName,
     ]
