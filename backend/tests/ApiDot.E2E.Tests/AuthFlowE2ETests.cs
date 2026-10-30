@@ -18,14 +18,14 @@ namespace ApiDot.E2E.Tests;
 public class AuthFlowE2ETests : IClassFixture<WebApplicationFactory<Program>>, IAsyncLifetime
 {
     private readonly WebApplicationFactory<Program> _factory;
-    private readonly string _dbName;
+    private readonly string _dbPath;
     private const string RootEmail = "contato@hmedeiros.dev";
     private const string RootPassword = "RootStrongPassword123!";
     private Guid _seededWorkspaceId;
 
     public AuthFlowE2ETests(WebApplicationFactory<Program> factory)
     {
-        _dbName = "AuthFlowE2E_" + Guid.NewGuid();
+        _dbPath = Path.Combine(Path.GetTempPath(), $"AuthFlowE2E_{Guid.NewGuid():N}.db");
         _factory = factory.WithWebHostBuilder(builder =>
         {
             builder.ConfigureAppConfiguration((_, config) =>
@@ -49,7 +49,7 @@ public class AuthFlowE2ETests : IClassFixture<WebApplicationFactory<Program>>, I
 
                 services.AddDbContext<ApiDotDbContext>((sp, options) =>
                 {
-                    options.UseSqlite($"Data Source={_dbName}.db;Foreign Keys=True");
+                    options.UseSqlite($"Data Source={_dbPath};Foreign Keys=True");
                     options.AddInterceptors(sp.GetRequiredService<WorkspaceScopeInterceptor>());
                 });
             });
@@ -88,9 +88,9 @@ public class AuthFlowE2ETests : IClassFixture<WebApplicationFactory<Program>>, I
         SqliteConnection.ClearAllPools();
         try
         {
-            if (File.Exists($"{_dbName}.db"))
+            if (File.Exists(_dbPath))
             {
-                File.Delete($"{_dbName}.db");
+                File.Delete(_dbPath);
             }
         }
         catch
@@ -112,17 +112,10 @@ public class AuthFlowE2ETests : IClassFixture<WebApplicationFactory<Program>>, I
         });
 
         var unauthWsResponse = await unauthenticatedClient.GetAsync("/api/workspaces");
-        if (unauthWsResponse.StatusCode == HttpStatusCode.Unauthorized)
-        {
-            unauthWsResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-        }
-        else
-        {
-            unauthWsResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-            var unauthWorkspaces = await unauthWsResponse.Content.ReadFromJsonAsync<List<WorkspaceDto>>();
-            unauthWorkspaces.Should().NotBeNull();
-            unauthWorkspaces.Should().BeEmpty("unauthenticated requests must not see workspaces when auth is active");
-        }
+        unauthWsResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var unauthWorkspaces = await unauthWsResponse.Content.ReadFromJsonAsync<List<WorkspaceDto>>();
+        unauthWorkspaces.Should().NotBeNull();
+        unauthWorkspaces.Should().BeEmpty("unauthenticated requests must not see workspaces when auth is active");
 
         // 2. Issues POST /api/auth/local with credentials -> receives 200 and Set-Cookie: apidot_session=...
         var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -176,17 +169,10 @@ public class AuthFlowE2ETests : IClassFixture<WebApplicationFactory<Program>>, I
 
         // 7. Subsequent call with revoked session to /api/workspaces -> returns empty/protected.
         var afterLogoutWs = await client.GetAsync("/api/workspaces");
-        if (afterLogoutWs.StatusCode == HttpStatusCode.Unauthorized)
-        {
-            afterLogoutWs.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-        }
-        else
-        {
-            afterLogoutWs.StatusCode.Should().Be(HttpStatusCode.OK);
-            var workspacesAfterLogout = await afterLogoutWs.Content.ReadFromJsonAsync<List<WorkspaceDto>>();
-            workspacesAfterLogout.Should().NotBeNull();
-            workspacesAfterLogout.Should().BeEmpty();
-        }
+        afterLogoutWs.StatusCode.Should().Be(HttpStatusCode.OK);
+        var workspacesAfterLogout = await afterLogoutWs.Content.ReadFromJsonAsync<List<WorkspaceDto>>();
+        workspacesAfterLogout.Should().NotBeNull();
+        workspacesAfterLogout.Should().BeEmpty();
     }
 
     [Fact]
@@ -202,5 +188,9 @@ public class AuthFlowE2ETests : IClassFixture<WebApplicationFactory<Program>>, I
         var response = await client.PostAsJsonAsync("/api/auth/local", invalidPayload);
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        if (response.Headers.TryGetValues("Set-Cookie", out var cookies))
+        {
+            string.Join(";", cookies).Should().NotContain("apidot_session=");
+        }
     }
 }

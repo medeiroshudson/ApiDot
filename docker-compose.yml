@@ -11,7 +11,7 @@ services:
       - APIDOT_VERSION=${APIDOT_VERSION:-dev}
       - APIDOT_AUTH_ENABLED=${APIDOT_AUTH_ENABLED:-true}
       - APIDOT_ROOT_EMAIL=${APIDOT_ROOT_EMAIL:-contato@hmedeiros.dev}
-      - APIDOT_ROOT_PASSWORD=${APIDOT_ROOT_PASSWORD:-RootStrongPassword123!}
+      - APIDOT_ROOT_PASSWORD=${APIDOT_ROOT_PASSWORD:-}
       # OIDC Configuration (optional)
       # - OIDC_AUTHORITY=https://auth.hmedeiros.dev/application/o/apidot/
       # - OIDC_CLIENT_ID=apidot
