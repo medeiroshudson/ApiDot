@@ -82,6 +82,12 @@ export default function LoginPage() {
             <a
               href="/api/auth/login"
               role="button"
+              onKeyDown={(e) => {
+                if (e.key === ' ' || e.key === 'Spacebar') {
+                  e.preventDefault();
+                  window.location.href = '/api/auth/login';
+                }
+              }}
               aria-label="Entrar com SSO"
               className="w-full inline-flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-medium text-sm transition-colors shadow-lg shadow-blue-600/20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-neutral-900 cursor-pointer"
             >
@@ -127,6 +133,7 @@ export default function LoginPage() {
               required
               autoComplete="email"
               placeholder="seu@email.com"
+              aria-invalid={!!error}
               value={email}
               disabled={isSubmitting}
               onChange={(e) => {
@@ -152,6 +159,7 @@ export default function LoginPage() {
               required
               autoComplete="current-password"
               placeholder="••••••••"
+              aria-invalid={!!error}
               value={password}
               disabled={isSubmitting}
               onChange={(e) => {
