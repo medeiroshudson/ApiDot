@@ -74,32 +74,32 @@ describe('LoginPage (/login)', () => {
   });
 
   describe('SSO Authentication', () => {
-    it('renders "Entrar com SSO" button when oidcEnabled is true', () => {
+    it('renders "Sign in with SSO" button when oidcEnabled is true', () => {
       useAuthStore.setState({ config: mockConfigEnabled });
       render(<LoginPage />);
 
-      const ssoButton = screen.getByRole('button', { name: /entrar com sso/i });
+      const ssoButton = screen.getByRole('button', { name: /sign in with sso/i });
       expect(ssoButton).toBeInTheDocument();
       expect(ssoButton).toHaveAttribute('href', '/api/auth/login');
-      expect(screen.getByText(/ou continue com credenciais locais/i)).toBeInTheDocument();
+      expect(screen.getByText(/or continue with local credentials/i)).toBeInTheDocument();
     });
 
-    it('renders "Entrar com SSO" button by default while config is loading', () => {
+    it('renders "Sign in with SSO" button by default while config is loading', () => {
       vi.mocked(authApi.getAuthConfig).mockImplementation(() => new Promise(() => {}));
       useAuthStore.setState({ config: null });
       render(<LoginPage />);
 
-      const ssoButton = screen.getByRole('button', { name: /entrar com sso/i });
+      const ssoButton = screen.getByRole('button', { name: /sign in with sso/i });
       expect(ssoButton).toBeInTheDocument();
       expect(ssoButton).toHaveAttribute('href', '/api/auth/login');
     });
 
-    it('hides "Entrar com SSO" button and divider when oidcEnabled is false', () => {
+    it('hides "Sign in with SSO" button and divider when oidcEnabled is false', () => {
       useAuthStore.setState({ config: mockConfigDisabled });
       render(<LoginPage />);
 
-      expect(screen.queryByRole('button', { name: /entrar com sso/i })).not.toBeInTheDocument();
-      expect(screen.queryByText(/ou continue com credenciais locais/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /sign in with sso/i })).not.toBeInTheDocument();
+      expect(screen.queryByText(/or continue with local credentials/i)).not.toBeInTheDocument();
     });
   });
 
@@ -107,18 +107,18 @@ describe('LoginPage (/login)', () => {
     it('renders email, password inputs and submit button', () => {
       render(<LoginPage />);
 
-      expect(screen.getByLabelText(/e-?mail/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/senha/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/email|e-?mail/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/password|senha/i)).toBeInTheDocument();
       expect(
-        screen.getByRole('button', { name: /entrar com credenciais locais/i })
+        screen.getByRole('button', { name: /sign in with local credentials|entrar com credenciais locais/i })
       ).toBeInTheDocument();
     });
 
     it('allows typing into email and password inputs', () => {
       render(<LoginPage />);
 
-      const emailInput = screen.getByLabelText(/e-?mail/i) as HTMLInputElement;
-      const passwordInput = screen.getByLabelText(/senha/i) as HTMLInputElement;
+      const emailInput = screen.getByLabelText(/email|e-?mail/i) as HTMLInputElement;
+      const passwordInput = screen.getByLabelText(/password|senha/i) as HTMLInputElement;
 
       fireEvent.change(emailInput, { target: { value: 'user@example.com' } });
       fireEvent.change(passwordInput, { target: { value: 'secret123' } });
@@ -133,9 +133,9 @@ describe('LoginPage (/login)', () => {
 
       render(<LoginPage />);
 
-      const emailInput = screen.getByLabelText(/e-?mail/i);
-      const passwordInput = screen.getByLabelText(/senha/i);
-      const submitButton = screen.getByRole('button', { name: /entrar com credenciais locais/i });
+      const emailInput = screen.getByLabelText(/email|e-?mail/i);
+      const passwordInput = screen.getByLabelText(/password|senha/i);
+      const submitButton = screen.getByRole('button', { name: /sign in with local credentials|entrar com credenciais locais/i });
 
       fireEvent.change(emailInput, { target: { value: 'admin@apidot.dev' } });
       fireEvent.change(passwordInput, { target: { value: 'correctpassword' } });
@@ -156,9 +156,9 @@ describe('LoginPage (/login)', () => {
 
       render(<LoginPage />);
 
-      const emailInput = screen.getByLabelText(/e-?mail/i);
-      const passwordInput = screen.getByLabelText(/senha/i);
-      const submitButton = screen.getByRole('button', { name: /entrar com credenciais locais/i });
+      const emailInput = screen.getByLabelText(/email|e-?mail/i);
+      const passwordInput = screen.getByLabelText(/password|senha/i);
+      const submitButton = screen.getByRole('button', { name: /sign in with local credentials|entrar com credenciais locais/i });
 
       fireEvent.change(emailInput, { target: { value: 'wrong@apidot.dev' } });
       fireEvent.change(passwordInput, { target: { value: 'wrongpass' } });
@@ -182,7 +182,7 @@ describe('LoginPage (/login)', () => {
 
       render(<LoginPage />);
 
-      const form = screen.getByRole('button', { name: /entrar com credenciais locais/i }).closest('form')!;
+      const form = screen.getByRole('button', { name: /sign in with local credentials|entrar com credenciais locais/i }).closest('form')!;
       fireEvent.submit(form);
 
       await waitFor(() => {
@@ -203,9 +203,9 @@ describe('LoginPage (/login)', () => {
 
       render(<LoginPage />);
 
-      const emailInput = screen.getByLabelText(/e-?mail/i);
-      const passwordInput = screen.getByLabelText(/senha/i);
-      const submitButton = screen.getByRole('button', { name: /entrar com credenciais locais/i });
+      const emailInput = screen.getByLabelText(/email|e-?mail/i);
+      const passwordInput = screen.getByLabelText(/password|senha/i);
+      const submitButton = screen.getByRole('button', { name: /sign in with local credentials|entrar com credenciais locais/i });
 
       fireEvent.change(emailInput, { target: { value: 'admin@apidot.dev' } });
       fireEvent.change(passwordInput, { target: { value: 'password' } });

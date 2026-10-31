@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, Trash2, Plus, Sparkles, Code, Table, Lock, Unlock } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface VariableItem {
   id?: string;
@@ -60,9 +61,11 @@ export function VariableGrid({
   title,
   description,
   isReadOnly = false,
-  emptyMessage = 'Nenhuma variável cadastrada.',
+  emptyMessage,
   className = '',
 }: VariableGridProps) {
+  const { t } = useTranslation();
+  const effectiveEmptyMessage = emptyMessage ?? t('environments.noVariables');
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [rawJson, setRawJson] = useState('');
   const [jsonError, setJsonError] = useState<string | null>(null);
@@ -92,14 +95,14 @@ export function VariableGrid({
           const parsed = JSON.parse(rawJson);
           const newVars = parseJsonToVariableItems(parsed);
           if (newVars === null) {
-            setJsonError('O JSON deve ser um array de objetos ou um objeto chave-valor.');
+            setJsonError(t('environments.jsonParseError'));
             return;
           }
           onChange(newVars);
           setJsonError(null);
           setIsBulkMode(false);
         } catch (err: any) {
-          setJsonError(`JSON inválido: ${err.message || 'Sintaxe inválida'}`);
+          setJsonError(t('environments.invalidJson', { error: err.message || 'Syntax error' }));
           return;
         }
       } else {
@@ -115,14 +118,14 @@ export function VariableGrid({
     try {
       const parsed = JSON.parse(rawJson);
       if (parsed === null || typeof parsed !== 'object') {
-        setJsonError('O JSON deve ser um array de objetos ou um objeto chave-valor.');
+        setJsonError(t('environments.jsonParseError'));
         return;
       }
       const formatted = JSON.stringify(parsed, null, 2);
       setRawJson(formatted);
       setJsonError(null);
     } catch (err: any) {
-      setJsonError(`JSON inválido: ${err.message || 'Sintaxe inválida'}`);
+      setJsonError(t('environments.invalidJson', { error: err.message || 'Syntax error' }));
     }
   };
 
@@ -162,18 +165,18 @@ export function VariableGrid({
             <button
               type="button"
               onClick={handleToggleBulkMode}
-              aria-label="Modo JSON em massa"
+              aria-label={t('environments.bulkJsonMode')}
               className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded border border-neutral-700 bg-neutral-900 text-neutral-300 hover:text-white hover:border-neutral-600 transition-colors"
             >
               {isBulkMode ? (
                 <>
                   <Table className="w-3.5 h-3.5 text-neutral-400" />
-                  <span>Modo Tabela</span>
+                  <span>{t('environments.tableMode')}</span>
                 </>
               ) : (
                 <>
                   <Code className="w-3.5 h-3.5 text-neutral-400" />
-                  <span>JSON em Massa</span>
+                  <span>{t('environments.bulkJson')}</span>
                 </>
               )}
             </button>
@@ -186,21 +189,21 @@ export function VariableGrid({
         <div className="flex-1 flex flex-col gap-2 min-h-[250px]">
           <div className="flex items-center justify-between">
             <span className="text-xs text-neutral-400">
-              Cole ou edite as variáveis como JSON (array de objetos ou chave-valor).
+              {t('environments.bulkJsonDesc')}
             </span>
             <button
               type="button"
               onClick={handleFormatJson}
-              aria-label="Formatar JSON"
+              aria-label={t('environments.formatJson')}
               className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded bg-neutral-800 text-neutral-200 hover:bg-neutral-700 hover:text-white transition-colors"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Formatar</span>
+              <span>{t('environments.format')}</span>
             </button>
           </div>
 
           <textarea
-            aria-label="Editor JSON em massa"
+            aria-label={t('environments.bulkJsonEditorAria')}
             value={rawJson}
             onChange={(e) => {
               setRawJson(e.target.value);
@@ -225,11 +228,11 @@ export function VariableGrid({
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-neutral-800 text-neutral-400 font-medium select-none">
-                  <th scope="col" className="py-2 px-2 w-10 text-center">Ativo</th>
-                  <th scope="col" className="py-2 px-2 w-1/3">Chave</th>
-                  <th scope="col" className="py-2 px-2">Valor</th>
-                  <th scope="col" className="py-2 px-2 w-24 text-center">Segredo</th>
-                  {!isReadOnly && <th scope="col" className="py-2 px-2 w-12 text-center">Ações</th>}
+                  <th scope="col" className="py-2 px-2 w-10 text-center">{t('environments.colActive')}</th>
+                  <th scope="col" className="py-2 px-2 w-1/3">{t('environments.colKey')}</th>
+                  <th scope="col" className="py-2 px-2">{t('environments.colValue')}</th>
+                  <th scope="col" className="py-2 px-2 w-24 text-center">{t('environments.colSecret')}</th>
+                  {!isReadOnly && <th scope="col" className="py-2 px-2 w-12 text-center">{t('environments.colActions')}</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-900">
@@ -239,7 +242,7 @@ export function VariableGrid({
                       colSpan={isReadOnly ? 4 : 5}
                       className="py-8 text-center text-neutral-500 italic"
                     >
-                      {emptyMessage}
+                      {effectiveEmptyMessage}
                     </td>
                   </tr>
                 ) : (
@@ -259,7 +262,7 @@ export function VariableGrid({
                             onChange={(e) =>
                               handleUpdateItem(idx, { isActive: e.target.checked })
                             }
-                            aria-label={`Ativar variável ${item.key || idx + 1}`}
+                            aria-label={t('environments.enableVariableAria', { name: item.key || String(idx + 1) })}
                             disabled={isReadOnly}
                             className="rounded border-neutral-700 bg-neutral-900 text-blue-500 focus:ring-neutral-400 cursor-pointer h-4 w-4"
                           />
@@ -269,10 +272,10 @@ export function VariableGrid({
                         <td className="py-1.5 px-2 align-middle">
                           <input
                             type="text"
-                            placeholder="Chave"
+                            placeholder={t('environments.keyPlaceholder')}
                             value={item.key}
                             onChange={(e) => handleUpdateItem(idx, { key: e.target.value })}
-                            aria-label={`Chave da variável ${idx + 1}`}
+                            aria-label={t('environments.variableKeyAria', { index: idx + 1 })}
                             readOnly={isReadOnly}
                             className="w-full bg-neutral-900 border border-neutral-800 rounded px-2.5 py-1.5 font-mono text-xs text-neutral-200 placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-neutral-400 focus:border-neutral-700"
                           />
@@ -283,10 +286,10 @@ export function VariableGrid({
                           <div className="relative flex items-center">
                             <input
                               type={item.isSecret && !isSecretRevealed ? 'password' : 'text'}
-                              placeholder="Valor"
+                              placeholder={t('environments.valuePlaceholder')}
                               value={item.value}
                               onChange={(e) => handleUpdateItem(idx, { value: e.target.value })}
-                              aria-label={`Valor da variável ${idx + 1}`}
+                              aria-label={t('environments.variableValueAria', { index: idx + 1 })}
                               readOnly={isReadOnly}
                               className={`w-full bg-neutral-900 border border-neutral-800 rounded px-2.5 py-1.5 font-mono text-xs text-neutral-200 placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-neutral-400 focus:border-neutral-700 ${
                                 item.isSecret ? 'pr-8' : ''
@@ -297,9 +300,9 @@ export function VariableGrid({
                                 type="button"
                                 onClick={() => toggleRevealSecret(secretKey)}
                                 aria-label={
-                                  isSecretRevealed ? 'Ocultar segredo' : 'Revelar segredo'
+                                  isSecretRevealed ? t('environments.hideSecret') : t('environments.revealSecret')
                                 }
-                                title={isSecretRevealed ? 'Ocultar valor' : 'Revelar valor'}
+                                title={isSecretRevealed ? t('environments.hideValue') : t('environments.revealValue')}
                                 className="absolute right-1.5 p-1 text-neutral-400 hover:text-white rounded hover:bg-neutral-800 transition-colors"
                               >
                                 {isSecretRevealed ? (
@@ -319,10 +322,10 @@ export function VariableGrid({
                             onClick={() => handleUpdateItem(idx, { isSecret: !item.isSecret })}
                             aria-label={
                               item.isSecret
-                                ? `Desmarcar segredo ${item.key || idx + 1}`
-                                : `Marcar segredo ${item.key || idx + 1}`
+                                ? t('environments.unmarkSecret', { name: item.key || String(idx + 1) })
+                                : t('environments.markSecret', { name: item.key || String(idx + 1) })
                             }
-                            title={item.isSecret ? 'Variável secreta' : 'Marcar como segredo'}
+                            title={item.isSecret ? t('environments.secretVariable') : t('environments.markAsSecret')}
                             disabled={isReadOnly}
                             className={`p-1.5 rounded transition-colors ${
                               item.isSecret
@@ -344,8 +347,8 @@ export function VariableGrid({
                             <button
                               type="button"
                               onClick={() => handleDeleteItem(idx)}
-                              aria-label={`Excluir variável ${item.key || idx + 1}`}
-                              title="Excluir variável"
+                              aria-label={t('environments.deleteVariableAria', { name: item.key || String(idx + 1) })}
+                              title={t('environments.deleteVariableTitle')}
                               className="p-1.5 text-neutral-400 hover:text-rose-400 rounded hover:bg-neutral-800 transition-colors"
                             >
                               <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
@@ -366,11 +369,11 @@ export function VariableGrid({
               <button
                 type="button"
                 onClick={handleAddItem}
-                aria-label="Adicionar variável"
+                aria-label={t('environments.addVariable')}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 hover:border-neutral-700 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-400"
               >
                 <Plus className="w-3.5 h-3.5 text-neutral-400" aria-hidden="true" />
-                <span>Adicionar Variável</span>
+                <span>{t('environments.addVariable')}</span>
               </button>
             </div>
           )}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Bookmark, Loader2, AlertCircle } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface FolderOption {
   id: string;
@@ -27,7 +28,9 @@ export function SaveRequestModal({
   defaultName,
   onSave,
 }: SaveRequestModalProps) {
-  const [name, setName] = useState(defaultName ?? 'Nova Requisição');
+  const { t } = useTranslation();
+  const defaultNameString = defaultName ?? t('saveRequestModal.defaultName');
+  const [name, setName] = useState(defaultNameString);
   const [selectedCollectionId, setSelectedCollectionId] = useState(collections[0]?.id || '');
   const [selectedFolderId, setSelectedFolderId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -42,7 +45,7 @@ export function SaveRequestModal({
   useEffect(() => {
     if (isOpen) {
       if (!wasOpenRef.current) {
-        setName(defaultName !== undefined ? defaultName : 'Nova Requisição');
+        setName(defaultName !== undefined ? defaultName : t('saveRequestModal.defaultName'));
         setSelectedCollectionId(collections[0]?.id || '');
         setSelectedFolderId('');
         setError(null);
@@ -69,7 +72,7 @@ export function SaveRequestModal({
         previousActiveElementRef.current.focus();
       }
     }
-  }, [isOpen, defaultName, collections, selectedCollectionId]);
+  }, [isOpen, defaultName, collections, selectedCollectionId, t]);
 
   useEffect(() => {
     return () => {
@@ -139,17 +142,17 @@ export function SaveRequestModal({
 
     const trimmedName = name.trim();
     if (!trimmedName) {
-      setNameError('O nome da requisição é obrigatório.');
+      setNameError(t('saveRequestModal.nameRequired'));
       return;
     }
 
     if (trimmedName.length > 200) {
-      setNameError('O nome da requisição não pode exceder 200 caracteres.');
+      setNameError(t('saveRequestModal.nameTooLong'));
       return;
     }
 
     if (!selectedCollectionId) {
-      setError('Selecione uma coleção de destino.');
+      setError(t('saveRequestModal.collectionRequired'));
       return;
     }
 
@@ -161,7 +164,7 @@ export function SaveRequestModal({
       await onSave(trimmedName, selectedCollectionId, selectedFolderId || undefined);
       onClose();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erro ao salvar a requisição.';
+      const message = err instanceof Error ? err.message : t('saveRequestModal.saveError');
       setError(message);
     } finally {
       setIsSubmitting(false);
@@ -197,16 +200,16 @@ export function SaveRequestModal({
                 id="save-request-modal-title"
                 className="text-sm font-semibold text-neutral-100"
               >
-                Salvar Requisição
+                {t('saveRequestModal.title')}
               </h2>
               <p className="text-xs text-neutral-400">
-                Escolha a coleção e a pasta onde deseja salvar.
+                {t('saveRequestModal.subtitle')}
               </p>
             </div>
           </div>
           <button
             type="button"
-            aria-label="Fechar modal"
+            aria-label={t('saveRequestModal.closeAria')}
             onClick={onClose}
             disabled={isSubmitting}
             className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors disabled:opacity-50 cursor-pointer"
@@ -223,19 +226,19 @@ export function SaveRequestModal({
               htmlFor="save-request-name-input"
               className="text-xs text-neutral-400 font-medium"
             >
-              Nome da Requisição <span className="text-rose-400">*</span>
+              {t('saveRequestModal.nameLabel')} <span className="text-rose-400">*</span>
             </label>
             <input
               ref={nameInputRef}
               id="save-request-name-input"
               type="text"
-              aria-label="Nome da requisição"
+              aria-label={t('saveRequestModal.nameLabel')}
               aria-required="true"
               aria-invalid={!!nameError}
               aria-describedby={nameError ? 'save-request-name-error' : undefined}
               value={name}
               disabled={isSubmitting}
-              placeholder="Ex: Listar Usuários"
+              placeholder={t('saveRequestModal.namePlaceholder')}
               onChange={(e) => {
                 setName(e.target.value);
                 if (nameError && e.target.value.trim()) {
@@ -265,11 +268,11 @@ export function SaveRequestModal({
               htmlFor="save-request-collection-select"
               className="text-xs text-neutral-400 font-medium"
             >
-              Coleção de Destino <span className="text-rose-400">*</span>
+              {t('saveRequestModal.collectionLabel')} <span className="text-rose-400">*</span>
             </label>
             <select
               id="save-request-collection-select"
-              aria-label="Coleção de destino"
+              aria-label={t('saveRequestModal.collectionLabel')}
               aria-required="true"
               value={selectedCollectionId}
               disabled={isSubmitting || collections.length === 0}
@@ -277,7 +280,7 @@ export function SaveRequestModal({
               className="h-10 px-3 text-sm bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {collections.length === 0 ? (
-                <option value="">Nenhuma coleção disponível</option>
+                <option value="">{t('saveRequestModal.noCollections')}</option>
               ) : (
                 collections.map((col) => (
                   <option key={col.id} value={col.id} className="bg-neutral-900 text-neutral-100">
@@ -294,18 +297,18 @@ export function SaveRequestModal({
               htmlFor="save-request-folder-select"
               className="text-xs text-neutral-400 font-medium"
             >
-              Pasta (Opcional)
+              {t('saveRequestModal.folderLabel')}
             </label>
             <select
               id="save-request-folder-select"
-              aria-label="Pasta de destino"
+              aria-label={t('saveRequestModal.folderLabel')}
               value={selectedFolderId}
               disabled={isSubmitting || collections.length === 0}
               onChange={(e) => setSelectedFolderId(e.target.value)}
               className="h-10 px-3 text-sm bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <option value="" className="bg-neutral-900 text-neutral-300">
-                (Nenhuma pasta - Raiz da coleção)
+                {t('saveRequestModal.noFolder')}
               </option>
               {availableFolders.map((folder) => (
                 <option key={folder.id} value={folder.id} className="bg-neutral-900 text-neutral-100">
@@ -334,7 +337,7 @@ export function SaveRequestModal({
               disabled={isSubmitting}
               className="h-9 px-4 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white text-xs font-medium transition-colors border border-neutral-700/60 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-neutral-500 cursor-pointer"
             >
-              Cancelar
+              {t('saveRequestModal.cancel')}
             </button>
             <button
               type="submit"
@@ -344,10 +347,10 @@ export function SaveRequestModal({
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-                  <span>Salvando...</span>
+                  <span>{t('saveRequestModal.saving')}</span>
                 </>
               ) : (
-                <span>Salvar</span>
+                <span>{t('saveRequestModal.save')}</span>
               )}
             </button>
           </div>

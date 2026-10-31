@@ -54,14 +54,14 @@ describe('EnvironmentModal', () => {
       const titleId = dialog.getAttribute('aria-labelledby');
       const title = document.getElementById(titleId!);
       expect(title).toBeInTheDocument();
-      expect(title?.textContent).toMatch(/ambientes e variáveis/i);
+      expect(title?.textContent).toMatch(/^environments & variables$/i);
     });
 
     it('triggers onClose when close button is clicked', () => {
       const handleClose = vi.fn();
       render(<EnvironmentModal isOpen={true} onClose={handleClose} />);
 
-      const closeBtn = screen.getByRole('button', { name: /fechar modal|fechar/i });
+      const closeBtn = screen.getByRole('button', { name: /close modal|fechar modal|fechar/i });
       fireEvent.click(closeBtn);
       expect(handleClose).toHaveBeenCalledTimes(1);
     });
@@ -176,13 +176,13 @@ describe('EnvironmentModal', () => {
   });
 
   describe('Tabs Navigation', () => {
-    it('renders all 4 tabs: Globais, Coleção, Ambientes, Calculadas', () => {
+    it('renders all 4 tabs: Globals, Collection, Environments, Computed', () => {
       render(<EnvironmentModal isOpen={true} onClose={() => {}} />);
 
-      expect(screen.getByRole('tab', { name: /globais/i })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /coleção|colecao/i })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /ambientes/i })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /calculadas/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^globals$/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^collection$/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^environments$/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^computed$/i })).toBeInTheDocument();
     });
 
     it('switches tabs and updates active aria-selected state', () => {
@@ -195,31 +195,31 @@ describe('EnvironmentModal', () => {
         />
       );
 
-      const globaisTab = screen.getByRole('tab', { name: /globais/i });
-      const colecaoTab = screen.getByRole('tab', { name: /coleção|colecao/i });
+      const globalsTab = screen.getByRole('tab', { name: /^globals$/i });
+      const collectionTab = screen.getByRole('tab', { name: /^collection$/i });
 
-      expect(globaisTab).toHaveAttribute('aria-selected', 'true');
-      expect(colecaoTab).toHaveAttribute('aria-selected', 'false');
+      expect(globalsTab).toHaveAttribute('aria-selected', 'true');
+      expect(collectionTab).toHaveAttribute('aria-selected', 'false');
 
-      fireEvent.click(colecaoTab);
+      fireEvent.click(collectionTab);
 
-      expect(globaisTab).toHaveAttribute('aria-selected', 'false');
-      expect(colecaoTab).toHaveAttribute('aria-selected', 'true');
+      expect(globalsTab).toHaveAttribute('aria-selected', 'false');
+      expect(collectionTab).toHaveAttribute('aria-selected', 'true');
       expect(screen.getByDisplayValue('COLLECTION_NAME')).toBeInTheDocument();
     });
 
     it('supports arrow key navigation across tabs', () => {
       render(<EnvironmentModal isOpen={true} onClose={() => {}} />);
 
-      const globaisTab = screen.getByRole('tab', { name: /globais/i });
-      const colecaoTab = screen.getByRole('tab', { name: /coleção|colecao/i });
+      const globalsTab = screen.getByRole('tab', { name: /^globals$/i });
+      const collectionTab = screen.getByRole('tab', { name: /^collection$/i });
 
-      globaisTab.focus();
-      fireEvent.keyDown(globaisTab, { key: 'ArrowRight' });
-      expect(colecaoTab).toHaveAttribute('aria-selected', 'true');
+      globalsTab.focus();
+      fireEvent.keyDown(globalsTab, { key: 'ArrowRight' });
+      expect(collectionTab).toHaveAttribute('aria-selected', 'true');
 
-      fireEvent.keyDown(colecaoTab, { key: 'ArrowLeft' });
-      expect(globaisTab).toHaveAttribute('aria-selected', 'true');
+      fireEvent.keyDown(collectionTab, { key: 'ArrowLeft' });
+      expect(globalsTab).toHaveAttribute('aria-selected', 'true');
     });
   });
 
@@ -237,7 +237,7 @@ describe('EnvironmentModal', () => {
       expect(screen.getByDisplayValue('https://api.global.com')).toBeInTheDocument();
       expect(screen.getByDisplayValue('GLOBAL_TOKEN')).toBeInTheDocument();
 
-      const checkboxes = screen.getAllByRole('checkbox', { name: /ativo|ativar variável/i });
+      const checkboxes = screen.getAllByRole('checkbox', { name: /active|enable variable|ativo|ativar variável/i });
       expect(checkboxes.length).toBeGreaterThanOrEqual(2);
       expect(checkboxes[0]).toBeChecked();
     });
@@ -253,7 +253,7 @@ describe('EnvironmentModal', () => {
         />
       );
 
-      const checkboxes = screen.getAllByRole('checkbox', { name: /ativo|ativar variável/i });
+      const checkboxes = screen.getAllByRole('checkbox', { name: /active|enable variable|ativo|ativar variável/i });
       fireEvent.click(checkboxes[0]);
 
       expect(checkboxes[0]).not.toBeChecked();
@@ -310,13 +310,13 @@ describe('EnvironmentModal', () => {
       expect(secretInput).toHaveAttribute('type', 'password');
 
       // Click reveal eye icon
-      const revealBtn = screen.getByRole('button', { name: /revelar segredo|mostrar segredo|revelar valor/i });
+      const revealBtn = screen.getByRole('button', { name: /reveal secret|show secret|reveal value|revelar segredo/i });
       fireEvent.click(revealBtn);
 
       expect(secretInput).toHaveAttribute('type', 'text');
 
       // Click again to hide/mask
-      const hideBtn = screen.getByRole('button', { name: /ocultar segredo|esconder segredo|ocultar valor/i });
+      const hideBtn = screen.getByRole('button', { name: /hide secret|mask secret|hide value|ocultar segredo/i });
       fireEvent.click(hideBtn);
 
       expect(secretInput).toHaveAttribute('type', 'password');
@@ -334,7 +334,7 @@ describe('EnvironmentModal', () => {
       );
 
       expect(screen.getByDisplayValue('API_URL')).toBeInTheDocument();
-      const deleteButtons = screen.getAllByRole('button', { name: /excluir variável|remover variável/i });
+      const deleteButtons = screen.getAllByRole('button', { name: /delete variable|excluir variável|remover variável/i });
       fireEvent.click(deleteButtons[0]);
 
       expect(screen.queryByDisplayValue('API_URL')).toBeNull();
@@ -343,7 +343,7 @@ describe('EnvironmentModal', () => {
       ]);
     });
 
-    it('adds a new empty variable row when "Adicionar Variável" button is clicked', () => {
+    it('adds a new empty variable row when "Add Variable" button is clicked', () => {
       render(
         <EnvironmentModal
           isOpen={true}
@@ -352,10 +352,10 @@ describe('EnvironmentModal', () => {
         />
       );
 
-      const addBtn = screen.getByRole('button', { name: /adicionar variável/i });
+      const addBtn = screen.getByRole('button', { name: /add variable/i });
       fireEvent.click(addBtn);
 
-      const keyInputs = screen.getAllByPlaceholderText(/chave|nome/i);
+      const keyInputs = screen.getAllByPlaceholderText(/key|chave|nome/i);
       expect(keyInputs.length).toBe(2);
       expect(keyInputs[1]).toHaveValue('');
     });
@@ -394,7 +394,7 @@ describe('EnvironmentModal', () => {
       expect(inputA).toHaveAttribute('type', 'password');
       expect(inputB).toHaveAttribute('type', 'password');
 
-      const revealBtns = screen.getAllByRole('button', { name: /revelar segredo/i });
+      const revealBtns = screen.getAllByRole('button', { name: /reveal secret|revelar segredo/i });
       fireEvent.click(revealBtns[0]);
 
       expect(inputA).toHaveAttribute('type', 'text');
@@ -433,14 +433,14 @@ describe('EnvironmentModal', () => {
         <EnvironmentModal
           isOpen={true}
           onClose={() => {}}
-          initialTab="Ambientes"
+          initialTab="Environments"
           environments={defaultEnvironments}
           onEnvironmentsChange={handleEnvironmentsChange}
         />
       );
 
-      const input = screen.getByPlaceholderText(/novo ambiente/i);
-      const addBtn = screen.getByRole('button', { name: /adicionar ambiente|criar ambiente/i });
+      const input = screen.getByPlaceholderText(/new environment|novo ambiente/i);
+      const addBtn = screen.getByRole('button', { name: /add environment|adicionar ambiente/i });
 
       fireEvent.change(input, { target: { value: 'Staging' } });
       fireEvent.click(addBtn);
@@ -459,14 +459,14 @@ describe('EnvironmentModal', () => {
         <EnvironmentModal
           isOpen={true}
           onClose={() => {}}
-          initialTab="Ambientes"
+          initialTab="Environments"
           environments={defaultEnvironments}
           onEnvironmentsChange={handleEnvironmentsChange}
         />
       );
 
-      const input = screen.getByPlaceholderText(/novo ambiente/i);
-      const addBtn = screen.getByRole('button', { name: /adicionar ambiente|criar ambiente/i });
+      const input = screen.getByPlaceholderText(/new environment|novo ambiente/i);
+      const addBtn = screen.getByRole('button', { name: /add environment|adicionar ambiente/i });
 
       // "Development" already exists; try adding lowercase "development"
       fireEvent.change(input, { target: { value: 'development' } });
@@ -584,16 +584,16 @@ describe('EnvironmentModal', () => {
         <EnvironmentModal
           isOpen={true}
           onClose={() => {}}
-          initialTab="Calculadas"
+          initialTab="Computed"
           globals={defaultGlobals}
           environments={defaultEnvironments}
         />
       );
 
-      const select = screen.getByLabelText(/ambiente ativo/i);
+      const select = screen.getByLabelText(/active environment|ambiente ativo/i);
       expect(select).toBeInTheDocument();
       expect(select).toHaveAttribute('id', 'active-env-select');
-      expect(select).toHaveAttribute('aria-label', 'Ambiente ativo');
+      expect(select).toHaveAttribute('aria-label', expect.stringMatching(/active environment|ambiente ativo/i));
     });
   });
 
@@ -607,10 +607,10 @@ describe('EnvironmentModal', () => {
         />
       );
 
-      const bulkToggle = screen.getByRole('button', { name: /modo json|bulk json|json em massa/i });
+      const bulkToggle = screen.getByRole('button', { name: /bulk json|modo json|json em massa/i });
       fireEvent.click(bulkToggle);
 
-      const textarea = screen.getByRole('textbox', { name: /editor json|json em massa/i });
+      const textarea = screen.getByRole('textbox', { name: /bulk json editor|editor json|json em massa/i });
       expect(textarea).toBeInTheDocument();
       expect(textarea.textContent || (textarea as HTMLTextAreaElement).value).toContain('API_URL');
     });
@@ -624,14 +624,14 @@ describe('EnvironmentModal', () => {
         />
       );
 
-      const bulkToggle = screen.getByRole('button', { name: /modo json|bulk json|json em massa/i });
+      const bulkToggle = screen.getByRole('button', { name: /bulk json|modo json|json em massa/i });
       fireEvent.click(bulkToggle);
 
-      const textarea = screen.getByRole('textbox', { name: /editor json|json em massa/i });
+      const textarea = screen.getByRole('textbox', { name: /bulk json editor|editor json|json em massa/i });
       // Unformatted JSON
       fireEvent.change(textarea, { target: { value: '{"API_URL":"https://test.com","TIMEOUT":"5000"}' } });
 
-      const formatBtn = screen.getByRole('button', { name: /formatar/i });
+      const formatBtn = screen.getByRole('button', { name: /format|formatar/i });
       fireEvent.click(formatBtn);
 
       const formattedValue = (textarea as HTMLTextAreaElement).value;
@@ -647,16 +647,16 @@ describe('EnvironmentModal', () => {
         />
       );
 
-      const bulkToggle = screen.getByRole('button', { name: /modo json|bulk json|json em massa/i });
+      const bulkToggle = screen.getByRole('button', { name: /bulk json|modo json|json em massa/i });
       fireEvent.click(bulkToggle);
 
-      const textarea = screen.getByRole('textbox', { name: /editor json|json em massa/i });
+      const textarea = screen.getByRole('textbox', { name: /bulk json editor|editor json|json em massa/i });
       fireEvent.change(textarea, { target: { value: '{ invalid: json' } });
 
-      const formatBtn = screen.getByRole('button', { name: /formatar/i });
+      const formatBtn = screen.getByRole('button', { name: /format|formatar/i });
       fireEvent.click(formatBtn);
 
-      expect(screen.getByText(/json inválido|sintaxe json inválida/i)).toBeInTheDocument();
+      expect(screen.getByText(/invalid json|json inválido|sintaxe json inválida/i)).toBeInTheDocument();
     });
 
     it('applies JSON changes back to variables table when toggled back', () => {
@@ -668,10 +668,10 @@ describe('EnvironmentModal', () => {
         />
       );
 
-      const bulkToggle = screen.getByRole('button', { name: /modo json|bulk json|json em massa/i });
+      const bulkToggle = screen.getByRole('button', { name: /bulk json|modo json|json em massa/i });
       fireEvent.click(bulkToggle);
 
-      const textarea = screen.getByRole('textbox', { name: /editor json|json em massa/i });
+      const textarea = screen.getByRole('textbox', { name: /bulk json editor|editor json|json em massa/i });
       fireEvent.change(textarea, {
         target: {
           value: JSON.stringify([
@@ -698,15 +698,15 @@ describe('EnvironmentModal', () => {
         />
       );
 
-      const bulkToggle = screen.getByRole('button', { name: /modo json|bulk json|json em massa/i });
+      const bulkToggle = screen.getByRole('button', { name: /bulk json|modo json|json em massa/i });
       fireEvent.click(bulkToggle);
 
-      const textarea = screen.getByRole('textbox', { name: /editor json|json em massa/i });
+      const textarea = screen.getByRole('textbox', { name: /bulk json editor|editor json|json em massa/i });
       fireEvent.change(textarea, { target: { value: '123' } });
 
       fireEvent.click(bulkToggle);
 
-      expect(screen.getByText(/o json deve ser um array de objetos ou um objeto chave-valor/i)).toBeInTheDocument();
+      expect(screen.getByText(/json must be an array of objects or a key-value object|o json deve ser um array de objetos/i)).toBeInTheDocument();
       expect(handleGlobalsChange).not.toHaveBeenCalled();
     });
 
@@ -721,13 +721,13 @@ describe('EnvironmentModal', () => {
         />
       );
 
-      const bulkToggle = screen.getByRole('button', { name: /modo json|bulk json|json em massa/i });
+      const bulkToggle = screen.getByRole('button', { name: /bulk json|modo json|json em massa/i });
       fireEvent.click(bulkToggle);
 
-      const textarea = screen.getByRole('textbox', { name: /editor json|json em massa/i });
+      const textarea = screen.getByRole('textbox', { name: /bulk json editor|editor json|json em massa/i });
       fireEvent.change(textarea, { target: { value: '{"A":"1","B":"2"}' } });
 
-      const formatBtn = screen.getByRole('button', { name: /formatar/i });
+      const formatBtn = screen.getByRole('button', { name: /format|formatar/i });
       fireEvent.click(formatBtn);
 
       expect((textarea as HTMLTextAreaElement).value).toContain('{\n  "A": "1",\n  "B": "2"\n}');

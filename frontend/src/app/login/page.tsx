@@ -3,12 +3,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { useTranslation } from '@/hooks/useTranslation';
 import { LogIn, Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
   const routerRef = useRef(router);
   routerRef.current = router;
+  const { t } = useTranslation();
 
   const {
     config,
@@ -78,7 +80,7 @@ export default function LoginPage() {
     if (isSubmitting) return;
 
     if (!email.trim() || !password) {
-      setError('Por favor preencha todos os campos.');
+      setError(t('auth.fillAllFields'));
       return;
     }
 
@@ -89,7 +91,7 @@ export default function LoginPage() {
       await loginLocal(email.trim(), password);
       routerRef.current.replace(getReturnUrl());
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Falha na autenticação';
+      const message = err instanceof Error ? err.message : t('auth.authFailed');
       setError(message);
     } finally {
       setIsSubmitting(false);
@@ -107,7 +109,7 @@ export default function LoginPage() {
             </span>
           </div>
           <p className="text-sm text-neutral-400">
-            Test and debug any API, anywhere
+            {t('auth.loginSubtitle')}
           </p>
         </div>
 
@@ -134,11 +136,11 @@ export default function LoginPage() {
                   window.location.href = `/api/auth/login${getReturnUrl() !== '/' ? `?returnUrl=${encodeURIComponent(getReturnUrl())}` : ''}`;
                 }
               }}
-              aria-label="Entrar com SSO"
+              aria-label={t('auth.ssoSignIn')}
               className="w-full inline-flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-medium text-sm transition-colors shadow-lg shadow-blue-600/20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-neutral-900 cursor-pointer"
             >
               <LogIn className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span>Entrar com SSO</span>
+              <span>{t('auth.ssoSignIn')}</span>
             </a>
 
             <div className="relative flex items-center justify-center">
@@ -146,7 +148,7 @@ export default function LoginPage() {
                 <div className="w-full border-t border-neutral-800" />
               </div>
               <div className="relative px-3 bg-neutral-900 text-xs text-neutral-400 uppercase tracking-wider select-none">
-                ou continue com credenciais locais
+                {t('auth.or')}
               </div>
             </div>
           </div>
@@ -160,7 +162,7 @@ export default function LoginPage() {
               className="text-xs font-medium text-neutral-300 flex items-center gap-1.5"
             >
               <Mail className="w-3.5 h-3.5 text-neutral-400" aria-hidden="true" />
-              <span>E-mail</span>
+              <span>{t('auth.email')}</span>
             </label>
             <input
               id="email"
@@ -186,7 +188,7 @@ export default function LoginPage() {
               className="text-xs font-medium text-neutral-300 flex items-center gap-1.5"
             >
               <Lock className="w-3.5 h-3.5 text-neutral-400" aria-hidden="true" />
-              <span>Senha</span>
+              <span>{t('auth.password')}</span>
             </label>
             <input
               id="password"
@@ -209,16 +211,16 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            aria-label="Entrar com credenciais locais"
+            aria-label={t('auth.localSubmitButton')}
             className="w-full mt-2 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-neutral-100 hover:bg-white active:bg-neutral-200 text-neutral-900 font-medium text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 focus:ring-offset-neutral-900 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden="true" />
-                <span>Entrando...</span>
+                <span>{t('auth.signingIn')}</span>
               </>
             ) : (
-              <span>Entrar com credenciais locais</span>
+              <span>{t('auth.localSubmitButton')}</span>
             )}
           </button>
         </form>

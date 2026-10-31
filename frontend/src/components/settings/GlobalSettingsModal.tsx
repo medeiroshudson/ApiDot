@@ -217,7 +217,7 @@ export function GlobalSettingsModal({
     if (e) e.preventDefault();
     const trimmed = newDeviceName.trim();
     if (!trimmed) {
-      setCreateError(locale === 'en-US' ? 'Device name is required.' : 'O nome do dispositivo é obrigatório.');
+      setCreateError(t('settings.deviceNameRequired'));
       return;
     }
 
@@ -241,9 +241,7 @@ export function GlobalSettingsModal({
       const message =
         err instanceof Error
           ? err.message
-          : locale === 'en-US'
-          ? 'Failed to register device.'
-          : 'Falha ao cadastrar dispositivo.';
+          : t('settings.failedToCreateDevice');
       setCreateError(message);
     } finally {
       setIsCreating(false);
@@ -268,9 +266,7 @@ export function GlobalSettingsModal({
       const message =
         err instanceof Error
           ? err.message
-          : locale === 'en-US'
-          ? 'Failed to regenerate token.'
-          : 'Falha ao regenerar token.';
+          : t('settings.failedToRegenerateToken');
       setActionError(message);
     } finally {
       setActionInProgressId(null);
@@ -289,9 +285,7 @@ export function GlobalSettingsModal({
       const message =
         err instanceof Error
           ? err.message
-          : locale === 'en-US'
-          ? 'Failed to revoke device.'
-          : 'Falha ao revogar dispositivo.';
+          : t('settings.failedToRevokeDevice');
       setActionError(message);
     } finally {
       setActionInProgressId(null);
@@ -327,16 +321,14 @@ export function GlobalSettingsModal({
                 {t('settings.title')}
               </h2>
               <p className="text-xs text-neutral-400">
-                {locale === 'en-US'
-                  ? 'Manage local execution agents, interface preferences, and environments'
-                  : 'Gerencie os agentes de execução local, preferências de interface e ambiente'}
+                {t('settings.subtitle')}
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label={locale === 'en-US' ? 'Close global settings' : 'Fechar configurações globais'}
+            aria-label={t('settings.closeSettingsAria')}
             className="text-neutral-400 hover:text-white p-1 rounded-md hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-400"
           >
             <X className="w-4 h-4" aria-hidden="true" />
@@ -387,7 +379,7 @@ export function GlobalSettingsModal({
               </div>
               <div className="flex items-center gap-1.5">
                 <span
-                  title={`${onlineAgentsCount} ${locale === 'en-US' ? 'agent(s) online' : 'agente(s) online'}`}
+                  title={t('settings.agentsOnlineCount', { count: onlineAgentsCount })}
                   className={`w-2 h-2 rounded-full ${
                     onlineAgentsCount > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-neutral-600'
                   }`}
@@ -429,9 +421,7 @@ export function GlobalSettingsModal({
                 <div>
                   <h3 className="text-sm font-semibold text-white">{t('settings.generalTab')}</h3>
                   <p className="text-xs text-neutral-400">
-                    {locale === 'en-US'
-                      ? 'Application appearance and workspace panel preferences.'
-                      : 'Aparência da aplicação e preferências dos painéis de trabalho.'}
+                    {t('settings.generalDesc')}
                   </p>
                 </div>
 
@@ -458,16 +448,14 @@ export function GlobalSettingsModal({
                   <div className="flex items-center justify-between p-3.5 sm:p-4">
                     <div className="flex flex-col gap-0.5">
                       <span className="font-semibold text-white">
-                        {locale === 'en-US' ? 'Application Version' : 'Versão da Aplicação'}
+                        {t('settings.appVersion')}
                       </span>
                       <span className="text-neutral-400">
-                        {locale === 'en-US'
-                          ? 'Official platform support and update channel'
-                          : 'Canal oficial de atualizações e suporte da plataforma'}
+                        {t('settings.appVersionDesc')}
                       </span>
                     </div>
                     <span className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-neutral-900 border border-neutral-800 text-blue-400">
-                      ApiDot {formatDisplayVersion(APP_VERSION)} • {locale === 'en-US' ? 'Stable' : 'Estável'}
+                      ApiDot {formatDisplayVersion(APP_VERSION)} • {t('settings.stable')}
                     </span>
                   </div>
 
@@ -475,16 +463,14 @@ export function GlobalSettingsModal({
                   <div className="flex items-center justify-between p-3.5 sm:p-4">
                     <div className="flex flex-col gap-0.5">
                       <span className="font-semibold text-white">
-                        {locale === 'en-US' ? 'Visual Theme' : 'Tema Visual'}
+                        {t('settings.visualTheme')}
                       </span>
                       <span className="text-neutral-400">
-                        {locale === 'en-US'
-                          ? 'Color scheme for the editing interface and requests'
-                          : 'Esquema de cores da interface de edição e requisições'}
+                        {t('settings.visualThemeDesc')}
                       </span>
                     </div>
                     <span className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-neutral-900 border border-neutral-800 text-neutral-200">
-                      {locale === 'en-US' ? 'Dark (Default)' : 'Escuro (Padrão)'}
+                      {t('settings.darkDefault')}
                     </span>
                   </div>
 
@@ -493,9 +479,7 @@ export function GlobalSettingsModal({
                     <div className="flex flex-col gap-0.5">
                       <span className="font-semibold text-white">{t('settings.sidebarWidth')}</span>
                       <span className="text-neutral-400">
-                        {locale === 'en-US'
-                          ? 'Default size of 256px for the workspaces and collections tree'
-                          : 'Tamanho padrão de 256px para a árvore de workspaces e coleções'}
+                        {t('settings.sidebarWidthDesc')}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -517,9 +501,7 @@ export function GlobalSettingsModal({
                     <div className="flex flex-col gap-0.5">
                       <span className="font-semibold text-white">{t('settings.requestResponseRatio')}</span>
                       <span className="text-neutral-400">
-                        {locale === 'en-US'
-                          ? 'Horizontal proportion between code editor and response viewer'
-                          : 'Proporção horizontal entre o editor de código e o visualizador de resposta'}
+                        {t('settings.splitRatioDesc')}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -541,9 +523,7 @@ export function GlobalSettingsModal({
                     <div className="flex flex-col gap-0.5">
                       <span className="font-semibold text-white">{t('settings.executionTimeout')}</span>
                       <span className="text-neutral-400">
-                        {locale === 'en-US'
-                          ? 'Timeout limit before aborting remote or local requests'
-                          : 'Tempo limite antes de cancelar requisições remotas ou locais'}
+                        {t('settings.timeoutDesc')}
                       </span>
                     </div>
                     <span className="text-neutral-300 font-mono text-[11px]">
@@ -566,12 +546,10 @@ export function GlobalSettingsModal({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-semibold text-white">
-                      {locale === 'en-US' ? 'Devices & Local Agents' : 'Dispositivos & Local Agents'}
+                      {t('settings.devicesAndAgents')}
                     </h3>
                     <p className="text-xs text-neutral-400">
-                      {locale === 'en-US'
-                        ? 'Authorized devices for local execution of HTTP calls'
-                        : 'Dispositivos autorizados para execução local de chamadas HTTP'}
+                      {t('settings.devicesSubtitle')}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -662,17 +640,17 @@ export function GlobalSettingsModal({
                                   {/* Status indicator */}
                                   {device.isRevoked ? (
                                     <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                                      {locale === 'en-US' ? 'Revoked' : 'Revogado'}
+                                      {t('settings.statusRevoked')}
                                     </span>
                                   ) : device.isOnline ? (
                                     <span className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                      {locale === 'en-US' ? 'Online' : 'Online'}
+                                      {t('settings.statusOnline')}
                                     </span>
                                   ) : (
                                     <span className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-neutral-800 text-neutral-400 border border-neutral-700">
                                       <span className="w-1.5 h-1.5 rounded-full bg-neutral-500" />
-                                      {locale === 'en-US' ? 'Offline' : 'Offline'}
+                                      {t('settings.statusOffline')}
                                     </span>
                                   )}
                                 </div>
@@ -681,7 +659,7 @@ export function GlobalSettingsModal({
                                   <span>
                                     {device.lastConnectedHostname
                                       ? `Host: ${device.lastConnectedHostname} (${device.lastConnectedOs || 'OS'})`
-                                      : (locale === 'en-US' ? 'Never connected' : 'Nunca conectado')}
+                                      : t('settings.neverConnected')}
                                   </span>
                                   {device.agentVersion && (
                                     <>
@@ -709,7 +687,7 @@ export function GlobalSettingsModal({
                                     type="button"
                                     onClick={() => handleRegenerate(device)}
                                     disabled={isBusy}
-                                    title={locale === 'en-US' ? 'Regenerate Token' : 'Regenerar Token'}
+                                    title={t('settings.regenerateToken')}
                                     className="h-7 px-2.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white transition-colors disabled:opacity-50 inline-flex items-center gap-1 text-[11px] cursor-pointer"
                                   >
                                     {isBusy ? (
@@ -717,7 +695,7 @@ export function GlobalSettingsModal({
                                     ) : (
                                       <RefreshCw className="w-3 h-3" />
                                     )}
-                                    <span>{locale === 'en-US' ? 'Regenerate Token' : 'Regenerar Token'}</span>
+                                    <span>{t('settings.regenerateToken')}</span>
                                   </button>
                                 )}
                               </div>
@@ -726,14 +704,14 @@ export function GlobalSettingsModal({
                                 type="button"
                                 onClick={() => handleRevoke(device)}
                                 disabled={device.isRevoked || isBusy}
-                                title={locale === 'en-US' ? 'Revoke Device' : 'Revogar Dispositivo'}
+                                title={t('settings.revokeDevice')}
                                 className="h-7 px-2.5 rounded-lg text-neutral-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors disabled:opacity-40 disabled:hover:text-neutral-400 disabled:hover:bg-transparent text-[11px] inline-flex items-center gap-1 ml-auto sm:ml-0 cursor-pointer"
                               >
                                 <Trash2 className="w-3 h-3" />
                                 <span>
                                   {device.isRevoked
-                                    ? (locale === 'en-US' ? 'Revoked' : 'Revogado')
-                                    : (locale === 'en-US' ? 'Revoke' : 'Revogar')}
+                                    ? t('settings.statusRevoked')
+                                    : t('settings.revoke')}
                                 </span>
                               </button>
                             </div>
@@ -762,13 +740,13 @@ export function GlobalSettingsModal({
               <div className="flex items-center gap-2">
                 <Laptop className="w-4 h-4 text-blue-400" />
                 <h3 id="create-device-modal-title" className="text-sm font-semibold text-white">
-                  {locale === 'en-US' ? 'Register New Device' : 'Cadastrar Novo Dispositivo'}
+                  {t('settings.registerNewDevice')}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsCreateDialogOpen(false)}
-                aria-label={locale === 'en-US' ? 'Close device registration' : 'Fechar cadastro de dispositivo'}
+                aria-label={t('settings.closeRegistrationAria')}
                 className="text-neutral-400 hover:text-white p-1 rounded hover:bg-neutral-800"
               >
                 <X className="w-4 h-4" />
@@ -788,7 +766,7 @@ export function GlobalSettingsModal({
 
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="device-name-input" className="font-medium text-neutral-300">
-                  {locale === 'en-US' ? 'Device Name' : 'Nome do Dispositivo'}
+                  {t('settings.deviceName')}
                 </label>
                 <input
                   ref={createInputRef}
@@ -801,13 +779,11 @@ export function GlobalSettingsModal({
                   }}
                   disabled={isCreating}
                   maxLength={100}
-                  placeholder={locale === 'en-US' ? 'e.g. MacBook Pro Hudson' : 'Ex: MacBook Pro Hudson'}
+                  placeholder={t('settings.deviceNamePlaceholder')}
                   className="px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
                 />
                 <span className="text-[11px] text-neutral-500">
-                  {locale === 'en-US'
-                    ? 'A friendly name to identify this execution node.'
-                    : 'Um nome amigável para identificar este nó de execução.'}
+                  {t('settings.deviceNameHint')}
                 </span>
               </div>
 
@@ -828,12 +804,12 @@ export function GlobalSettingsModal({
                   {isCreating ? (
                     <>
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>{locale === 'en-US' ? 'Registering...' : 'Cadastrando...'}</span>
+                      <span>{t('settings.registering')}</span>
                     </>
                   ) : (
                     <>
                       <Plus className="w-3.5 h-3.5" />
-                      <span>{locale === 'en-US' ? 'Register' : 'Cadastrar'}</span>
+                      <span>{t('settings.register')}</span>
                     </>
                   )}
                 </button>
@@ -858,14 +834,14 @@ export function GlobalSettingsModal({
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 <h3 id="one-time-token-title" className="text-sm font-semibold text-white">
                   {oneTimeTokenData.isRegenerated
-                    ? (locale === 'en-US' ? 'Token Successfully Regenerated' : 'Token Regenerado com Sucesso')
-                    : (locale === 'en-US' ? 'Device Successfully Registered' : 'Dispositivo Cadastrado com Sucesso')}
+                    ? t('settings.tokenRegeneratedSuccess')
+                    : t('settings.deviceRegisteredSuccess')}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setOneTimeTokenData(null)}
-                aria-label={locale === 'en-US' ? 'Close token dialog' : 'Fechar diálogo de token'}
+                aria-label={t('settings.closeTokenDialogAria')}
                 className="text-neutral-400 hover:text-white p-1 rounded hover:bg-neutral-800"
               >
                 <X className="w-4 h-4" />
@@ -881,12 +857,10 @@ export function GlobalSettingsModal({
                 <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                 <div className="flex flex-col gap-0.5">
                   <span className="font-semibold text-amber-200">
-                    {locale === 'en-US' ? 'Attention: Save this token now' : 'Atenção: Guarde este token agora'}
+                    {t('settings.attentionSaveToken')}
                   </span>
                   <span>
-                    {locale === 'en-US'
-                      ? 'This personal access token (PAT) will not be shown again. If lost, you will need to regenerate it.'
-                      : 'Este token de acesso pessoal (PAT) não será exibido novamente. Caso perca, será necessário regenerá-lo.'}
+                    {t('settings.tokenWarningDesc')}
                   </span>
                 </div>
               </div>
@@ -895,7 +869,7 @@ export function GlobalSettingsModal({
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between text-neutral-300">
                   <span className="font-medium">
-                    {locale === 'en-US' ? 'Access Token (PAT):' : 'Token de Acesso (PAT):'}
+                    {t('settings.accessTokenPat')}
                   </span>
                   <button
                     type="button"
@@ -905,8 +879,8 @@ export function GlobalSettingsModal({
                     {isTokenMasked ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
                     <span>
                       {isTokenMasked
-                        ? (locale === 'en-US' ? 'Show' : 'Mostrar')
-                        : (locale === 'en-US' ? 'Hide' : 'Ocultar')}
+                        ? t('settings.show')
+                        : t('settings.hide')}
                     </span>
                   </button>
                 </div>
@@ -941,18 +915,18 @@ export function GlobalSettingsModal({
               {/* Setup Commands Box */}
               <div className="flex flex-col gap-1.5">
                 <span className="font-medium text-neutral-300">
-                  {locale === 'en-US' ? 'Quick Start Commands:' : 'Comandos de Inicialização Rápida:'}
+                  {t('settings.quickStartCommands')}
                 </span>
                 <div className="relative group bg-neutral-950 border border-neutral-800 rounded-lg p-3 font-mono text-[11px] text-neutral-300 flex flex-col gap-2">
                   <div className="text-neutral-400">
-                    {locale === 'en-US' ? '# 1. Install agent via script:' : '# 1. Instalar o agent via script:'}
+                    {t('settings.installScriptComment')}
                   </div>
                   <div className="text-emerald-400 select-all">
                     curl -fsSL {originUrl}/install.sh | bash
                   </div>
 
                   <div className="text-neutral-400 pt-1">
-                    {locale === 'en-US' ? '# 2. Register as system service:' : '# 2. Registrar como serviço do sistema:'}
+                    {t('settings.registerServiceComment')}
                   </div>
                   <div className="text-blue-400 select-all break-all">
                     apidot-agent service install --server {originUrl} --token {oneTimeTokenData.rawToken}
@@ -969,12 +943,12 @@ export function GlobalSettingsModal({
                     {commandCopied ? (
                       <>
                         <Check className="w-3 h-3 text-emerald-400" />
-                        <span>{locale === 'en-US' ? 'Commands copied!' : 'Comando copiado!'}</span>
+                        <span>{t('settings.commandsCopied')}</span>
                       </>
                     ) : (
                       <>
                         <Copy className="w-3 h-3" />
-                        <span>{locale === 'en-US' ? 'Copy Commands' : 'Copiar Comandos'}</span>
+                        <span>{t('settings.copyCommands')}</span>
                       </>
                     )}
                   </button>
@@ -987,7 +961,7 @@ export function GlobalSettingsModal({
                   onClick={() => setOneTimeTokenData(null)}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg transition-colors"
                 >
-                  {locale === 'en-US' ? 'Finish & Close' : 'Concluir & Fechar'}
+                  {t('settings.finishClose')}
                 </button>
               </div>
             </div>
@@ -1008,15 +982,13 @@ export function GlobalSettingsModal({
               <div className="flex items-center gap-2">
                 <Terminal className="w-4 h-4 text-blue-400" />
                 <h3 id="instructions-modal-title" className="text-sm font-semibold text-white">
-                  {locale === 'en-US'
-                    ? `Instructions for "${instructionsDevice.name}"`
-                    : `Instruções para “${instructionsDevice.name}”`}
+                  {t('settings.instructionsForDevice', { name: instructionsDevice.name })}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setInstructionsDevice(null)}
-                aria-label={locale === 'en-US' ? 'Close instructions' : 'Fechar instruções'}
+                aria-label={t('settings.closeInstructionsAria')}
                 className="text-neutral-400 hover:text-white p-1 rounded hover:bg-neutral-800"
               >
                 <X className="w-4 h-4" />
@@ -1025,14 +997,12 @@ export function GlobalSettingsModal({
 
             <div className="p-5 flex flex-col gap-4">
               <p className="text-neutral-400">
-                {locale === 'en-US'
-                  ? 'The ApiDot agent runs as a lightweight daemon on the machine where you want to execute local network calls.'
-                  : 'O agent do ApiDot roda como um daemon leve na máquina onde você deseja executar chamadas de rede local.'}
+                {t('settings.instructionsSubtitle')}
               </p>
 
               <div className="flex flex-col gap-2">
                 <span className="font-semibold text-white">
-                  {locale === 'en-US' ? '1. Binary Installation' : '1. Instalação do Binário'}
+                  {t('settings.step1Title')}
                 </span>
                 <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 font-mono text-[11px] text-emerald-400">
                   <div className="text-neutral-500 mb-1"># macOS / Linux:</div>
@@ -1044,25 +1014,19 @@ export function GlobalSettingsModal({
 
               <div className="flex flex-col gap-2">
                 <span className="font-semibold text-white">
-                  {locale === 'en-US'
-                    ? '2. Start as Background Service (Recommended)'
-                    : '2. Inicialização como Serviço de Fundo (Recomendado)'}
+                  {t('settings.step2Title')}
                 </span>
                 <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 font-mono text-[11px] text-blue-400">
                   <div>apidot-agent service install --server {originUrl} --token &lt;SEU_TOKEN&gt;</div>
                 </div>
                 <span className="text-[11px] text-neutral-500">
-                  {locale === 'en-US'
-                    ? 'Installs and starts via launchd (macOS), systemd --user (Linux) or schtasks (Windows).'
-                    : 'Instala e inicia via launchd (macOS), systemd --user (Linux) ou schtasks (Windows).'}
+                  {t('settings.step2Desc')}
                 </span>
               </div>
 
               <div className="flex flex-col gap-2">
                 <span className="font-semibold text-white">
-                  {locale === 'en-US'
-                    ? '3. Foreground Execution (For quick testing)'
-                    : '3. Execução em Primeiro Plano (Para testes rápidos)'}
+                  {t('settings.step3Title')}
                 </span>
                 <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 font-mono text-[11px] text-neutral-300">
                   <div>apidot-agent connect --server {originUrl} --token &lt;SEU_TOKEN&gt;</div>
@@ -1075,7 +1039,7 @@ export function GlobalSettingsModal({
                   onClick={() => setInstructionsDevice(null)}
                   className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white font-medium rounded-lg transition-colors"
                 >
-                  {locale === 'en-US' ? 'Got it' : 'Entendi'}
+                  {t('settings.gotIt')}
                 </button>
               </div>
             </div>

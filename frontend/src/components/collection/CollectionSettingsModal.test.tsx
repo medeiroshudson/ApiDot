@@ -65,7 +65,7 @@ describe('CollectionSettingsModal', () => {
       const titleId = dialog.getAttribute('aria-labelledby');
       const title = document.getElementById(titleId!);
       expect(title).toBeInTheDocument();
-      expect(title?.textContent).toMatch(/configurações da coleção/i);
+      expect(title?.textContent).toMatch(/collection settings|configurações da coleção/i);
     });
   });
 
@@ -79,10 +79,10 @@ describe('CollectionSettingsModal', () => {
         />
       );
 
-      const tabGeneral = screen.getByRole('tab', { name: /geral & alvo/i });
-      const tabAuth = screen.getByRole('tab', { name: /autenticação/i });
+      const tabGeneral = screen.getByRole('tab', { name: /general & target|geral & alvo/i });
+      const tabAuth = screen.getByRole('tab', { name: /authentication|autenticação/i });
       const tabOpenApi = screen.getByRole('tab', { name: /openapi \/ sync/i });
-      const tabDeps = screen.getByRole('tab', { name: /vínculos & dependências/i });
+      const tabDeps = screen.getByRole('tab', { name: /links & dependencies|vínculos & dependências/i });
 
       expect(tabGeneral).toBeInTheDocument();
       expect(tabAuth).toBeInTheDocument();
@@ -90,22 +90,22 @@ describe('CollectionSettingsModal', () => {
       expect(tabDeps).toBeInTheDocument();
 
       // Tab 1 (General) is active by default
-      expect(screen.getByLabelText(/nome da coleção/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/collection name|nome da coleção/i)).toBeInTheDocument();
       expect(screen.getByRole('combobox', { name: /execution target|target de execução|alvo de execução/i })).toBeInTheDocument();
 
       // Switch to Auth tab
       fireEvent.click(tabAuth);
-      expect(screen.getByRole('combobox', { name: /tipo de autenticação da coleção/i })).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: /collection authentication type|tipo de autenticação da coleção/i })).toBeInTheDocument();
 
       // Switch to OpenAPI tab
       fireEvent.click(tabOpenApi);
-      expect(screen.getByLabelText(/url da especificação openapi/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/openapi specification url|url da especificação openapi/i)).toBeInTheDocument();
       expect(screen.getByTestId('openapi-code-editor')).toBeInTheDocument();
 
       // Switch to Dependencies tab
       fireEvent.click(tabDeps);
       expect(screen.getAllByText(/get user profile/i).length).toBeGreaterThan(0);
-      expect(screen.getAllByRole('button', { name: /copiar/i }).length).toBeGreaterThan(0);
+      expect(screen.getAllByRole('button', { name: /copy|copiar/i }).length).toBeGreaterThan(0);
     });
   });
 
@@ -121,16 +121,16 @@ describe('CollectionSettingsModal', () => {
         />
       );
 
-      const tabAuth = screen.getByRole('tab', { name: /autenticação/i });
+      const tabAuth = screen.getByRole('tab', { name: /authentication|autenticação/i });
       fireEvent.click(tabAuth);
 
-      const authSelect = screen.getByRole('combobox', { name: /tipo de autenticação da coleção/i });
+      const authSelect = screen.getByRole('combobox', { name: /collection authentication type|tipo de autenticação da coleção/i });
       fireEvent.change(authSelect, { target: { value: 'bearer' } });
 
       const tokenInput = screen.getByLabelText(/token:/i);
       fireEvent.change(tokenInput, { target: { value: 'my-coll-token-123' } });
 
-      const saveBtn = screen.getByRole('button', { name: /salvar alterações/i });
+      const saveBtn = screen.getByRole('button', { name: /save changes|salvar alterações/i });
       fireEvent.click(saveBtn);
 
       await waitFor(() => {
@@ -158,13 +158,13 @@ describe('CollectionSettingsModal', () => {
         />
       );
 
-      const nameInput = screen.getByLabelText(/nome da coleção/i);
+      const nameInput = screen.getByLabelText(/collection name|nome da coleção/i);
       fireEvent.change(nameInput, { target: { value: 'Nova Coleção Renomeada' } });
 
       const targetSelect = screen.getByRole('combobox', { name: /execution target|target de execução|alvo de execução/i });
       fireEvent.change(targetSelect, { target: { value: 'Agent' } });
 
-      const saveBtn = screen.getByRole('button', { name: /salvar alterações/i });
+      const saveBtn = screen.getByRole('button', { name: /save changes|salvar alterações/i });
       fireEvent.click(saveBtn);
 
       await waitFor(() => {
@@ -193,7 +193,7 @@ describe('CollectionSettingsModal', () => {
       const tabOpenApi = screen.getByRole('tab', { name: /openapi \/ sync/i });
       fireEvent.click(tabOpenApi);
 
-      const syncBtn = screen.getByRole('button', { name: /sincronizar coleção/i });
+      const syncBtn = screen.getByRole('button', { name: /sync collection|sincronizar coleção/i });
       fireEvent.click(syncBtn);
 
       await waitFor(() => {
@@ -224,10 +224,10 @@ describe('CollectionSettingsModal', () => {
         />
       );
 
-      const tabDeps = screen.getByRole('tab', { name: /vínculos & dependências/i });
+      const tabDeps = screen.getByRole('tab', { name: /links & dependencies|vínculos & dependências/i });
       fireEvent.click(tabDeps);
 
-      const copyBtns = screen.getAllByRole('button', { name: /copiar/i });
+      const copyBtns = screen.getAllByRole('button', { name: /copy|copiar/i });
       fireEvent.click(copyBtns[0]);
 
       await waitFor(() => {
