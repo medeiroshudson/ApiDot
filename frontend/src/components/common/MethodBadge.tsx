@@ -31,7 +31,7 @@ export function MethodBadge({
 
   return (
     <span
-      className={`inline-flex items-center justify-center font-mono font-semibold rounded border uppercase shrink-0 tracking-wide select-none ${sizeClasses} ${colorClasses} ${className}`.trim()}
+      className={`inline-flex items-center justify-center font-mono font-semibold rounded border uppercase shrink-0 tracking-wide select-none overflow-hidden ${sizeClasses} ${colorClasses} ${className}`.trim()}
       {...rest}
     >
       {normalizedMethod}
