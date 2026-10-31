@@ -226,7 +226,7 @@ describe('Root Redirector (app/page.tsx)', () => {
     render(<Home />);
 
     expect(screen.getByRole('status')).toBeInTheDocument();
-    expect(screen.getByText(/carregando workspace\.\.\./i)).toBeInTheDocument();
+    expect(screen.getByText(/loading workspace\.\.\.|carregando workspace\.\.\./i)).toBeInTheDocument();
   });
 
   it('redirects directly to activeWorkspaceId if already present in useWorkspaceStore', async () => {
@@ -346,9 +346,9 @@ describe('Root Redirector (app/page.tsx)', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toBeInTheDocument();
-      expect(screen.getByText('Erro ao carregar workspace')).toBeInTheDocument();
+      expect(screen.getByText(/error loading workspace|erro ao carregar workspace/i)).toBeInTheDocument();
       expect(screen.getByText('Network error on list')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /tentar novamente/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /try again|tentar novamente/i })).toBeInTheDocument();
     });
   });
 
@@ -377,7 +377,7 @@ describe('Root Redirector (app/page.tsx)', () => {
       expect(screen.getByText('Temporary server glitch')).toBeInTheDocument();
     });
 
-    const retryBtn = screen.getByRole('button', { name: /tentar novamente/i });
+    const retryBtn = screen.getByRole('button', { name: /try again|tentar novamente/i });
     fireEvent.click(retryBtn);
 
     await waitFor(() => {

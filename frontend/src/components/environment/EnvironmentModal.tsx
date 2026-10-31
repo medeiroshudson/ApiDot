@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Plus, Layers, Globe, FolderGit2, Calculator, Trash2 } from 'lucide-react';
 import { VariableGrid, VariableItem } from './VariableGrid';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface EnvironmentGroup {
   name: string;
@@ -16,7 +17,27 @@ export interface ResolvedVariableItem {
   isSecret?: boolean;
 }
 
-export type ModalTab = 'Globais' | 'Coleção' | 'Ambientes' | 'Calculadas';
+export type CanonicalTab = 'globals' | 'collection' | 'environments' | 'computed';
+export type ModalTab =
+  | CanonicalTab
+  | 'Globais'
+  | 'Coleção'
+  | 'Ambientes'
+  | 'Calculadas'
+  | 'Globals'
+  | 'Collection'
+  | 'Environments'
+  | 'Computed';
+
+function toCanonicalTab(tab?: ModalTab): CanonicalTab {
+  if (!tab) return 'globals';
+  const lower = tab.toLowerCase();
+  if (lower === 'globals' || lower === 'globais') return 'globals';
+  if (lower === 'collection' || lower === 'coleção' || lower === 'colecao') return 'collection';
+  if (lower === 'environments' || lower === 'ambientes') return 'environments';
+  if (lower === 'computed' || lower === 'calculadas') return 'computed';
+  return 'globals';
+}
 
 export interface EnvironmentModalProps {
   isOpen: boolean;
@@ -43,12 +64,12 @@ const EMPTY_GLOBALS: VariableItem[] = [];
 const EMPTY_COLLECTIONS: VariableItem[] = [];
 const EMPTY_ENVIRONMENTS: EnvironmentGroup[] = [];
 
-const TABS: ModalTab[] = ['Globais', 'Coleção', 'Ambientes', 'Calculadas'];
+const CANONICAL_TABS: CanonicalTab[] = ['globals', 'collection', 'environments', 'computed'];
 
 export function EnvironmentModal({
   isOpen,
   onClose,
-  initialTab = 'Globais',
+  initialTab = 'globals',
   globals = EMPTY_GLOBALS,
   collectionVariables = EMPTY_COLLECTIONS,
   environments = EMPTY_ENVIRONMENTS,
@@ -60,7 +81,8 @@ export function EnvironmentModal({
   onEnvironmentsChange,
   onSelectActiveEnvironment,
 }: EnvironmentModalProps) {
-  const [activeTab, setActiveTab] = useState<ModalTab>(initialTab);
+  const { t } = useTranslation();
+  const [activeTab, setActiveTab] = useState<CanonicalTab>(() => toCanonicalTab(initialTab));
   const [globalsList, setGlobalsList] = useState<VariableItem[]>(globals);
   const [collectionList, setCollectionList] = useState<VariableItem[]>(collectionVariables);
 
@@ -116,7 +138,7 @@ export function EnvironmentModal({
 
   useEffect(() => {
     if (initialTab) {
-      setActiveTab(initialTab);
+      setActiveTab(toCanonicalTab(initialTab));
     }
   }, [initialTab]);
 
@@ -238,19 +260,19 @@ export function EnvironmentModal({
   const handleTabKeyDown = (e: React.KeyboardEvent, index: number) => {
     let nextIndex = index;
     if (e.key === 'ArrowRight') {
-      nextIndex = (index + 1) % TABS.length;
+      nextIndex = (index + 1) % CANONICAL_TABS.length;
     } else if (e.key === 'ArrowLeft') {
-      nextIndex = (index - 1 + TABS.length) % TABS.length;
+      nextIndex = (index - 1 + CANONICAL_TABS.length) % CANONICAL_TABS.length;
     } else if (e.key === 'Home') {
       nextIndex = 0;
     } else if (e.key === 'End') {
-      nextIndex = TABS.length - 1;
+      nextIndex = CANONICAL_TABS.length - 1;
     } else {
       return;
     }
 
     e.preventDefault();
-    setActiveTab(TABS[nextIndex]);
+    setActiveTab(CANONICAL_TABS[nextIndex]);
     tabRefs.current[nextIndex]?.focus();
   };
 
@@ -353,14 +375,14 @@ export function EnvironmentModal({
           <div className="flex items-center gap-2.5">
             <Layers className="w-5 h-5 text-blue-400" aria-hidden="true" />
             <h2 id="env-modal-title" className="text-base font-semibold tracking-tight text-white">
-              Ambientes e Variáveis
+              {t('environments.title')}
             </h2>
           </div>
           <button
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            aria-label="Fechar modal"
+            aria-label={t('environments.closeModal')}
             className="p-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-400"
           >
             <X className="w-5 h-5" aria-hidden="true" />
@@ -369,14 +391,20 @@ export function EnvironmentModal({
 
         {/* Tab List */}
         <div className="flex items-center gap-1 px-6 pt-3 border-b border-neutral-800 bg-neutral-900/20">
-          <div role="tablist" aria-label="Abas de gerenciamento de variáveis" className="flex gap-2">
-            {TABS.map((tab, idx) => {
+          <div role="tablist" aria-label={t('environments.tabsAriaLabel')} className="flex gap-2">
+            {CANONICAL_TABS.map((tab, idx) => {
               const isSelected = activeTab === tab;
               const icons = {
-                Globais: Globe,
-                Coleção: FolderGit2,
-                Ambientes: Layers,
-                Calculadas: Calculator,
+                globals: Globe,
+                collection: FolderGit2,
+                environments: Layers,
+                computed: Calculator,
+              };
+              const tabLabels = {
+                globals: t('environments.globalsTab'),
+                collection: t('environments.collectionTab'),
+                environments: t('environments.environmentsTab'),
+                computed: t('environments.computedTab'),
               };
               const TabIcon = icons[tab];
 
@@ -400,7 +428,7 @@ export function EnvironmentModal({
                   }`}
                 >
                   <TabIcon className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span>{tab}</span>
+                  <span>{tabLabels[tab]}</span>
                 </button>
               );
             })}
@@ -409,55 +437,55 @@ export function EnvironmentModal({
 
         {/* Tab Content Panes */}
         <div className="flex-1 overflow-hidden p-6">
-          {/* 1. Globais Tab */}
-          {activeTab === 'Globais' && (
+          {/* 1. Globals Tab */}
+          {activeTab === 'globals' && (
             <div
               role="tabpanel"
-              id="panel-Globais"
-              aria-labelledby="tab-Globais"
+              id="panel-globals"
+              aria-labelledby="tab-globals"
               className="h-full flex flex-col"
             >
               <VariableGrid
-                title="Variáveis Globais"
-                description="Disponíveis em todas as requisições deste Workspace. Podem ser sobrescritas por Coleção e Ambientes."
+                title={t('environments.globalsTitle')}
+                description={t('environments.globalsDescription')}
                 variables={globalsList}
                 onChange={handleGlobalsChange}
-                emptyMessage="Nenhuma variável global cadastrada."
+                emptyMessage={t('environments.globalsEmpty')}
               />
             </div>
           )}
 
-          {/* 2. Coleção Tab */}
-          {activeTab === 'Coleção' && (
+          {/* 2. Collection Tab */}
+          {activeTab === 'collection' && (
             <div
               role="tabpanel"
-              id="panel-Coleção"
-              aria-labelledby="tab-Coleção"
+              id="panel-collection"
+              aria-labelledby="tab-collection"
               className="h-full flex flex-col"
             >
               <VariableGrid
-                title="Variáveis da Coleção"
-                description="Vinculadas à coleção selecionada. Sobrescrevem Variáveis Globais para as requisições da coleção."
+                title={t('environments.collectionTitle')}
+                description={t('environments.collectionDescription')}
                 variables={collectionList}
                 onChange={handleCollectionChange}
-                emptyMessage="Nenhuma variável de coleção cadastrada."
+                emptyMessage={t('environments.collectionEmpty')}
               />
             </div>
           )}
 
-          {/* 3. Ambientes Tab */}
-          {activeTab === 'Ambientes' && (
+          {/* 3. Environments Tab */}
+          {activeTab === 'environments' && (
             <div
               role="tabpanel"
-              id="panel-Ambientes"
-              aria-labelledby="tab-Ambientes"
+              id="panel-environments"
+              aria-labelledby="tab-environments"
               className="h-full flex flex-col md:flex-row gap-6 overflow-hidden"
             >
               {/* Left sidebar: Environments list & Add input */}
               <div className="w-full md:w-60 flex flex-col border-b md:border-b-0 md:border-r border-neutral-800 pr-0 md:pr-4">
                 <div className="flex items-center justify-between pb-2 mb-3 border-b border-neutral-800">
                   <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-                    Ambientes ({envList.length})
+                    {t('environments.environmentsCount', { count: envList.length })}
                   </span>
                 </div>
 
@@ -465,8 +493,8 @@ export function EnvironmentModal({
                 <div className="flex items-center gap-1.5 mb-4">
                   <input
                     type="text"
-                    placeholder="Novo ambiente..."
-                    aria-label="Nome do novo ambiente"
+                    placeholder={t('environments.newEnvironmentPlaceholder')}
+                    aria-label={t('environments.newEnvironmentAria')}
                     value={newEnvInput}
                     onChange={(e) => setNewEnvInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -480,7 +508,7 @@ export function EnvironmentModal({
                   <button
                     type="button"
                     onClick={handleAddEnvironment}
-                    aria-label="Adicionar ambiente"
+                    aria-label={t('environments.addEnvironment')}
                     className="p-1.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white transition-colors"
                   >
                     <Plus className="w-4 h-4" aria-hidden="true" />
@@ -491,12 +519,12 @@ export function EnvironmentModal({
                 <div
                   role="tablist"
                   aria-orientation="vertical"
-                  aria-label="Lista de ambientes"
+                  aria-label={t('environments.environmentsListAria')}
                   className="flex-1 flex flex-col gap-1 overflow-y-auto"
                 >
                   {envList.length === 0 ? (
                     <span className="text-xs text-neutral-500 italic p-2">
-                      Nenhum ambiente criado.
+                      {t('environments.noEnvironments')}
                     </span>
                   ) : (
                     envList.map((env, envIdx) => {
@@ -533,8 +561,8 @@ export function EnvironmentModal({
                           <button
                             type="button"
                             onClick={() => handleDeleteEnvironment(env.name)}
-                            aria-label={`Excluir ambiente ${env.name}`}
-                            title={`Excluir ambiente ${env.name}`}
+                            aria-label={t('environments.deleteEnvironmentAria', { name: env.name })}
+                            title={t('environments.deleteEnvironmentAria', { name: env.name })}
                             className="opacity-0 group-hover:opacity-100 p-1 text-neutral-500 hover:text-rose-400 rounded transition-opacity ml-1.5"
                           >
                             <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
@@ -555,50 +583,50 @@ export function EnvironmentModal({
               >
                 {currentEnvironment ? (
                   <VariableGrid
-                    title={`Variáveis: ${currentEnvironment.name}`}
-                    description={`Sobrescreve valores para o ambiente "${currentEnvironment.name}". Tem prioridade máxima sobre Coleção e Globais.`}
+                    title={t('environments.envOverridesTitle', { name: currentEnvironment.name })}
+                    description={t('environments.envOverridesDescription', { name: currentEnvironment.name })}
                     variables={currentEnvironment.variables}
                     onChange={handleCurrentEnvVarsChange}
-                    emptyMessage={`Nenhuma variável configurada para "${currentEnvironment.name}".`}
+                    emptyMessage={t('environments.envOverridesEmpty', { name: currentEnvironment.name })}
                   />
                 ) : (
                   <div className="flex-1 flex items-center justify-center text-xs text-neutral-500">
-                    Selecione ou crie um ambiente à esquerda para configurar variáveis.
+                    {t('environments.selectOrCreateEnv')}
                   </div>
                 )}
               </div>
             </div>
           )}
 
-          {/* 4. Calculadas Tab */}
-          {activeTab === 'Calculadas' && (
+          {/* 4. Computed Tab */}
+          {activeTab === 'computed' && (
             <div
               role="tabpanel"
-              id="panel-Calculadas"
-              aria-labelledby="tab-Calculadas"
+              id="panel-computed"
+              aria-labelledby="tab-computed"
               className="h-full flex flex-col"
             >
               <div className="flex items-center justify-between pb-3 mb-3 border-b border-neutral-800">
                 <div>
                   <h3 className="text-sm font-semibold text-neutral-200">
-                    Variáveis Calculadas (Cascata)
+                    {t('environments.computedTitle')}
                   </h3>
                   <p className="text-xs text-neutral-400 mt-0.5">
-                    Visualização em tempo real das variáveis resolvidas na ordem:{' '}
-                    <span className="text-neutral-300 font-mono">Globais</span> &rarr;{' '}
-                    <span className="text-neutral-300 font-mono">Coleção</span> &rarr;{' '}
-                    <span className="text-neutral-300 font-mono">Ambiente Ativo</span>.
+                    {t('environments.computedDescription')}{' '}
+                    <span className="text-neutral-300 font-mono">{t('environments.globalsTab')}</span> &rarr;{' '}
+                    <span className="text-neutral-300 font-mono">{t('environments.collectionTab')}</span> &rarr;{' '}
+                    <span className="text-neutral-300 font-mono">{t('environments.activeEnvironment')}</span>.
                   </p>
                 </div>
 
                 {envList.length > 0 && (
                   <div className="flex items-center gap-2">
                     <label htmlFor="active-env-select" className="text-xs text-neutral-400">
-                      Ambiente ativo:
+                      {t('environments.activeEnvSelectLabel')}
                     </label>
                     <select
                       id="active-env-select"
-                      aria-label="Ambiente ativo"
+                      aria-label={t('environments.activeEnvironment')}
                       value={selectedEnvName}
                       onChange={(e) => {
                         setSelectedEnvName(e.target.value);
@@ -620,17 +648,17 @@ export function EnvironmentModal({
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-neutral-800 text-neutral-400 font-medium select-none">
-                      <th scope="col" className="py-2 px-3 w-1/4">Chave</th>
-                      <th scope="col" className="py-2 px-3 w-1/3">Valor Resolvido</th>
-                      <th scope="col" className="py-2 px-3 w-1/4">Origem / Escopo</th>
-                      <th scope="col" className="py-2 px-3 text-center">Sobrescrita</th>
+                      <th scope="col" className="py-2 px-3 w-1/4">{t('environments.colKey')}</th>
+                      <th scope="col" className="py-2 px-3 w-1/3">{t('environments.colResolvedValue')}</th>
+                      <th scope="col" className="py-2 px-3 w-1/4">{t('environments.colSourceScope')}</th>
+                      <th scope="col" className="py-2 px-3 text-center">{t('environments.colOverride')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-900 font-mono">
                     {resolvedVariables.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="py-8 text-center text-neutral-500 italic">
-                          Nenhuma variável calculada.
+                          {t('environments.noComputed')}
                         </td>
                       </tr>
                     ) : (
@@ -676,7 +704,7 @@ export function EnvironmentModal({
                                   data-testid="override-indicator"
                                   className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-sans font-semibold bg-amber-950/60 text-amber-300 border border-amber-800/80"
                                 >
-                                  Sobrescrito
+                                  {t('environments.overridden')}
                                 </span>
                               ) : (
                                 <span className="text-neutral-600 font-sans">-</span>

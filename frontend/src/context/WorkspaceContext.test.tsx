@@ -122,7 +122,7 @@ function ConsumerComponent() {
           ctx.handleSaveExisting({
             method: 'PATCH',
             url: 'https://api.example.com/updated',
-            target: 'Browser',
+            target: 'Inherit',
             headers: '{"x-test": "1"}',
             body: '{"status": "ok"}',
             auth: { type: 'none' },
@@ -438,7 +438,7 @@ describe('WorkspaceContext', () => {
     const active = useRequestStore.getState().activeRequestDetails;
     expect(active?.method).toBe('PATCH');
     expect(active?.url).toBe('https://api.example.com/updated');
-    expect(active?.target).toBe('Browser');
+    expect(active?.target).toBe('Inherit');
   });
 
   it('handles save as by setting pendingSaveData and opening save modal', async () => {

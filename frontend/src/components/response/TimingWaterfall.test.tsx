@@ -19,7 +19,7 @@ describe('TimingWaterfall', () => {
     expect(screen.getByText('TLS Handshake')).toBeInTheDocument();
     expect(screen.getByText('TTFB')).toBeInTheDocument();
     expect(screen.getByText('Content Transfer')).toBeInTheDocument();
-    expect(screen.getByText(/Duração Total/i)).toBeInTheDocument();
+    expect(screen.getByText(/Total Duration/i)).toBeInTheDocument();
 
     // Values formatted
     expect(screen.getByText('15.5 ms')).toBeInTheDocument();
@@ -105,6 +105,6 @@ describe('TimingWaterfall', () => {
   it('renders fallback message when timing is null or undefined', () => {
     render(<TimingWaterfall timing={null} />);
 
-    expect(screen.getByText('Sem métricas de tempo disponíveis')).toBeInTheDocument();
+    expect(screen.getByText('No timing metrics available')).toBeInTheDocument();
   });
 });

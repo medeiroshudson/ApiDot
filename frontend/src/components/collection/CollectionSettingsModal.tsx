@@ -22,6 +22,7 @@ import { ExecutionTarget, TargetSelector } from '../request/TargetSelector';
 import { CollectionNodeDto, FolderNodeDto, RequestItemNodeDto } from '@/lib/treeApi';
 import { CodeEditor } from '../common/CodeEditor';
 import { AuthConfig } from '../request/RequestEditor';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface SyncReport {
   addedRequests: number;
@@ -57,45 +58,6 @@ interface StatCardConfig {
   className?: string;
   getValue: (report: SyncReport) => number;
 }
-
-const STAT_CONFIGS: StatCardConfig[] = [
-  {
-    key: 'addedRequests',
-    label: 'Requisições Adicionadas',
-    icon: PlusCircle,
-    color: 'text-emerald-400',
-    getValue: (r) => r.addedRequests,
-  },
-  {
-    key: 'updatedRequests',
-    label: 'Requisições Atualizadas',
-    icon: Edit3,
-    color: 'text-blue-400',
-    getValue: (r) => r.updatedRequests,
-  },
-  {
-    key: 'fieldsAdded',
-    label: 'Campos Adicionados',
-    icon: PlusCircle,
-    color: 'text-teal-400',
-    getValue: (r) => r.fieldsAdded,
-  },
-  {
-    key: 'fieldsRemoved',
-    label: 'Campos Removidos',
-    icon: Trash2,
-    color: 'text-rose-400',
-    getValue: (r) => r.fieldsRemoved,
-  },
-  {
-    key: 'fieldsPreserved',
-    label: 'Campos Preservados',
-    icon: ShieldCheck,
-    color: 'text-amber-400',
-    className: 'col-span-2 sm:col-span-1',
-    getValue: (r) => r.fieldsPreserved,
-  },
-];
 
 interface ChainedDependency {
   requestId: string;
@@ -150,6 +112,7 @@ export function CollectionSettingsModal({
   onSave,
   onSyncSuccess,
 }: CollectionSettingsModalProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<CollectionModalTab>('general');
   const [name, setName] = useState('');
   const [defaultTarget, setDefaultTarget] = useState<ExecutionTarget>('Inherit');
@@ -161,6 +124,45 @@ export function CollectionSettingsModal({
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<SyncReport | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+
+  const statConfigs: StatCardConfig[] = [
+    {
+      key: 'addedRequests',
+      label: t('collectionSettings.addedRequests'),
+      icon: PlusCircle,
+      color: 'text-emerald-400',
+      getValue: (r) => r.addedRequests,
+    },
+    {
+      key: 'updatedRequests',
+      label: t('collectionSettings.updatedRequests'),
+      icon: Edit3,
+      color: 'text-blue-400',
+      getValue: (r) => r.updatedRequests,
+    },
+    {
+      key: 'fieldsAdded',
+      label: t('collectionSettings.fieldsAdded'),
+      icon: PlusCircle,
+      color: 'text-teal-400',
+      getValue: (r) => r.fieldsAdded,
+    },
+    {
+      key: 'fieldsRemoved',
+      label: t('collectionSettings.fieldsRemoved'),
+      icon: Trash2,
+      color: 'text-rose-400',
+      getValue: (r) => r.fieldsRemoved,
+    },
+    {
+      key: 'fieldsPreserved',
+      label: t('collectionSettings.fieldsPreserved'),
+      icon: ShieldCheck,
+      color: 'text-amber-400',
+      className: 'col-span-2 sm:col-span-1',
+      getValue: (r) => r.fieldsPreserved,
+    },
+  ];
 
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const modalContentRef = useRef<HTMLDivElement>(null);
@@ -256,12 +258,12 @@ export function CollectionSettingsModal({
     const trimmedContent = specContent.trim();
 
     if (!trimmedUrl && !trimmedContent) {
-      setError('Forneça a URL ou o conteúdo da especificação OpenAPI.');
+      setError(t('collectionSettings.urlOrContentRequired'));
       return;
     }
 
     if (trimmedUrl && !/^https?:\/\//i.test(trimmedUrl)) {
-      setError('A URL da especificação deve ser um endereço HTTP ou HTTPS válido.');
+      setError(t('collectionSettings.invalidUrl'));
       return;
     }
 
@@ -285,7 +287,7 @@ export function CollectionSettingsModal({
         });
 
         if (!res.ok) {
-          let errDetail = 'Falha ao sincronizar a especificação OpenAPI.';
+          let errDetail = t('collectionSettings.syncFailed');
           try {
             const json = await res.json();
             errDetail = json.detail || json.title || json.message || errDetail;
@@ -302,7 +304,7 @@ export function CollectionSettingsModal({
       setReport(syncResult);
       onSyncSuccess?.(syncResult);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erro inesperado na sincronização.';
+      const msg = err instanceof Error ? err.message : t('collectionSettings.unexpectedSyncError');
       setError(msg);
     } finally {
       setIsLoading(false);
@@ -323,7 +325,7 @@ export function CollectionSettingsModal({
       });
       onClose();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Falha ao salvar configurações.';
+      const msg = err instanceof Error ? err.message : t('collectionSettings.saveFailed');
       setError(msg);
     } finally {
       setIsSaving(false);
@@ -351,7 +353,7 @@ export function CollectionSettingsModal({
             </div>
             <div>
               <h2 id="collection-settings-title" className="text-sm font-semibold text-white">
-                Configurações da Coleção
+                {t('collectionSettings.title')}
               </h2>
               <span className="text-[11px] text-neutral-400 truncate max-w-xs block">
                 {collection.name}
@@ -361,7 +363,7 @@ export function CollectionSettingsModal({
           <button
             ref={closeButtonRef}
             type="button"
-            aria-label="Fechar configurações da coleção"
+            aria-label={t('collectionSettings.closeAria')}
             onClick={onClose}
             disabled={isBusy}
             className="p-1 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors disabled:opacity-40"
@@ -373,7 +375,7 @@ export function CollectionSettingsModal({
         {/* Modal Tabs Bar */}
         <div
           role="tablist"
-          aria-label="Abas de configuração da coleção"
+          aria-label={t('collectionSettings.tabsAria')}
           className="flex border-b border-neutral-800 bg-neutral-950/30 px-5 shrink-0"
         >
           <button
@@ -388,7 +390,7 @@ export function CollectionSettingsModal({
             }`}
           >
             <Sliders className="w-3.5 h-3.5" />
-            <span>Geral & Alvo</span>
+            <span>{t('collectionSettings.generalTab')}</span>
           </button>
 
           <button
@@ -403,7 +405,7 @@ export function CollectionSettingsModal({
             }`}
           >
             <Shield className="w-3.5 h-3.5" />
-            <span>Autenticação</span>
+            <span>{t('collectionSettings.authTab')}</span>
           </button>
 
           <button
@@ -418,7 +420,7 @@ export function CollectionSettingsModal({
             }`}
           >
             <FileCode className="w-3.5 h-3.5" />
-            <span>OpenAPI / Sync</span>
+            <span>{t('collectionSettings.openapiTab')}</span>
           </button>
 
           <button
@@ -433,7 +435,7 @@ export function CollectionSettingsModal({
             }`}
           >
             <Link2 className="w-3.5 h-3.5" />
-            <span>Vínculos & Dependências</span>
+            <span>{t('collectionSettings.dependenciesTab')}</span>
             {dependencies.length > 0 && (
               <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-500/20 text-blue-300 font-mono">
                 {dependencies.length}
@@ -459,7 +461,7 @@ export function CollectionSettingsModal({
             <div className="space-y-4 animate-in fade-in duration-100">
               <div className="space-y-1.5">
                 <label htmlFor="collection-name-input" className="text-xs font-medium text-neutral-300 block">
-                  Nome da Coleção:
+                  {t('collectionSettings.collectionNameLabel')}
                 </label>
                 <input
                   id="collection-name-input"
@@ -467,17 +469,17 @@ export function CollectionSettingsModal({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   disabled={isBusy}
-                  placeholder="Nome da coleção"
+                  placeholder={t('collectionSettings.collectionNamePlaceholder')}
                   className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
 
               <div className="space-y-1.5 pt-2 border-t border-neutral-800/80">
                 <label className="text-xs font-medium text-neutral-300 block">
-                  Alvo de Execução Padrão:
+                  {t('collectionSettings.defaultTargetLabel')}
                 </label>
                 <p className="text-[11px] text-neutral-400 mb-2">
-                  Define onde as requisições desta coleção são executadas por padrão (na nuvem ou no seu Agent local).
+                  {t('collectionSettings.defaultTargetDesc')}
                 </p>
                 <TargetSelector
                   value={defaultTarget}
@@ -494,38 +496,38 @@ export function CollectionSettingsModal({
           {activeTab === 'auth' && (
             <div className="space-y-4 animate-in fade-in duration-100">
               <p className="text-xs text-neutral-400">
-                Define a autenticação padrão para as requisições desta coleção que estiverem configuradas com &ldquo;Herdar da Coleção&rdquo;.
+                {t('collectionSettings.authDesc')}
               </p>
 
               <div className="space-y-1.5">
                 <label htmlFor="collection-auth-type-select" className="text-xs font-medium text-neutral-300 block">
-                  Tipo de Autenticação da Coleção:
+                  {t('collectionSettings.authTypeLabel')}
                 </label>
                 <select
                   id="collection-auth-type-select"
-                  aria-label="Tipo de Autenticação da Coleção"
+                  aria-label={t('collectionSettings.authTypeLabel')}
                   value={auth.type}
                   disabled={isBusy}
                   onChange={(e) => setAuth((prev) => ({ ...prev, type: e.target.value as AuthConfig['type'] }))}
                   className="bg-neutral-950 border border-neutral-800 text-xs rounded-lg px-3 py-2 text-neutral-200 outline-none focus:ring-1 focus:ring-blue-500 block w-full sm:w-64"
                 >
-                  <option value="none">Nenhuma Autenticação</option>
-                  <option value="bearer">Bearer Token</option>
-                  <option value="basic">Basic Auth</option>
-                  <option value="apikey">API Key</option>
+                  <option value="none">{t('collectionSettings.authNone')}</option>
+                  <option value="bearer">{t('collectionSettings.authBearer')}</option>
+                  <option value="basic">{t('collectionSettings.authBasic')}</option>
+                  <option value="apikey">{t('collectionSettings.authApiKey')}</option>
                 </select>
               </div>
 
               {auth.type === 'bearer' && (
                 <div className="space-y-1.5">
                   <label htmlFor="collection-bearer-token" className="text-xs font-medium text-neutral-300 block">
-                    Token:
+                    {t('collectionSettings.tokenLabel')}
                   </label>
                   <input
                     id="collection-bearer-token"
                     type="text"
-                    aria-label="Token Bearer da Coleção"
-                    placeholder="Token ou {{variavel}}"
+                    aria-label={t('collectionSettings.tokenAria')}
+                    placeholder={t('collectionSettings.tokenPlaceholder')}
                     value={auth.token || ''}
                     disabled={isBusy}
                     onChange={(e) => setAuth((prev) => ({ ...prev, token: e.target.value }))}
@@ -538,13 +540,13 @@ export function CollectionSettingsModal({
                 <div className="space-y-3">
                   <div className="space-y-1.5">
                     <label htmlFor="collection-basic-username" className="text-xs font-medium text-neutral-300 block">
-                      Usuário:
+                      {t('collectionSettings.usernameLabel')}
                     </label>
                     <input
                       id="collection-basic-username"
                       type="text"
-                      aria-label="Usuário Basic Auth da Coleção"
-                      placeholder="Nome de usuário"
+                      aria-label={t('collectionSettings.usernameAria')}
+                      placeholder={t('collectionSettings.usernamePlaceholder')}
                       value={auth.username || ''}
                       disabled={isBusy}
                       onChange={(e) => setAuth((prev) => ({ ...prev, username: e.target.value }))}
@@ -553,13 +555,13 @@ export function CollectionSettingsModal({
                   </div>
                   <div className="space-y-1.5">
                     <label htmlFor="collection-basic-password" className="text-xs font-medium text-neutral-300 block">
-                      Senha:
+                      {t('collectionSettings.passwordLabel')}
                     </label>
                     <input
                       id="collection-basic-password"
                       type="password"
-                      aria-label="Senha Basic Auth da Coleção"
-                      placeholder="Senha"
+                      aria-label={t('collectionSettings.passwordAria')}
+                      placeholder={t('collectionSettings.passwordPlaceholder')}
                       value={auth.password || ''}
                       disabled={isBusy}
                       onChange={(e) => setAuth((prev) => ({ ...prev, password: e.target.value }))}
@@ -573,13 +575,13 @@ export function CollectionSettingsModal({
                 <div className="space-y-3">
                   <div className="space-y-1.5">
                     <label htmlFor="collection-apikey-key" className="text-xs font-medium text-neutral-300 block">
-                      Nome da Chave API:
+                      {t('collectionSettings.apiKeyNameLabel')}
                     </label>
                     <input
                       id="collection-apikey-key"
                       type="text"
-                      aria-label="Nome da Chave API da Coleção"
-                      placeholder="ex: X-API-Key"
+                      aria-label={t('collectionSettings.apiKeyNameAria')}
+                      placeholder={t('collectionSettings.apiKeyNamePlaceholder')}
                       value={auth.key || ''}
                       disabled={isBusy}
                       onChange={(e) => setAuth((prev) => ({ ...prev, key: e.target.value }))}
@@ -588,13 +590,13 @@ export function CollectionSettingsModal({
                   </div>
                   <div className="space-y-1.5">
                     <label htmlFor="collection-apikey-value" className="text-xs font-medium text-neutral-300 block">
-                      Valor:
+                      {t('collectionSettings.apiKeyValueLabel')}
                     </label>
                     <input
                       id="collection-apikey-value"
                       type="text"
-                      aria-label="Valor da Chave API da Coleção"
-                      placeholder="Valor da chave"
+                      aria-label={t('collectionSettings.apiKeyValueAria')}
+                      placeholder={t('collectionSettings.apiKeyValuePlaceholder')}
                       value={auth.value || ''}
                       disabled={isBusy}
                       onChange={(e) => setAuth((prev) => ({ ...prev, value: e.target.value }))}
@@ -611,12 +613,12 @@ export function CollectionSettingsModal({
             <div className="space-y-4 animate-in fade-in duration-100">
               <div className="space-y-1.5">
                 <label htmlFor="openapi-spec-url" className="text-xs font-medium text-neutral-300 block">
-                  URL da Especificação OpenAPI (JSON ou YAML):
+                  {t('collectionSettings.openApiUrlLabel')}
                 </label>
                 <input
                   id="openapi-spec-url"
                   type="url"
-                  placeholder="https://api.exemplo.com/swagger/v1/swagger.json"
+                  placeholder={t('collectionSettings.openApiUrlPlaceholder')}
                   value={specUrl}
                   disabled={isBusy}
                   onChange={(e) => {
@@ -629,7 +631,7 @@ export function CollectionSettingsModal({
 
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-neutral-300 block">
-                  Conteúdo da Especificação OpenAPI (JSON / YAML direto):
+                  {t('collectionSettings.openApiContentLabel')}
                 </label>
                 <CodeEditor
                   value={specContent}
@@ -638,8 +640,8 @@ export function CollectionSettingsModal({
                     if (error) setError(null);
                   }}
                   language="json"
-                  placeholder="Cole aqui a especificação OpenAPI (JSON ou YAML)..."
-                  ariaLabel="Conteúdo da Especificação OpenAPI"
+                  placeholder={t('collectionSettings.openApiContentPlaceholder')}
+                  ariaLabel={t('collectionSettings.openApiContentAria')}
                   testId="openapi-code-editor"
                   minHeight="140px"
                   maxHeight="240px"
@@ -655,7 +657,7 @@ export function CollectionSettingsModal({
                   className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-                  <span>{isLoading ? 'Sincronizando...' : 'Sincronizar Coleção'}</span>
+                  <span>{isLoading ? t('collectionSettings.syncingButton') : t('collectionSettings.syncButton')}</span>
                 </button>
               </div>
 
@@ -663,10 +665,10 @@ export function CollectionSettingsModal({
                 <div data-testid="sync-report-section" className="pt-3 border-t border-neutral-800 space-y-2">
                   <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-400">
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Relatório de Sincronização Não-Destrutiva</span>
+                    <span>{t('collectionSettings.syncReportTitle')}</span>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {STAT_CONFIGS.map((c) => {
+                    {statConfigs.map((c) => {
                       const Icon = c.icon;
                       return (
                         <div key={c.key} className="p-2.5 rounded-lg bg-neutral-950 border border-neutral-800 flex items-center gap-2">
@@ -688,17 +690,17 @@ export function CollectionSettingsModal({
           {activeTab === 'dependencies' && (
             <div className="space-y-4 animate-in fade-in duration-100">
               <p className="text-xs text-neutral-400">
-                Visualização de requisições que utilizam tokens encadeados de respostas anteriores nesta coleção.
+                {t('collectionSettings.dependenciesDesc')}
               </p>
 
               {dependencies.length === 0 ? (
                 <div className="p-6 text-center border border-dashed border-neutral-800 rounded-lg bg-neutral-950/40">
                   <Link2 className="w-6 h-6 text-neutral-600 mx-auto mb-2" />
                   <h4 className="text-xs font-medium text-neutral-300 mb-1">
-                    Nenhum vínculo encadeado nesta coleção
+                    {t('collectionSettings.noDependencies')}
                   </h4>
                   <p className="text-[11px] text-neutral-500 max-w-sm mx-auto">
-                    Para encadear respostas entre requisições, digite <code className="text-blue-400 bg-neutral-900 px-1 py-0.5 rounded">{'{{$request['}</code> no URL, Headers ou Body de qualquer requisição.
+                    {t('collectionSettings.dependenciesHint')}
                   </p>
                 </div>
               ) : (
@@ -724,12 +726,12 @@ export function CollectionSettingsModal({
                         {copiedToken === dep.token ? (
                           <>
                             <Check className="w-3.5 h-3.5 text-emerald-400" />
-                            <span className="text-emerald-400">Copiado</span>
+                            <span className="text-emerald-400">{t('collectionSettings.copied')}</span>
                           </>
                         ) : (
                           <>
                             <Copy className="w-3.5 h-3.5" />
-                            <span>Copiar</span>
+                            <span>{t('collectionSettings.copy')}</span>
                           </>
                         )}
                       </button>
@@ -749,7 +751,7 @@ export function CollectionSettingsModal({
             disabled={isBusy}
             className="px-3.5 py-1.5 text-xs font-medium rounded-lg text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors disabled:opacity-40"
           >
-            Cancelar
+            {t('collectionSettings.cancel')}
           </button>
           <button
             type="button"
@@ -758,7 +760,7 @@ export function CollectionSettingsModal({
             className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
           >
             {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            <span>{isSaving ? 'Salvando...' : 'Salvar Alterações'}</span>
+            <span>{isSaving ? t('collectionSettings.savingChanges') : t('collectionSettings.saveChanges')}</span>
           </button>
         </div>
       </div>

@@ -7,7 +7,7 @@ describe('TargetSelector', () => {
     const onChange = vi.fn();
     render(<TargetSelector value="Inherit" isAgentOnline={true} onChange={onChange} />);
 
-    const select = screen.getByRole('combobox', { name: /target de execução/i });
+    const select = screen.getByRole('combobox', { name: /execution target/i });
     expect(select).toBeDefined();
 
     fireEvent.change(select, { target: { value: 'Agent' } });
@@ -27,8 +27,8 @@ describe('TargetSelector', () => {
     const pulse = screen.getByTestId('target-agent-pulse');
     expect(pulse).toBeDefined();
     expect(pulse.getAttribute('role')).toBe('status');
-    expect(pulse.getAttribute('title')).toBe('Agent Conectado');
-    expect(pulse.getAttribute('aria-label')).toBe('Agent Conectado');
+    expect(pulse.getAttribute('title')).toBe('Agent Connected');
+    expect(pulse.getAttribute('aria-label')).toBe('Agent Connected');
     expect(pulse.className).toContain('bg-emerald-500');
     expect(pulse.className).toContain('animate-pulse');
 
@@ -42,8 +42,8 @@ describe('TargetSelector', () => {
     const pulse = screen.getByTestId('target-agent-pulse');
     expect(pulse).toBeDefined();
     expect(pulse.getAttribute('role')).toBe('status');
-    expect(pulse.getAttribute('title')).toBe('Agent Desconectado');
-    expect(pulse.getAttribute('aria-label')).toBe('Agent Desconectado');
+    expect(pulse.getAttribute('title')).toBe('Agent Disconnected');
+    expect(pulse.getAttribute('aria-label')).toBe('Agent Disconnected');
     expect(pulse.className).toContain('bg-rose-500');
     expect(pulse.className).not.toContain('animate-pulse');
 
@@ -66,7 +66,7 @@ describe('TargetSelector', () => {
     const onChange = vi.fn();
     render(<TargetSelector value="Inherit" isAgentOnline={true} onChange={onChange} disabled={true} />);
 
-    const select = screen.getByRole('combobox', { name: /target de execução/i });
+    const select = screen.getByRole('combobox', { name: /execution target/i });
     expect(select).toBeDisabled();
   });
 });

@@ -7,6 +7,7 @@ import {
   getCurrentUser as getCurrentUserApi,
   logout as logoutApi,
 } from '@/lib/authApi';
+import { useI18nStore } from '@/stores/useI18nStore';
 
 export const INITIAL_AUTH_STATE = {
   user: null as AuthUser | null,
@@ -52,6 +53,9 @@ export const useAuthStore = create<AuthState>()((set) => ({
           isLoading: false,
           error: null,
         });
+        if (user.locale) {
+          useI18nStore.getState().initFromUser(user.locale);
+        }
         return user;
       } else {
         set({
@@ -97,6 +101,9 @@ export const useAuthStore = create<AuthState>()((set) => ({
         isLoading: false,
         error: null,
       });
+      if (user.locale) {
+        useI18nStore.getState().initFromUser(user.locale);
+      }
       return user;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed';

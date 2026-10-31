@@ -16,6 +16,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.PasswordSalt).HasMaxLength(128);
         builder.Property(u => u.OidcSubject).HasMaxLength(256);
         builder.Property(u => u.OidcIssuer).HasMaxLength(256);
+        builder.Property(u => u.Locale).HasMaxLength(16).IsRequired(false);
 
         builder.HasIndex(u => u.Email).IsUnique();
         builder.HasIndex(u => u.OidcSubject);

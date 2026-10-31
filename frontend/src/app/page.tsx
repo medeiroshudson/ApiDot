@@ -4,12 +4,14 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { useTranslation } from '@/hooks/useTranslation';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 export default function Home() {
   const router = useRouter();
   const routerRef = useRef(router);
   routerRef.current = router;
+  const { t } = useTranslation();
 
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const fetchWorkspaces = useWorkspaceStore((s) => s.fetchWorkspaces);
@@ -88,10 +90,10 @@ export default function Home() {
       redirectedRef.current = false;
       setHasError(true);
       setErrorMessage(
-        error instanceof Error ? error.message : 'Falha ao carregar workspaces'
+        error instanceof Error ? error.message : t('home.errorDefault')
       );
     }
-  }, [activeWorkspaceId, fetchWorkspaces, createWorkspace, executeRedirect, checkAuth]);
+  }, [activeWorkspaceId, fetchWorkspaces, createWorkspace, executeRedirect, checkAuth, t]);
 
   useEffect(() => {
     let isMounted = true;
@@ -124,9 +126,9 @@ export default function Home() {
       >
         <AlertCircle className="w-8 h-8 text-rose-500 shrink-0" />
         <div className="flex flex-col items-center gap-1 text-center">
-          <h2 className="text-base font-semibold text-neutral-100">Erro ao carregar workspace</h2>
+          <h2 className="text-base font-semibold text-neutral-100">{t('home.errorTitle')}</h2>
           <p className="text-sm text-neutral-400 max-w-sm">
-            {errorMessage || 'Ocorreu um erro ao carregar o workspace.'}
+            {errorMessage || t('home.errorFallback')}
           </p>
         </div>
         <button
@@ -134,7 +136,7 @@ export default function Home() {
           onClick={handleRetry}
           className="px-4 py-2 text-sm font-medium rounded-md bg-neutral-800 text-neutral-100 hover:bg-neutral-700 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-500 cursor-pointer"
         >
-          Tentar novamente
+          {t('home.retry')}
         </button>
       </div>
     );
@@ -147,7 +149,7 @@ export default function Home() {
       className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 text-neutral-400 gap-3"
     >
       <Loader2 className="w-6 h-6 animate-spin text-neutral-200" />
-      <span className="text-sm font-medium">Carregando workspace...</span>
+      <span className="text-sm font-medium">{t('home.loading')}</span>
     </div>
   );
 }

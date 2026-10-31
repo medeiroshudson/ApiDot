@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Trash2, Plus, Route, HelpCircle } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface QueryParamRow {
   id: string;
@@ -182,6 +183,7 @@ export function ParamsTab({
   onPathParamsChange,
   disabled = false,
 }: ParamsTabProps) {
+  const { t } = useTranslation();
   // --- Section 1: Path Parameters State ---
   const [internalPathParams, setInternalPathParams] = useState<Record<string, string>>({});
   const pathParams = controlledPathParams ?? internalPathParams;
@@ -323,7 +325,7 @@ export function ParamsTab({
         <div className="flex items-center gap-2">
           <Route className="w-4 h-4 text-blue-400" aria-hidden="true" />
           <h3 className="text-xs font-semibold text-neutral-200 uppercase tracking-wider">
-            Parâmetros de Rota
+            {t('request.pathParamsTitle')}
           </h3>
           {pathParamNames.length > 0 && (
             <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.2 rounded font-mono">
@@ -337,7 +339,7 @@ export function ParamsTab({
             data-testid="path-params-empty"
             className="p-4 border border-dashed border-neutral-800 rounded-lg text-center text-xs text-neutral-500 bg-neutral-900/20"
           >
-            Nenhum parâmetro de rota detectado no caminho da URL.
+            {t('request.noPathParams')}
           </div>
         ) : (
           <div className="border border-neutral-800 rounded-lg overflow-hidden bg-neutral-900/30">
@@ -345,10 +347,10 @@ export function ParamsTab({
               <thead className="bg-neutral-900/80 text-neutral-400 font-medium border-b border-neutral-800">
                 <tr>
                   <th scope="col" className="px-3 py-2 w-1/3">
-                    Chave
+                    {t('request.key')}
                   </th>
                   <th scope="col" className="px-3 py-2 w-2/3">
-                    Valor
+                    {t('request.value')}
                   </th>
                 </tr>
               </thead>
@@ -362,8 +364,8 @@ export function ParamsTab({
                       <input
                         type="text"
                         disabled={disabled}
-                        aria-label={`Valor para :${name}`}
-                        placeholder={`Valor para :${name}`}
+                        aria-label={t('request.paramValueFor', { name })}
+                        placeholder={t('request.paramValueFor', { name })}
                         value={pathParams[name] ?? ''}
                         onChange={(e) => handlePathParamChange(name, e.target.value)}
                         className="w-full bg-neutral-900/60 hover:bg-neutral-900 focus:bg-neutral-900 border border-neutral-800/80 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/40 rounded px-2.5 py-1 text-xs text-neutral-100 placeholder-neutral-500 outline-none transition-all disabled:opacity-50"
@@ -382,7 +384,7 @@ export function ParamsTab({
         <div className="flex items-center gap-2">
           <HelpCircle className="w-4 h-4 text-emerald-400" aria-hidden="true" />
           <h3 className="text-xs font-semibold text-neutral-200 uppercase tracking-wider">
-            Parâmetros de Consulta
+            {t('request.queryParamsTitle')}
           </h3>
           {queryRows.length > 0 && (
             <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.2 rounded font-mono">
@@ -396,19 +398,19 @@ export function ParamsTab({
             <thead className="bg-neutral-900/80 text-neutral-400 font-medium border-b border-neutral-800">
               <tr>
                 <th scope="col" className="w-9 px-2.5 py-2 text-center">
-                  <span className="sr-only">Ativar</span>
+                  <span className="sr-only">{t('request.enableParam')}</span>
                 </th>
                 <th scope="col" className="px-3 py-2 w-1/4">
-                  Chave
+                  {t('request.key')}
                 </th>
                 <th scope="col" className="px-3 py-2 w-1/3">
-                  Valor
+                  {t('request.value')}
                 </th>
                 <th scope="col" className="px-3 py-2">
-                  Descrição
+                  {t('request.description')}
                 </th>
                 <th scope="col" className="w-9 px-2.5 py-2 text-center">
-                  <span className="sr-only">Ações</span>
+                  <span className="sr-only">{t('request.actions')}</span>
                 </th>
               </tr>
             </thead>
@@ -423,7 +425,7 @@ export function ParamsTab({
                   <td className="px-2.5 py-1.5 text-center">
                     <input
                       type="checkbox"
-                      aria-label="Ativar parâmetro"
+                      aria-label={t('request.enableParam')}
                       checked={row.enabled}
                       disabled={disabled}
                       onChange={(e) => handleRowToggle(row.id, e.target.checked)}
@@ -434,8 +436,8 @@ export function ParamsTab({
                     <input
                       type="text"
                       disabled={disabled}
-                      placeholder="Chave"
-                      aria-label="Chave do parâmetro"
+                      placeholder={t('request.paramKeyPlaceholder')}
+                      aria-label={t('request.paramKeyAria')}
                       value={row.key}
                       onChange={(e) => handleRowKeyChange(row.id, e.target.value)}
                       className="w-full bg-neutral-900/60 hover:bg-neutral-900 focus:bg-neutral-900 border border-neutral-800/80 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/40 rounded px-2.5 py-1 text-xs text-neutral-100 placeholder-neutral-500 outline-none transition-all disabled:opacity-50"
@@ -445,8 +447,8 @@ export function ParamsTab({
                     <input
                       type="text"
                       disabled={disabled}
-                      placeholder="Valor"
-                      aria-label="Valor do parâmetro"
+                      placeholder={t('request.paramValuePlaceholder')}
+                      aria-label={t('request.paramValueAria')}
                       value={row.value}
                       onChange={(e) => handleRowValueChange(row.id, e.target.value)}
                       className="w-full bg-neutral-900/60 hover:bg-neutral-900 focus:bg-neutral-900 border border-neutral-800/80 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/40 rounded px-2.5 py-1 text-xs text-neutral-100 placeholder-neutral-500 outline-none transition-all disabled:opacity-50"
@@ -456,8 +458,8 @@ export function ParamsTab({
                     <input
                       type="text"
                       disabled={disabled}
-                      placeholder="Descrição"
-                      aria-label="Descrição do parâmetro"
+                      placeholder={t('request.paramDescPlaceholder')}
+                      aria-label={t('request.paramDescAria')}
                       value={row.description || ''}
                       onChange={(e) => handleRowDescriptionChange(row.id, e.target.value)}
                       className="w-full bg-neutral-900/60 hover:bg-neutral-900 focus:bg-neutral-900 border border-neutral-800/80 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/40 rounded px-2.5 py-1 text-xs text-neutral-300 placeholder-neutral-600 outline-none transition-all disabled:opacity-50"
@@ -467,8 +469,8 @@ export function ParamsTab({
                     <button
                       type="button"
                       disabled={disabled}
-                      aria-label="Remover parâmetro"
-                      title="Remover parâmetro"
+                      aria-label={t('request.deleteParam')}
+                      title={t('request.deleteParam')}
                       onClick={() => handleRowDelete(row.id)}
                       className="text-neutral-500 hover:text-rose-400 hover:bg-neutral-800 p-1 rounded transition-colors focus:outline-none"
                     >
@@ -484,7 +486,7 @@ export function ParamsTab({
                   <input
                     type="checkbox"
                     disabled
-                    aria-label="Novo parâmetro"
+                    aria-label={t('request.newParamPlaceholder')}
                     className="rounded bg-neutral-800 border-neutral-700 opacity-30 cursor-not-allowed h-3.5 w-3.5"
                   />
                 </td>
@@ -493,8 +495,8 @@ export function ParamsTab({
                     ref={newKeyInputRef}
                     type="text"
                     disabled={disabled}
-                    placeholder="Novo parâmetro"
-                    aria-label="Chave do novo parâmetro"
+                    placeholder={t('request.newParamPlaceholder')}
+                    aria-label={t('request.newParamKeyAria')}
                     value={newKey}
                     onChange={(e) => setNewKey(e.target.value)}
                     onBlur={handleAddRowBlur}
@@ -511,8 +513,8 @@ export function ParamsTab({
                   <input
                     type="text"
                     disabled={disabled}
-                    placeholder="Valor"
-                    aria-label="Valor do novo parâmetro"
+                    placeholder={t('request.paramValuePlaceholder')}
+                    aria-label={t('request.newParamValueAria')}
                     value={newValue}
                     onChange={(e) => setNewValue(e.target.value)}
                     onBlur={handleAddRowBlur}
@@ -529,8 +531,8 @@ export function ParamsTab({
                   <input
                     type="text"
                     disabled={disabled}
-                    placeholder="Descrição"
-                    aria-label="Descrição do novo parâmetro"
+                    placeholder={t('request.paramDescPlaceholder')}
+                    aria-label={t('request.newParamDescAria')}
                     value={newDescription}
                     onChange={(e) => setNewDescription(e.target.value)}
                     onBlur={handleAddRowBlur}
@@ -547,7 +549,7 @@ export function ParamsTab({
                   <button
                     type="button"
                     disabled={disabled || !newKey.trim()}
-                    aria-label="Salvar novo parâmetro"
+                    aria-label={t('request.saveNewParam')}
                     onClick={handleCommitNewRow}
                     className="text-neutral-500 hover:text-blue-400 hover:bg-neutral-800 p-1 rounded transition-colors disabled:opacity-20 disabled:hover:text-neutral-500 disabled:hover:bg-transparent"
                   >
@@ -573,7 +575,7 @@ export function ParamsTab({
             className="text-xs font-medium text-blue-400 hover:text-blue-300 flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-neutral-900 hover:bg-neutral-800 border border-neutral-800/80 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Adicionar Parâmetro</span>
+            <span>{t('request.addParam')}</span>
           </button>
         </div>
       </div>

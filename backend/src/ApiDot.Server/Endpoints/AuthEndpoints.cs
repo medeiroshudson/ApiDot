@@ -12,6 +12,8 @@ namespace ApiDot.Server.Endpoints;
 
 public static class AuthEndpoints
 {
+    private static readonly string[] SupportedLocales = ["en-US", "pt-BR"];
+
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         ArgumentNullException.ThrowIfNull(app);
@@ -98,7 +100,7 @@ public static class AuthEndpoints
             var isAuthDisabled = string.Equals(configuration["APIDOT_AUTH_ENABLED"], "false", StringComparison.OrdinalIgnoreCase);
             if (isAuthDisabled || currentUserContext.UserId == Guid.Empty)
             {
-                return Results.Ok(new AuthUserDto(Guid.Empty, "root@local", "Root (Dev/Test)", true, []));
+                return Results.Ok(new AuthUserDto(Guid.Empty, "root@local", "Root (Dev/Test)", true, "en-US", []));
             }
 
             if (httpContext.User.Identity?.IsAuthenticated != true || !currentUserContext.UserId.HasValue)
@@ -113,6 +115,37 @@ public static class AuthEndpoints
             }
 
             return Results.Ok(userDto);
+        });
+
+        group.MapPatch("/me/locale", async (
+            UpdateLocaleRequest? request,
+            HttpContext httpContext,
+            ICurrentUserContext userContext,
+            IAuthService authService,
+            CancellationToken ct) =>
+        {
+            if (httpContext.User.Identity?.IsAuthenticated != true || !userContext.UserId.HasValue || userContext.UserId.Value == Guid.Empty)
+            {
+                return Results.Unauthorized();
+            }
+
+            if (request == null || string.IsNullOrWhiteSpace(request.Locale))
+            {
+                return Results.BadRequest(new { message = "Locale is required." });
+            }
+
+            if (!SupportedLocales.Contains(request.Locale, StringComparer.OrdinalIgnoreCase))
+            {
+                return Results.BadRequest(new { message = "Supported locales are: en-US, pt-BR." });
+            }
+
+            var success = await authService.UpdateUserLocaleAsync(userContext.UserId.Value, request.Locale, ct);
+            if (!success)
+            {
+                return Results.NotFound();
+            }
+
+            return Results.NoContent();
         });
 
         group.MapPost("/logout", async (

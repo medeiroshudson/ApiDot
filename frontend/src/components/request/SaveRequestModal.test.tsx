@@ -58,7 +58,7 @@ describe('SaveRequestModal', () => {
       expect(dialog).toBeInTheDocument();
       expect(dialog).toHaveAttribute('aria-modal', 'true');
       expect(dialog).toHaveAttribute('aria-labelledby', 'save-request-modal-title');
-      expect(screen.getByRole('heading', { name: /salvar requisição/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^save request$/i })).toBeInTheDocument();
     });
 
     it('renders form inputs for request name, collection select, and folder select', () => {
@@ -71,11 +71,11 @@ describe('SaveRequestModal', () => {
         />
       );
 
-      expect(screen.getByRole('textbox', { name: /nome da requisição/i })).toBeInTheDocument();
-      expect(screen.getByRole('combobox', { name: /coleção de destino/i })).toBeInTheDocument();
-      expect(screen.getByRole('combobox', { name: /pasta de destino/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /^salvar$/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /cancelar/i })).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: /^request name/i })).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: /^target collection/i })).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: /^folder/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^cancel$/i })).toBeInTheDocument();
     });
   });
 
@@ -91,11 +91,11 @@ describe('SaveRequestModal', () => {
         />
       );
 
-      const nameInput = screen.getByRole('textbox', { name: /nome da requisição/i });
+      const nameInput = screen.getByRole('textbox', { name: /^request name/i });
       expect(nameInput).toHaveValue('Obter Perfil');
     });
 
-    it('defaults name to "Nova Requisição" when defaultName is omitted', () => {
+    it('defaults name to "New Request" when defaultName is omitted', () => {
       render(
         <SaveRequestModal
           isOpen={true}
@@ -105,8 +105,8 @@ describe('SaveRequestModal', () => {
         />
       );
 
-      const nameInput = screen.getByRole('textbox', { name: /nome da requisição/i });
-      expect(nameInput).toHaveValue('Nova Requisição');
+      const nameInput = screen.getByRole('textbox', { name: /^request name/i });
+      expect(nameInput).toHaveValue('New Request');
     });
 
     it('defaults selected collection to the first collection in the list', () => {
@@ -119,7 +119,7 @@ describe('SaveRequestModal', () => {
         />
       );
 
-      const collectionSelect = screen.getByRole('combobox', { name: /coleção de destino/i });
+      const collectionSelect = screen.getByRole('combobox', { name: /^target collection/i });
       expect(collectionSelect).toHaveValue('col-1');
     });
 
@@ -133,13 +133,13 @@ describe('SaveRequestModal', () => {
         />
       );
 
-      const folderSelect = screen.getByRole('combobox', { name: /pasta de destino/i });
+      const folderSelect = screen.getByRole('combobox', { name: /^folder/i });
       expect(screen.getByRole('option', { name: /autenticação/i })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: /usuários/i })).toBeInTheDocument();
       expect(screen.queryByRole('option', { name: /relatórios/i })).toBeNull();
 
       // Switch to Analytics API
-      const collectionSelect = screen.getByRole('combobox', { name: /coleção de destino/i });
+      const collectionSelect = screen.getByRole('combobox', { name: /^target collection/i });
       fireEvent.change(collectionSelect, { target: { value: 'col-2' } });
 
       expect(screen.getByRole('option', { name: /relatórios/i })).toBeInTheDocument();
@@ -164,11 +164,11 @@ describe('SaveRequestModal', () => {
       );
 
       // Select folder
-      const folderSelect = screen.getByRole('combobox', { name: /pasta de destino/i });
+      const folderSelect = screen.getByRole('combobox', { name: /^folder/i });
       fireEvent.change(folderSelect, { target: { value: 'f-auth' } });
 
       // Click save
-      const saveButton = screen.getByRole('button', { name: /^salvar$/i });
+      const saveButton = screen.getByRole('button', { name: /^save$/i });
       fireEvent.click(saveButton);
 
       await waitFor(() => {
@@ -191,7 +191,7 @@ describe('SaveRequestModal', () => {
         />
       );
 
-      const saveButton = screen.getByRole('button', { name: /^salvar$/i });
+      const saveButton = screen.getByRole('button', { name: /^save$/i });
       fireEvent.click(saveButton);
 
       await waitFor(() => {
@@ -212,15 +212,15 @@ describe('SaveRequestModal', () => {
         />
       );
 
-      const nameInput = screen.getByRole('textbox', { name: /nome da requisição/i });
+      const nameInput = screen.getByRole('textbox', { name: /^request name/i });
       fireEvent.change(nameInput, { target: { value: '   ' } });
 
-      const saveButton = screen.getByRole('button', { name: /^salvar$/i });
+      const saveButton = screen.getByRole('button', { name: /^save$/i });
       fireEvent.click(saveButton);
 
       expect(onSave).not.toHaveBeenCalled();
       const alert = screen.getByRole('alert');
-      expect(alert).toHaveTextContent(/nome da requisição é obrigatório/i);
+      expect(alert).toHaveTextContent('Request name is required.');
     });
 
     it('clears name validation error when user begins typing', async () => {
@@ -234,11 +234,11 @@ describe('SaveRequestModal', () => {
         />
       );
 
-      const saveButton = screen.getByRole('button', { name: /^salvar$/i });
+      const saveButton = screen.getByRole('button', { name: /^save$/i });
       fireEvent.click(saveButton);
       expect(screen.getByRole('alert')).toBeInTheDocument();
 
-      const nameInput = screen.getByRole('textbox', { name: /nome da requisição/i });
+      const nameInput = screen.getByRole('textbox', { name: /^request name/i });
       fireEvent.change(nameInput, { target: { value: 'Meu Endpoint' } });
 
       expect(screen.queryByRole('alert')).toBeNull();
@@ -255,14 +255,14 @@ describe('SaveRequestModal', () => {
         />
       );
 
-      const nameInput = screen.getByRole('textbox', { name: /nome da requisição/i });
+      const nameInput = screen.getByRole('textbox', { name: /^request name/i });
       fireEvent.change(nameInput, { target: { value: 'a'.repeat(201) } });
 
-      const saveButton = screen.getByRole('button', { name: /^salvar$/i });
+      const saveButton = screen.getByRole('button', { name: /^save$/i });
       fireEvent.click(saveButton);
 
       expect(onSave).not.toHaveBeenCalled();
-      expect(screen.getByRole('alert')).toHaveTextContent(/não pode exceder 200 caracteres/i);
+      expect(screen.getByRole('alert')).toHaveTextContent('Request name cannot exceed 200 characters.');
     });
   });
 
@@ -285,13 +285,13 @@ describe('SaveRequestModal', () => {
         />
       );
 
-      const saveButton = screen.getByRole('button', { name: /^salvar$/i });
+      const saveButton = screen.getByRole('button', { name: /^save$/i });
       fireEvent.click(saveButton);
 
-      expect(screen.getByText(/salvando\.\.\./i)).toBeInTheDocument();
+      expect(screen.getByText('Saving...')).toBeInTheDocument();
       expect(saveButton).toBeDisabled();
-      expect(screen.getByRole('button', { name: /cancelar/i })).toBeDisabled();
-      expect(screen.getByRole('textbox', { name: /nome da requisição/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /^cancel$/i })).toBeDisabled();
+      expect(screen.getByRole('textbox', { name: /^request name/i })).toBeDisabled();
 
       // Resolve save
       resolveSave();
@@ -314,7 +314,7 @@ describe('SaveRequestModal', () => {
         />
       );
 
-      const saveButton = screen.getByRole('button', { name: /^salvar$/i });
+      const saveButton = screen.getByRole('button', { name: /^save$/i });
       fireEvent.click(saveButton);
 
       await waitFor(() => {
@@ -335,9 +335,9 @@ describe('SaveRequestModal', () => {
         />
       );
 
-      const saveButton = screen.getByRole('button', { name: /^salvar$/i });
+      const saveButton = screen.getByRole('button', { name: /^save$/i });
       expect(saveButton).toBeDisabled();
-      expect(screen.getByText(/nenhuma coleção disponível/i)).toBeInTheDocument();
+      expect(screen.getByText('No collections available')).toBeInTheDocument();
     });
   });
 
@@ -353,7 +353,7 @@ describe('SaveRequestModal', () => {
         />
       );
 
-      fireEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
       expect(onClose).toHaveBeenCalledTimes(1);
     });
 
@@ -368,7 +368,7 @@ describe('SaveRequestModal', () => {
         />
       );
 
-      fireEvent.click(screen.getByRole('button', { name: /fechar modal/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^close modal$/i }));
       expect(onClose).toHaveBeenCalledTimes(1);
     });
 
@@ -431,7 +431,7 @@ describe('SaveRequestModal', () => {
         />
       );
 
-      const saveButton = screen.getByRole('button', { name: /^salvar$/i });
+      const saveButton = screen.getByRole('button', { name: /^save$/i });
       fireEvent.click(saveButton);
 
       fireEvent.keyDown(window, { key: 'Escape' });

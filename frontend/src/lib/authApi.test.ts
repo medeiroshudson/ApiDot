@@ -4,6 +4,7 @@ import {
   loginLocal,
   getCurrentUser,
   logout,
+  patchUserLocale,
   AuthConfig,
   AuthUser,
 } from './authApi';
@@ -185,6 +186,34 @@ describe('authApi', () => {
       } as Response);
 
       await expect(logout()).rejects.toThrow('Failed to terminate session');
+    });
+  });
+
+  describe('patchUserLocale', () => {
+    it('sends PATCH to /api/auth/me/locale with locale payload', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+      } as Response);
+
+      await patchUserLocale('pt-BR');
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/auth/me/locale', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locale: 'pt-BR' }),
+      });
+    });
+
+    it('throws error when patch fails', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+      } as Response);
+
+      await expect(patchUserLocale('invalid')).rejects.toThrow(
+        'Failed to update locale preference'
+      );
     });
   });
 });

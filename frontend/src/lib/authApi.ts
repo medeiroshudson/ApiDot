@@ -15,6 +15,7 @@ export interface AuthUser {
   email: string;
   displayName: string;
   isRoot: boolean;
+  locale?: string | null;
   workspaces: AuthWorkspace[];
 }
 
@@ -78,4 +79,13 @@ export async function logout(): Promise<void> {
     method: 'POST',
   });
   await handleResponse<{ message?: string }>(res);
+}
+
+export async function patchUserLocale(locale: string): Promise<void> {
+  const res = await fetch('/api/auth/me/locale', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ locale }),
+  });
+  if (!res.ok) throw new Error('Failed to update locale preference');
 }

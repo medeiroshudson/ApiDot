@@ -10,8 +10,8 @@ describe('CollectionsNav', () => {
 
   it('renders default collection navigation items as buttons', () => {
     render(<CollectionsNav />);
-    expect(screen.getByRole('button', { name: /^coleção padrão$/i })).toBeDefined();
-    expect(screen.getByRole('button', { name: /^autenticação$/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^default collection$/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^authentication$/i })).toBeDefined();
   });
 
   it('triggers onSelect when an item is clicked', () => {
@@ -37,13 +37,13 @@ describe('CollectionsNav', () => {
   it('renders sync and settings action buttons for collection items with dynamic labels', () => {
     render(<CollectionsNav items={customItems} />);
 
-    const syncButton = screen.getByRole('button', { name: 'Sincronizar coleção Minha API' });
+    const syncButton = screen.getByRole('button', { name: 'Sync collection Minha API' });
     expect(syncButton).toBeInTheDocument();
-    expect(syncButton).toHaveAttribute('aria-label', 'Sincronizar coleção Minha API');
+    expect(syncButton).toHaveAttribute('aria-label', 'Sync collection Minha API');
 
-    const settingsButton = screen.getByRole('button', { name: 'Configurações da coleção Minha API' });
+    const settingsButton = screen.getByRole('button', { name: 'Collection settings Minha API' });
     expect(settingsButton).toBeInTheDocument();
-    expect(settingsButton).toHaveAttribute('aria-label', 'Configurações da coleção Minha API');
+    expect(settingsButton).toHaveAttribute('aria-label', 'Collection settings Minha API');
   });
 
   it('includes group-focus-within:opacity-100 class for keyboard visibility on action buttons container', () => {
@@ -64,7 +64,7 @@ describe('CollectionsNav', () => {
       />
     );
 
-    const syncButton = screen.getByRole('button', { name: /sincronizar coleção|sincronizar/i });
+    const syncButton = screen.getByRole('button', { name: /sync collection|sync/i });
     fireEvent.click(syncButton);
 
     expect(handleSync).toHaveBeenCalledTimes(1);
@@ -84,7 +84,7 @@ describe('CollectionsNav', () => {
       />
     );
 
-    const settingsButton = screen.getByRole('button', { name: /configurações da coleção|configurações/i });
+    const settingsButton = screen.getByRole('button', { name: /collection settings|settings/i });
     fireEvent.click(settingsButton);
 
     expect(handleOpenSettings).toHaveBeenCalledTimes(1);
@@ -100,7 +100,7 @@ describe('CollectionsNav', () => {
       />
     );
 
-    const syncButton = screen.getByRole('button', { name: /sincronizar coleção|sincronizar/i });
+    const syncButton = screen.getByRole('button', { name: /sync collection|sync/i });
     expect(syncButton).toBeDisabled();
     expect(screen.getByTestId('nav-sync-spinning-coll-1')).toBeInTheDocument();
   });

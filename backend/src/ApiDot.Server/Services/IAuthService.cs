@@ -24,6 +24,12 @@ public interface IAuthService
         string email,
         string? displayName = null,
         string? issuer = null,
+        string? locale = null,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> UpdateUserLocaleAsync(
+        Guid userId,
+        string locale,
         CancellationToken cancellationToken = default);
 
     Task<AuthUserDto> BuildUserDtoAsync(

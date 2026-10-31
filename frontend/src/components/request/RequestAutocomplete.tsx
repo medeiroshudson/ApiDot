@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, useId } from 'react';
 import { Variable, Shuffle, Clock, Link2 } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
+import { MethodBadge, HTTP_METHOD_BADGES, METHOD_COLORS } from '@/components/common/MethodBadge';
 
 export interface AutocompleteVariable {
   key: string;
@@ -55,17 +57,7 @@ interface SuggestionItem {
   description?: string;
 }
 
-export const HTTP_METHOD_BADGES: Record<string, string> = {
-  GET: 'text-emerald-400 bg-emerald-950/60 border-emerald-800/80',
-  POST: 'text-blue-400 bg-blue-950/60 border-blue-800/80',
-  PUT: 'text-amber-400 bg-amber-950/60 border-amber-800/80',
-  PATCH: 'text-purple-400 bg-purple-950/60 border-purple-800/80',
-  DELETE: 'text-rose-400 bg-rose-950/60 border-rose-800/80',
-  HEAD: 'text-neutral-400 bg-neutral-900 border-neutral-700',
-  OPTIONS: 'text-cyan-400 bg-cyan-950/60 border-cyan-800/80',
-};
-
-export const METHOD_COLORS = HTTP_METHOD_BADGES;
+export { HTTP_METHOD_BADGES, METHOD_COLORS };
 
 export const SCHEMA_TYPE_BADGES: Record<string, string> = {
   string: 'text-emerald-400 bg-emerald-950/60 border-emerald-800/80',
@@ -224,6 +216,7 @@ export function RequestAutocomplete({
   className = '',
   children,
 }: RequestAutocompleteProps) {
+  const { t } = useTranslation();
   const baseId = useId();
   const listboxId = `${baseId}-listbox`;
   const getOptionId = (index: number) => `${baseId}-option-${index}`;
@@ -330,30 +323,30 @@ export function RequestAutocomplete({
         id: '$guid',
         name: '$guid',
         type: 'token' as const,
-        detail: 'UUID v4 aleatório',
+        detail: t('request.randomGuid'),
       },
       {
         id: '$timestamp',
         name: '$timestamp',
         type: 'token' as const,
-        detail: 'Timestamp Unix atual',
+        detail: t('request.currentTimestamp'),
       },
       {
         id: '$request[...]',
         name: '$request[...]',
         type: 'token' as const,
-        detail: 'Response chaining de outra requisição',
+        detail: t('request.requestChaining'),
       },
     ];
 
-    tokens.forEach((t) => {
-      if (!context.filter || t.name.toLowerCase().includes(context.filter)) {
-        items.push(t);
+    tokens.forEach((tok) => {
+      if (!context.filter || tok.name.toLowerCase().includes(context.filter)) {
+        items.push(tok);
       }
     });
 
     return items;
-  }, [context, availableVariables, availableRequests, schemaProperties]);
+  }, [context, availableVariables, availableRequests, schemaProperties, t]);
 
   // Reset selectedIndex whenever context changes
   useEffect(() => {
@@ -605,7 +598,9 @@ export function RequestAutocomplete({
   const liveRegion = (
     <span className="sr-only" role="status" aria-live="polite">
       {isOpen && suggestions.length > 0
-        ? `${suggestions.length} ${suggestions.length === 1 ? 'sugestão disponível' : 'sugestões disponíveis'}`
+        ? suggestions.length === 1
+          ? t('request.suggestionAvailable')
+          : t('request.suggestionsAvailable', { count: suggestions.length })
         : ''}
     </span>
   );
@@ -614,7 +609,7 @@ export function RequestAutocomplete({
     <div
       role="listbox"
       id={listboxId}
-      aria-label="Sugestões de autocompletar"
+      aria-label={t('request.autocompleteSuggestions')}
       style={
         cursorCoords
           ? {
@@ -633,7 +628,6 @@ export function RequestAutocomplete({
     >
       {suggestions.map((item, index) => {
         const isSelected = index === selectedIndex;
-        const method = item.method?.toUpperCase() || 'GET';
         return (
           <div
             key={`${item.type}-${item.id}-${index}`}
@@ -656,13 +650,7 @@ export function RequestAutocomplete({
             <div className="flex items-center gap-2 min-w-0">
               {item.type === 'request' ? (
                 <>
-                  <span
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border shrink-0 ${
-                      HTTP_METHOD_BADGES[method] || HTTP_METHOD_BADGES.GET
-                    }`}
-                  >
-                    {method}
-                  </span>
+                  <MethodBadge method={item.method} />
                   <span className="truncate">{item.name}</span>
                 </>
               ) : item.type === 'token' ? (

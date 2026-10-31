@@ -12,7 +12,8 @@ import {
   Activity,
   ArrowRight,
 } from 'lucide-react';
-import { HTTP_METHOD_BADGES } from './RequestAutocomplete';
+import { MethodBadge } from '@/components/common/MethodBadge';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface DependencyResponse {
   status?: number;
@@ -90,10 +91,11 @@ function TreeNode({
   onCopyToken,
   depth = 0,
 }: TreeNodeProps) {
+  const { t } = useTranslation();
   if (depth > 12) {
     return (
       <div className="text-xs text-neutral-500 italic pl-4">
-        [Profundidade máxima atingida]
+        {t('dependencyLinker.maxDepthReached')}
       </div>
     );
   }
@@ -154,7 +156,7 @@ function TreeNode({
     if (isObject) {
       return (
         <span className="text-neutral-500 text-xs">
-          {`{${Object.keys(value as Record<string, unknown>).length} campos}`}
+          {`{${t('dependencyLinker.fieldsCount', { count: Object.keys(value as Record<string, unknown>).length })}}`}
         </span>
       );
     }
@@ -176,13 +178,13 @@ function TreeNode({
         className={`group flex items-center justify-between py-1 px-2 rounded hover:bg-neutral-800/80 cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500 ${
           depth > 0 ? 'ml-3 border-l border-neutral-800 pl-2' : ''
         }`}
-        title={`Clique para inserir: ${token}`}
+        title={t('dependencyLinker.clickToInsert', { token })}
       >
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
           {isObject ? (
             <button
               type="button"
-              aria-label={isExpanded ? `Recolher ${label}` : `Expandir ${label}`}
+              aria-label={isExpanded ? t('dependencyLinker.collapse', { label }) : t('dependencyLinker.expand', { label })}
               onClick={handleToggle}
               onKeyDown={(e) => e.stopPropagation()}
               className="p-0.5 text-neutral-400 hover:text-white rounded hover:bg-neutral-700/60"
@@ -205,8 +207,8 @@ function TreeNode({
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0">
           <button
             type="button"
-            aria-label="Copiar token"
-            title="Copiar token"
+            aria-label={t('dependencyLinker.copyToken')}
+            title={t('dependencyLinker.copyToken')}
             onClick={handleCopy}
             onKeyDown={(e) => e.stopPropagation()}
             className="p-1 text-neutral-400 hover:text-neutral-100 rounded hover:bg-neutral-700/80 transition-colors"
@@ -218,7 +220,7 @@ function TreeNode({
             )}
           </button>
           <span className="text-[10px] text-neutral-500 bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded flex items-center gap-1 text-neutral-400">
-            <span>Inserir</span>
+            <span>{t('dependencyLinker.insert')}</span>
             <ArrowRight className="w-2.5 h-2.5" />
           </span>
         </div>
@@ -255,10 +257,17 @@ export function DependencyLinkerModal({
   availableRequests,
   currentRequestId,
 }: DependencyLinkerModalProps) {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<DependencyTabType>('body');
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+
+  const tabLabels: Record<DependencyTabType, string> = {
+    body: t('dependencyLinker.bodyTab'),
+    headers: t('dependencyLinker.headersTab'),
+    status: t('dependencyLinker.statusTab'),
+  };
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -436,17 +445,17 @@ export function DependencyLinkerModal({
             </div>
             <div>
               <h2 id="dependency-linker-title" className="text-sm font-semibold text-white">
-                Vincular Resposta de Dependência
+                {t('dependencyLinker.title')}
               </h2>
               <p className="text-xs text-neutral-400">
-                Selecione campos de requisições anteriores para encadear valores dinâmicos
+                {t('dependencyLinker.subtitle')}
               </p>
             </div>
           </div>
           <button
             ref={closeButtonRef}
             type="button"
-            aria-label="Fechar"
+            aria-label={t('dependencyLinker.closeAria')}
             onClick={onClose}
             className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-1 focus:ring-neutral-500"
           >
@@ -465,8 +474,8 @@ export function DependencyLinkerModal({
                 <input
                   ref={searchInputRef}
                   type="text"
-                  placeholder="Buscar requisições..."
-                  aria-label="Buscar requisições"
+                  placeholder={t('dependencyLinker.searchPlaceholder')}
+                  aria-label={t('dependencyLinker.searchAria')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full h-8 pl-8 pr-3 text-xs bg-neutral-900 border border-neutral-800 rounded-lg text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -478,15 +487,12 @@ export function DependencyLinkerModal({
             <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1.5">
               {filteredRequests.length === 0 ? (
                 <div className="p-4 text-center text-xs text-neutral-500">
-                  Nenhuma requisição encontrada.
+                  {t('dependencyLinker.noRequestsFound')}
                 </div>
               ) : (
                 filteredRequests.map((req) => {
                   const isSelected = req.id === selectedRequestId;
                   const reqStatus = req.response?.statusCode ?? req.response?.status;
-                  const methodBadge =
-                    HTTP_METHOD_BADGES[req.method] ||
-                    'text-blue-400 bg-blue-950/60 border-blue-800/80';
 
                   return (
                     <button
@@ -500,11 +506,7 @@ export function DependencyLinkerModal({
                       }`}
                     >
                       <div className="flex items-center justify-between gap-1.5">
-                        <span
-                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase shrink-0 ${methodBadge}`}
-                        >
-                          {req.method}
-                        </span>
+                        <MethodBadge method={req.method} />
                         <span className="text-xs font-semibold text-neutral-200 truncate flex-1">
                           {req.name}
                         </span>
@@ -536,19 +538,19 @@ export function DependencyLinkerModal({
           <div className="flex-1 flex flex-col overflow-hidden bg-neutral-900/50">
             {!selectedRequest ? (
               <div className="flex-1 flex items-center justify-center p-8 text-neutral-500 text-xs">
-                Selecione uma requisição para inspecionar os dados de resposta
+                {t('dependencyLinker.selectRequestPrompt')}
               </div>
             ) : !selectedRequest.response ? (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-neutral-500 text-xs gap-2">
                 <Activity className="w-8 h-8 text-neutral-600" />
-                <span>Esta requisição não possui dados de resposta executados.</span>
+                <span>{t('dependencyLinker.noResponseData')}</span>
               </div>
             ) : (
               <>
                 {/* Tabs */}
                 <div
                   role="tablist"
-                  aria-label="Abas de dados da resposta"
+                  aria-label={t('dependencyLinker.responseTabsAria')}
                   className="flex items-center border-b border-neutral-800 px-4 bg-neutral-950/40 shrink-0"
                 >
                   {DEPENDENCY_TABS.map((tab) => {
@@ -569,7 +571,7 @@ export function DependencyLinkerModal({
                         }`}
                       >
                         <Icon className="w-3.5 h-3.5" />
-                        <span>{tab.label}</span>
+                        <span>{tabLabels[tab.id]}</span>
                       </button>
                     );
                   })}
@@ -586,7 +588,7 @@ export function DependencyLinkerModal({
                       className="flex flex-col gap-2"
                     >
                       <div className="flex items-center justify-between text-xs text-neutral-400 pb-2 border-b border-neutral-800/80">
-                        <span>Árvore de Propriedades (clique para vincular)</span>
+                        <span>{t('dependencyLinker.propertyTreeHeader')}</span>
                         <span className="text-[11px] text-neutral-500 font-mono">
                           Format: {`{{$request['${selectedRequest.id}'].response.body.<path>}}`}
                         </span>
@@ -667,7 +669,7 @@ export function DependencyLinkerModal({
                               {String(selectedRequest.response.body)}
                             </div>
                           ) : (
-                            'Nenhum corpo de resposta retornado.'
+                            t('dependencyLinker.noResponseBody')
                           )}
                         </div>
                       )}
@@ -683,7 +685,7 @@ export function DependencyLinkerModal({
                       className="flex flex-col gap-2"
                     >
                       <div className="flex items-center justify-between text-xs text-neutral-400 pb-2 border-b border-neutral-800/80">
-                        <span>Cabeçalhos da Resposta (clique para vincular)</span>
+                        <span>{t('dependencyLinker.responseHeadersHeader')}</span>
                         <span className="text-[11px] text-neutral-500 font-mono">
                           Format: {`{{$request['${selectedRequest.id}'].response.headers['<header>']}}`}
                         </span>
@@ -691,7 +693,7 @@ export function DependencyLinkerModal({
 
                       {normalizedHeaders.length === 0 ? (
                         <div className="text-xs text-neutral-500 p-4 text-center">
-                          Nenhum cabeçalho retornado nesta resposta.
+                          {t('dependencyLinker.noHeadersReturned')}
                         </div>
                       ) : (
                         <div className="flex flex-col gap-1.5">
@@ -725,7 +727,7 @@ export function DependencyLinkerModal({
                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0">
                                   <button
                                     type="button"
-                                    aria-label="Copiar token"
+                                    aria-label={t('dependencyLinker.copyToken')}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleCopyToken(headerToken);
@@ -740,7 +742,7 @@ export function DependencyLinkerModal({
                                     )}
                                   </button>
                                   <span className="text-[10px] text-neutral-500 bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded flex items-center gap-1 text-neutral-400">
-                                    <span>Inserir</span>
+                                    <span>{t('dependencyLinker.insert')}</span>
                                     <ArrowRight className="w-2.5 h-2.5" />
                                   </span>
                                 </div>
@@ -761,7 +763,7 @@ export function DependencyLinkerModal({
                       className="flex flex-col gap-3"
                     >
                       <div className="flex items-center justify-between text-xs text-neutral-400 pb-2 border-b border-neutral-800/80">
-                        <span>Código de Status da Resposta (clique para vincular)</span>
+                        <span>{t('dependencyLinker.statusCodeHeader')}</span>
                         <span className="text-[11px] text-neutral-500 font-mono">
                           Format: {`{{$request['${selectedRequest.id}'].response.status}}`}
                         </span>
@@ -809,7 +811,7 @@ export function DependencyLinkerModal({
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0">
                             <button
                               type="button"
-                              aria-label="Copiar token"
+                              aria-label={t('dependencyLinker.copyToken')}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleCopyToken(
@@ -827,14 +829,14 @@ export function DependencyLinkerModal({
                               )}
                             </button>
                             <span className="text-xs text-neutral-400 bg-neutral-900 border border-neutral-800 px-2 py-1 rounded flex items-center gap-1">
-                              <span>Inserir</span>
+                              <span>{t('dependencyLinker.insert')}</span>
                               <ArrowRight className="w-3 h-3" />
                             </span>
                           </div>
                         </div>
                       ) : (
                         <div className="text-xs text-neutral-500 p-4 text-center">
-                          Status não disponível para esta requisição.
+                          {t('dependencyLinker.statusNotAvailable')}
                         </div>
                       )}
                     </div>
@@ -849,15 +851,15 @@ export function DependencyLinkerModal({
         <div className="flex items-center justify-between px-5 py-3 border-t border-neutral-800 bg-neutral-950/80 text-xs text-neutral-400 shrink-0">
           <span>
             {selectedRequest
-              ? `Requisição selecionada: ${selectedRequest.name} (${selectedRequest.id})`
-              : 'Nenhuma requisição selecionada'}
+              ? t('dependencyLinker.selectedRequestInfo', { name: selectedRequest.name, id: selectedRequest.id })
+              : t('dependencyLinker.noRequestSelected')}
           </span>
           <button
             type="button"
             onClick={onClose}
             className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-medium transition-colors"
           >
-            Cancelar
+            {t('dependencyLinker.cancel')}
           </button>
         </div>
       </div>

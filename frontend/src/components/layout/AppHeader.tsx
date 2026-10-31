@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Menu, Settings, Sliders, ChevronDown, LogOut } from 'lucide-react';
+import { Menu, Settings, Sliders, ChevronDown, LogOut, Globe } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useRequestStore } from '@/stores/useRequestStore';
+import { useTranslation } from '@/hooks/useTranslation';
+import { Select } from '@/components/common/Select';
 
 export interface AppHeaderProps {
   title?: string;
@@ -60,6 +62,7 @@ export function AppHeader({
   activeWorkspaceId = null,
 }: AppHeaderProps) {
   const router = useRouter();
+  const { t, locale, setLocale } = useTranslation();
   const { user, isAuthenticated, isLoading, logout } = useAuthStore();
   const storeActiveWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const currentWorkspaceId = activeWorkspaceId ?? storeActiveWorkspaceId;
@@ -137,19 +140,20 @@ export function AppHeader({
 
       <div className="flex items-center gap-2 sm:gap-3">
         <div className="flex items-center gap-1.5">
-          <select
+          <Select
+            sizeVariant="sm"
             value={activeEnvironment ?? ''}
             onChange={(e) => onSelectEnvironment?.(e.target.value === '' ? null : e.target.value)}
             aria-label="Selecionar ambiente ativo"
-            className="bg-neutral-900 border border-neutral-800 text-xs text-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-neutral-400 cursor-pointer hover:border-neutral-700 transition-colors max-w-[120px] sm:max-w-[200px] truncate"
+            className="max-w-[120px] sm:max-w-[200px] truncate hover:border-neutral-700"
           >
-            <option value="">Sem Ambiente</option>
+            <option value="">{t('header.noEnvironment')}</option>
             {(environments ?? []).map((env, idx) => (
               <option key={`${env}-${idx}`} value={env}>
                 {env}
               </option>
             ))}
-          </select>
+          </Select>
           <button
             type="button"
             onClick={onOpenEnvironmentSettings}
@@ -165,9 +169,9 @@ export function AppHeader({
         <button
           type="button"
           onClick={onOpenSettings}
-          aria-label="Configurações Globais"
+          aria-label={t('header.globalSettings')}
           aria-haspopup="dialog"
-          title="Configurações Globais"
+          title={t('header.globalSettings')}
           className="p-2 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-400 cursor-pointer"
         >
           <Settings className="w-4 h-4" aria-hidden="true" />
@@ -231,17 +235,35 @@ export function AppHeader({
                   </div>
                 </div>
 
+                {/* Language Switcher */}
+                <div className="px-3.5 py-2 border-b border-neutral-800 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2 text-neutral-300">
+                    <Globe className="w-3.5 h-3.5 text-neutral-400" aria-hidden="true" />
+                    <span>{t('settings.language')}</span>
+                  </div>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid="language-toggle"
+                    aria-label={`${t('settings.language')}: ${locale === 'en-US' ? t('settings.english') : t('settings.portuguese')}`}
+                    onClick={() => void setLocale(locale === 'en-US' ? 'pt-BR' : 'en-US')}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white transition-colors text-[11px] font-medium cursor-pointer"
+                  >
+                    <span>{locale === 'en-US' ? t('settings.english') : t('settings.portuguese')}</span>
+                  </button>
+                </div>
+
                 {/* Logout Action */}
                 <div className="pt-1">
                   <button
                     type="button"
                     role="menuitem"
                     onClick={handleLogout}
-                    aria-label="Sair da conta"
+                    aria-label={t('header.logout')}
                     className="w-full flex items-center gap-2 px-3.5 py-2 text-xs text-rose-400 hover:text-rose-300 hover:bg-neutral-800/80 transition-colors text-left cursor-pointer"
                   >
                     <LogOut className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                    <span>Sair</span>
+                    <span>{t('header.logout')}</span>
                   </button>
                 </div>
               </div>

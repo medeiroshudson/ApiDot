@@ -140,17 +140,16 @@ describe('responseStorage (IndexedDB Persistent Storage)', () => {
       'content-type': 'application/json',
       'x-custom-header': 'apidot-test',
     },
-    body: {
+    body: JSON.stringify({
       message: 'Hello World',
       items: [1, 2, 3],
       nested: { enabled: true, score: 99.5 },
-    },
+    }),
     timing: {
       dnsLookupMs: 5,
-      tcpHandshakeMs: 10,
       tlsHandshakeMs: 15,
       timeToFirstByteMs: 30,
-      contentDownloadMs: 15,
+      contentTransferMs: 15,
       totalDurationMs: 45,
     },
   };
@@ -259,7 +258,7 @@ describe('responseStorage (IndexedDB Persistent Storage)', () => {
 
     it('should preserve 100% intact complex response body types (string, object, array, null)', async () => {
       const stringResp: ResponseData = { statusCode: 200, body: 'Plain text raw response' };
-      const arrayResp: ResponseData = { statusCode: 200, body: [{ id: 1 }, { id: 2 }] };
+      const arrayResp: ResponseData = { statusCode: 200, body: JSON.stringify([{ id: 1 }, { id: 2 }]) };
 
       await saveResponseToStorage('resp-string', stringResp);
       await saveResponseToStorage('resp-array', arrayResp);

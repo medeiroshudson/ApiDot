@@ -115,6 +115,7 @@ public class AuthService(
         string email,
         string? displayName = null,
         string? issuer = null,
+        string? locale = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(subject);
@@ -158,6 +159,10 @@ public class AuthService(
             {
                 user.DisplayName = displayName.Trim();
             }
+            if (user.Locale == null && !string.IsNullOrEmpty(locale))
+            {
+                user.Locale = NormalizeLocale(locale);
+            }
 
             await dbContext.SaveChangesAsync(cancellationToken);
             return user;
@@ -174,6 +179,7 @@ public class AuthService(
             DisplayName = effectiveDisplayName,
             OidcSubject = subject,
             OidcIssuer = issuer,
+            Locale = NormalizeLocale(locale) ?? "en-US",
             IsRoot = false,
             CreatedAtUtc = DateTime.UtcNow,
             LastLoginAtUtc = DateTime.UtcNow
@@ -183,7 +189,7 @@ public class AuthService(
 
         var personalWorkspace = new Workspace
         {
-            Name = "Meu Workspace",
+            Name = "My Workspace",
             CreatedAtUtc = DateTime.UtcNow
         };
         dbContext.Workspaces.Add(personalWorkspace);
@@ -201,6 +207,54 @@ public class AuthService(
         logger?.LogInformation("JIT: Provisioned new user {Email} with personal workspace.", normalizedEmail);
 
         return user;
+    }
+
+    public async Task<bool> UpdateUserLocaleAsync(
+        Guid userId,
+        string locale,
+        CancellationToken cancellationToken = default)
+    {
+        var normalized = NormalizeLocale(locale);
+        if (normalized == null)
+        {
+            return false;
+        }
+
+        var user = await dbContext.Users
+            .TagWith(ScopeMarker)
+            .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+
+        if (user == null)
+        {
+            return false;
+        }
+
+        user.Locale = normalized;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public static string? NormalizeLocale(string? locale)
+    {
+        if (string.IsNullOrWhiteSpace(locale))
+        {
+            return null;
+        }
+
+        var normalized = locale.Trim().Replace('_', '-');
+        if (normalized.Equals("pt", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("pt-BR", StringComparison.OrdinalIgnoreCase))
+        {
+            return "pt-BR";
+        }
+
+        if (normalized.Equals("en", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("en-US", StringComparison.OrdinalIgnoreCase))
+        {
+            return "en-US";
+        }
+
+        return null;
     }
 
     public async Task<AuthUserDto> BuildUserDtoAsync(
@@ -244,6 +298,7 @@ public class AuthService(
             user.Email,
             user.DisplayName,
             user.IsRoot,
+            user.Locale,
             workspaces);
     }
 

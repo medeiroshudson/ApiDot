@@ -280,4 +280,44 @@ public class AuthEntityPersistenceTests
         var act = () => context.SaveChangesAsync();
         await act.Should().ThrowAsync<DbUpdateException>();
     }
+
+    [Fact]
+    public async Task CanPersistAndRetrieve_User_WithLocale()
+    {
+        using var context = CreateInMemoryContext();
+        var user = new User
+        {
+            Email = "locale.test@example.com",
+            DisplayName = "Locale Tester",
+            Locale = "pt-BR"
+        };
+
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var saved = await context.Users.FirstOrDefaultAsync(u => u.Id == user.Id);
+        saved.Should().NotBeNull();
+        saved!.Locale.Should().Be("pt-BR");
+    }
+
+    [Fact]
+    public async Task CanPersistAndRetrieve_User_WithNullLocale()
+    {
+        using var context = CreateInMemoryContext();
+        var user = new User
+        {
+            Email = "null.locale@example.com",
+            DisplayName = "Null Locale Tester",
+            Locale = null
+        };
+
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var saved = await context.Users.FirstOrDefaultAsync(u => u.Id == user.Id);
+        saved.Should().NotBeNull();
+        saved!.Locale.Should().BeNull();
+    }
 }

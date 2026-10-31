@@ -118,9 +118,9 @@ describe('WorkspaceEditorPane', () => {
     // Verify main components are present
     expect(screen.getByRole('main')).toBeInTheDocument();
     expect(screen.getByTestId('panel-splitter-request-response-splitter')).toBeInTheDocument();
-    expect(screen.getByText('Requisição')).toBeInTheDocument();
-    expect(screen.getByText('Resposta')).toBeInTheDocument();
-    expect(screen.getByText('Dispare uma requisição para visualizar a resposta')).toBeInTheDocument();
+    expect(screen.getByText('Request')).toBeInTheDocument();
+    expect(screen.getByText('Response')).toBeInTheDocument();
+    expect(screen.getByText(/Send a request to see the response|Dispare uma requisição/i)).toBeInTheDocument();
   });
 
   it('applies requestResponseRatio from useLayoutStore to desktop layout', async () => {
@@ -134,14 +134,14 @@ describe('WorkspaceEditorPane', () => {
   it('switches between request and response views on mobile', async () => {
     await renderEditorPane('ws-1', null);
 
-    // Click on mobile 'Resposta' button
-    const responseBtn = screen.getByRole('button', { name: /Resposta/i });
+    // Click on mobile 'Response' button
+    const responseBtn = screen.getByRole('button', { name: /Response/i });
     fireEvent.click(responseBtn);
 
     expect(useLayoutStore.getState().activeMobilePane).toBe('response');
 
-    // Click back to 'Requisição' button
-    const requestBtn = screen.getByRole('button', { name: /^Requisição$/i });
+    // Click back to 'Request' button
+    const requestBtn = screen.getByRole('button', { name: /^Request$/i });
     fireEvent.click(requestBtn);
 
     expect(useLayoutStore.getState().activeMobilePane).toBe('request');
@@ -207,7 +207,7 @@ describe('WorkspaceEditorPane', () => {
     await renderEditorPane('ws-1', 'req-2');
 
     // req-2 has no response, so it should display empty response viewer state
-    expect(screen.getByText('Dispare uma requisição para visualizar a resposta')).toBeInTheDocument();
+    expect(screen.getByText(/Send a request to see the response|Dispare uma requisição/i)).toBeInTheDocument();
     expect(screen.queryByText(/200 OK/)).not.toBeInTheDocument();
   });
 
@@ -246,7 +246,7 @@ describe('WorkspaceEditorPane', () => {
     });
 
     // Click Send
-    const sendButton = screen.getByRole('button', { name: /Enviar requisição/i });
+    const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
     await act(async () => {
       fireEvent.click(sendButton);
     });
@@ -312,7 +312,7 @@ describe('WorkspaceEditorPane', () => {
 
     await renderEditorPane('ws-1', null);
 
-    const sendButton = screen.getByRole('button', { name: /Enviar requisição/i });
+    const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
     await act(async () => {
       fireEvent.click(sendButton);
     });
@@ -345,7 +345,7 @@ describe('WorkspaceEditorPane', () => {
       expect(screen.getByDisplayValue('https://api.example.com/users')).toBeInTheDocument();
     });
 
-    const sendButton = screen.getByRole('button', { name: /Enviar requisição/i });
+    const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
     await act(async () => {
       fireEvent.click(sendButton);
     });
@@ -392,7 +392,7 @@ describe('WorkspaceEditorPane', () => {
       expect(screen.getByDisplayValue('https://api.example.com/users')).toBeInTheDocument();
     });
 
-    const sendButton = screen.getByRole('button', { name: /Enviar requisição/i });
+    const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
     await act(async () => {
       fireEvent.click(sendButton);
     });
@@ -438,7 +438,7 @@ describe('WorkspaceEditorPane', () => {
 
     await renderEditorPane('ws-1', null);
 
-    const sendButton = screen.getByRole('button', { name: /Enviar requisição/i });
+    const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
     await act(async () => {
       fireEvent.click(sendButton);
     });
@@ -484,7 +484,7 @@ describe('WorkspaceEditorPane', () => {
 
     await renderEditorPane('ws-1', null);
 
-    const sendButton = screen.getByRole('button', { name: /Enviar requisição/i });
+    const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
     await act(async () => {
       fireEvent.click(sendButton);
     });
@@ -530,7 +530,7 @@ describe('WorkspaceEditorPane', () => {
 
     await renderEditorPane('ws-1', null);
 
-    const sendButton = screen.getByRole('button', { name: /Enviar requisição/i });
+    const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
     await act(async () => {
       fireEvent.click(sendButton);
     });
@@ -575,7 +575,7 @@ describe('WorkspaceEditorPane', () => {
 
     await renderEditorPane('ws-1', null);
 
-    const sendButton = screen.getByRole('button', { name: /Enviar requisição/i });
+    const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
     await act(async () => {
       fireEvent.click(sendButton);
     });
@@ -615,7 +615,7 @@ describe('WorkspaceEditorPane', () => {
       expect(screen.getByDisplayValue('https://api.example.com/users')).toBeInTheDocument();
     });
 
-    const sendButton = screen.getByRole('button', { name: /Enviar requisição/i });
+    const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
     await act(async () => {
       fireEvent.click(sendButton);
     });
@@ -661,7 +661,7 @@ describe('WorkspaceEditorPane', () => {
 
     await renderEditorPane('ws-1', null);
 
-    const sendButton = screen.getByRole('button', { name: /Enviar requisição/i });
+    const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
     await act(async () => {
       fireEvent.click(sendButton);
     });
@@ -677,7 +677,7 @@ describe('WorkspaceEditorPane', () => {
     const scratchData = {
       method: 'POST' as const,
       url: 'https://scratchpad.example.com',
-      target: 'Browser' as const,
+      target: 'Inherit' as const,
       headers: '{"x-scratch": "true"}',
       body: '{"draft": true}',
       auth: { type: 'none' as const },

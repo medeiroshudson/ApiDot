@@ -26,6 +26,9 @@ public class User
 
     public bool IsRoot { get; set; } = false;
 
+    [MaxLength(16)]
+    public string? Locale { get; set; }
+
     public DateTime CreatedAtUtc { get; init; } = DateTime.UtcNow;
     public DateTime? LastLoginAtUtc { get; set; }
 

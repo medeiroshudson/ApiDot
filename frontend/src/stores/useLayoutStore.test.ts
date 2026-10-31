@@ -264,7 +264,7 @@ describe('useLayoutStore', () => {
     it('should set and clear auditBanner', () => {
       const bannerData = {
         collectionName: 'Customers API',
-        report: { addedRequests: 3, updatedRequests: 1, fieldsAdded: 4 },
+        report: { addedRequests: 3, updatedRequests: 1, fieldsAdded: 4, fieldsRemoved: 0, fieldsPreserved: 2 },
       };
 
       useLayoutStore.getState().setAuditBanner(bannerData);

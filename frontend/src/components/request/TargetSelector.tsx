@@ -1,4 +1,8 @@
+'use client';
+
 import React from 'react';
+import { useTranslation } from '@/hooks/useTranslation';
+import { Select } from '@/components/common/Select';
 
 export type ExecutionTarget = 'Inherit' | 'Server' | 'Agent';
 
@@ -8,6 +12,7 @@ export interface TargetSelectorProps {
   onChange: (value: ExecutionTarget) => void;
   disabled?: boolean;
   className?: string;
+  ariaLabel?: string;
 }
 
 export function TargetSelector({
@@ -16,22 +21,24 @@ export function TargetSelector({
   onChange,
   disabled = false,
   className = '',
+  ariaLabel,
 }: TargetSelectorProps) {
-  const agentTitle = isAgentOnline ? 'Agent Conectado' : 'Agent Desconectado';
+  const { t } = useTranslation();
+  const agentTitle = isAgentOnline ? t('request.agentConnected') : t('request.agentDisconnected');
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
-      <select
-        aria-label="Target de Execução"
+      <Select
+        sizeVariant="sm"
+        aria-label={ariaLabel || t('request.targetExecution')}
         value={value}
         onChange={(e) => onChange(e.target.value as ExecutionTarget)}
         disabled={disabled}
-        className="bg-neutral-800 text-xs text-neutral-200 border border-neutral-700 rounded px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <option value="Inherit">Inherit (Herdar)</option>
-        <option value="Server">Server (Nuvem)</option>
-        <option value="Agent">Agent (Máquina)</option>
-      </select>
+        <option value="Inherit">{t('request.targetInherit')}</option>
+        <option value="Server">{t('request.targetServer')}</option>
+        <option value="Agent">{t('request.targetAgent')}</option>
+      </Select>
 
       {value === 'Agent' && (
         <span

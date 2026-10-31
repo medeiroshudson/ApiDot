@@ -1,5 +1,8 @@
+'use client';
+
 import React from 'react';
 import { Clock } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface TimingBreakdown {
   dnsLookupMs?: number;
@@ -44,10 +47,12 @@ export function TimingWaterfall({
   totalDurationMs: propTotalMs,
   className = '',
 }: TimingWaterfallProps) {
+  const { t } = useTranslation();
+
   if (!timing) {
     return (
       <div className={`p-4 text-center text-xs text-neutral-500 ${className}`}>
-        <p>Sem métricas de tempo disponíveis</p>
+        <p>{t('response.noMetrics')}</p>
       </div>
     );
   }
@@ -66,29 +71,29 @@ export function TimingWaterfall({
   const metrics: TimingMetricItem[] = [
     {
       key: 'dns',
-      label: 'DNS Lookup',
-      description: 'Resolução de nome de domínio',
+      label: t('response.dnsLookup'),
+      description: t('response.dnsLookupDesc'),
       value: dns,
       colorClass: 'bg-sky-500',
     },
     {
       key: 'tls',
-      label: 'TLS Handshake',
-      description: 'Negociação e aperto de mão SSL/TLS',
+      label: t('response.tlsHandshake'),
+      description: t('response.tlsHandshakeDesc'),
       value: tls,
       colorClass: 'bg-indigo-500',
     },
     {
       key: 'ttfb',
-      label: 'TTFB',
-      description: 'Tempo até o primeiro byte (espera do servidor)',
+      label: t('response.ttfb'),
+      description: t('response.ttfbDesc'),
       value: ttfb,
       colorClass: 'bg-amber-500',
     },
     {
       key: 'transfer',
-      label: 'Content Transfer',
-      description: 'Download do corpo da resposta',
+      label: t('response.contentTransfer'),
+      description: t('response.contentTransferDesc'),
       value: transfer,
       colorClass: 'bg-emerald-500',
     },
@@ -100,11 +105,11 @@ export function TimingWaterfall({
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-neutral-400" aria-hidden="true" />
           <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-            Detalhamento de Latência
+            {t('response.latencyBreakdown')}
           </span>
         </div>
         <div className="flex items-baseline gap-1.5">
-          <span className="text-xs text-neutral-400">Duração Total:</span>
+          <span className="text-xs text-neutral-400">{t('response.totalDuration')}</span>
           <span className="text-sm font-mono font-bold text-neutral-100">
             {formatMs(total)}
           </span>

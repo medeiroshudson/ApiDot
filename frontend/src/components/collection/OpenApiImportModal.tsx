@@ -15,6 +15,7 @@ import {
   importOpenApiCollection,
   ImportOpenApiCollectionRequest,
 } from '@/lib/treeApi';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface OpenApiImportModalProps {
   isOpen: boolean;
@@ -88,6 +89,7 @@ export function OpenApiImportModal({
   onImport,
   onImportSuccess,
 }: OpenApiImportModalProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<ImportTabMode>('url');
   const [url, setUrl] = useState('');
   const [rawContent, setRawContent] = useState('');
@@ -168,17 +170,17 @@ export function OpenApiImportModal({
     if (activeTab === 'url') {
       const trimmedUrl = url.trim();
       if (!trimmedUrl) {
-        setError('A URL da especificação é obrigatória.');
+        setError(t('openApiImport.urlRequired'));
         return;
       }
       if (!/^https?:\/\//i.test(trimmedUrl)) {
-        setError('A URL da especificação deve ser um endereço HTTP ou HTTPS válido.');
+        setError(t('openApiImport.invalidHttpUrl'));
         return;
       }
     } else {
       const trimmedContent = rawContent.trim();
       if (!trimmedContent) {
-        setError('O conteúdo da especificação OpenAPI é obrigatório.');
+        setError(t('openApiImport.contentRequired'));
         return;
       }
     }
@@ -208,7 +210,7 @@ export function OpenApiImportModal({
 
       onClose();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Falha ao importar especificação OpenAPI.';
+      const msg = err instanceof Error ? err.message : t('openApiImport.importFailed');
       setError(msg);
     } finally {
       setIsLoading(false);
@@ -218,8 +220,8 @@ export function OpenApiImportModal({
   if (!isOpen) return null;
 
   const namePlaceholder = suggestedName
-    ? `Ex: ${suggestedName}`
-    : 'Ex: Minha Coleção OpenAPI (opcional)';
+    ? t('openApiImport.namePlaceholderSuggested', { name: suggestedName })
+    : t('openApiImport.namePlaceholderDefault');
 
   return (
     <div
@@ -240,16 +242,16 @@ export function OpenApiImportModal({
             </div>
             <div>
               <h2 id="openapi-import-modal-title" className="text-sm font-semibold text-white">
-                Importar Especificação OpenAPI
+                {t('openApiImport.title')}
               </h2>
               <span className="text-[11px] text-zinc-400">
-                Crie uma coleção com pastas e requisições a partir de Swagger/OpenAPI 2.0 ou 3.x
+                {t('openApiImport.subtitle')}
               </span>
             </div>
           </div>
           <button
             type="button"
-            aria-label="Fechar modal de importação OpenAPI"
+            aria-label={t('openApiImport.closeAria')}
             onClick={onClose}
             disabled={isLoading}
             className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-40 cursor-pointer"
@@ -261,7 +263,7 @@ export function OpenApiImportModal({
         {/* Tabs Bar */}
         <div
           role="tablist"
-          aria-label="Modo de importação"
+          aria-label={t('openApiImport.importModeAria')}
           className="flex border-b border-zinc-800 bg-zinc-950/30 px-5 shrink-0"
         >
           <button
@@ -276,7 +278,7 @@ export function OpenApiImportModal({
             }`}
           >
             <Link className="w-3.5 h-3.5" />
-            <span>URL</span>
+            <span>{t('openApiImport.urlTab')}</span>
           </button>
 
           <button
@@ -291,7 +293,7 @@ export function OpenApiImportModal({
             }`}
           >
             <FileCode className="w-3.5 h-3.5" />
-            <span>Colar Conteúdo</span>
+            <span>{t('openApiImport.rawTab')}</span>
           </button>
         </div>
 
@@ -316,7 +318,7 @@ export function OpenApiImportModal({
                   htmlFor="openapi-spec-url"
                   className="block text-xs font-medium text-zinc-300 mb-1.5"
                 >
-                  URL da Especificação
+                  {t('openApiImport.specUrlLabel')}
                 </label>
                 <div className="relative">
                   <input
@@ -326,12 +328,12 @@ export function OpenApiImportModal({
                     value={url}
                     onChange={handleUrlChange}
                     disabled={isLoading}
-                    placeholder="https://petstore.swagger.io/v2/swagger.json"
+                    placeholder={t('openApiImport.specUrlPlaceholder')}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50"
                   />
                 </div>
                 <p className="text-[11px] text-zinc-500 mt-1">
-                  Suporta endpoints remotos HTTPS/HTTP retornando JSON ou YAML.
+                  {t('openApiImport.specUrlHelp')}
                 </p>
               </div>
             ) : (
@@ -340,7 +342,7 @@ export function OpenApiImportModal({
                   htmlFor="openapi-spec-content"
                   className="block text-xs font-medium text-zinc-300 mb-1.5"
                 >
-                  Conteúdo da Especificação (JSON ou YAML)
+                  {t('openApiImport.rawContentLabel')}
                 </label>
                 <textarea
                   id="openapi-spec-content"
@@ -348,11 +350,11 @@ export function OpenApiImportModal({
                   value={rawContent}
                   onChange={handleRawContentChange}
                   disabled={isLoading}
-                  placeholder={`{\n  "openapi": "3.0.0",\n  "info": { "title": "Minha API", "version": "1.0" },\n  "paths": {}\n}`}
+                  placeholder={t('openApiImport.rawContentPlaceholder')}
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-xs font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50 resize-y"
                 />
                 <p className="text-[11px] text-zinc-500 mt-1">
-                  Cole o documento JSON ou YAML diretamente aqui.
+                  {t('openApiImport.rawContentHelp')}
                 </p>
               </div>
             )}
@@ -364,12 +366,12 @@ export function OpenApiImportModal({
                   htmlFor="openapi-collection-name"
                   className="block text-xs font-medium text-zinc-300"
                 >
-                  Nome da Coleção (opcional)
+                  {t('openApiImport.collectionNameLabel')}
                 </label>
                 {suggestedName && !name && (
                   <span className="text-[11px] text-zinc-500 flex items-center gap-1">
                     <Sparkles className="w-3 h-3 text-purple-400" />
-                    Sugestão pronta
+                    {t('openApiImport.suggestionReady')}
                   </span>
                 )}
               </div>
@@ -384,7 +386,7 @@ export function OpenApiImportModal({
               />
               {suggestedName && !name && (
                 <div className="flex items-center gap-1.5 mt-1.5 text-xs text-zinc-400">
-                  <span>Sugestão:</span>
+                  <span>{t('openApiImport.suggestionLabel')}</span>
                   <button
                     type="button"
                     onClick={() => setName(suggestedName)}
@@ -395,7 +397,7 @@ export function OpenApiImportModal({
                 </div>
               )}
               <p className="text-[11px] text-zinc-500 mt-1">
-                Se deixado em branco, o nome definido no título da especificação OpenAPI será usado.
+                {t('openApiImport.nameHint')}
               </p>
             </div>
           </div>
@@ -408,7 +410,7 @@ export function OpenApiImportModal({
               disabled={isLoading}
               className="px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
             >
-              Cancelar
+              {t('openApiImport.cancel')}
             </button>
             <button
               type="submit"
@@ -418,12 +420,12 @@ export function OpenApiImportModal({
               {isLoading ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Importando...</span>
+                  <span>{t('openApiImport.importing')}</span>
                 </>
               ) : (
                 <>
                   <Download className="w-3.5 h-3.5" />
-                  <span>Criar e Importar</span>
+                  <span>{t('openApiImport.submit')}</span>
                 </>
               )}
             </button>

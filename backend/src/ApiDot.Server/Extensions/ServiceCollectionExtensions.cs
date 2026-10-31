@@ -108,6 +108,7 @@ public static class ServiceCollectionExtensions
                         ?? principal?.FindFirst("name")?.Value
                         ?? principal?.FindFirst("preferred_username")?.Value;
                     var iss = principal?.FindFirst("iss")?.Value ?? oidcAuthority;
+                    var locale = principal?.FindFirst("locale")?.Value;
 
                     if (string.IsNullOrWhiteSpace(sub) || string.IsNullOrWhiteSpace(email))
                     {
@@ -120,6 +121,7 @@ public static class ServiceCollectionExtensions
                         email,
                         name,
                         iss,
+                        locale,
                         context.HttpContext.RequestAborted);
 
                     var claims = new List<Claim>

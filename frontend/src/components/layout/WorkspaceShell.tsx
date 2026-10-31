@@ -40,6 +40,7 @@ import {
   WorkspaceProvider,
   useWorkspaceContext,
 } from '@/context/WorkspaceContext';
+import { useTranslation } from '@/hooks/useTranslation';
 import { CheckCircle2, X, AlertCircle } from 'lucide-react';
 
 const STORAGE_KEY_ACTIVE_WORKSPACE = 'apidot_active_workspace_id';
@@ -75,6 +76,7 @@ function WorkspaceShellContent({
   workspaceId,
   children,
 }: WorkspaceShellProps): React.JSX.Element {
+  const { t } = useTranslation();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
@@ -186,12 +188,12 @@ function WorkspaceShellContent({
     const collectionId =
       importCurlTarget?.collectionId || tree?.collections[0]?.id || selectedCollectionId;
     if (!collectionId) {
-      throw new Error('Nenhuma coleção selecionada para importação');
+      throw new Error(t('sidebar.noCollectionSelectedForImport'));
     }
 
     const created = await createRequest({
       workspaceId,
-      name: requestName || parsed.name || 'Nova Requisição',
+      name: requestName || parsed.name || t('sidebar.newRequest'),
       method: parsed.method || 'GET',
       url: parsed.url || '',
       target: 'Inherit',
@@ -350,7 +352,7 @@ function WorkspaceShellContent({
         setSyncError(null);
         await reloadTree();
       } else {
-        let errDetail = `Falha ao sincronizar a coleção "${item.name}".`;
+        let errDetail = t('sidebar.failedToSyncCollection', { name: item.name });
         try {
           const json = await res.json();
           errDetail = json.detail || json.title || json.message || errDetail;
@@ -363,7 +365,9 @@ function WorkspaceShellContent({
       }
     } catch (err: unknown) {
       const msg =
-        err instanceof Error ? err.message : `Falha ao sincronizar a coleção "${item.name}".`;
+        err instanceof Error
+          ? err.message
+          : t('sidebar.failedToSyncCollection', { name: item.name });
       setSyncError(msg);
       setAuditBanner(null);
     } finally {
@@ -373,7 +377,7 @@ function WorkspaceShellContent({
 
   const handleSyncSuccess = (report: SyncReport) => {
     setAuditBanner({
-      collectionName: editingCollection?.name || 'Coleção',
+      collectionName: editingCollection?.name || t('sidebar.collections'),
       report,
     });
     setSyncError(null);
@@ -409,7 +413,7 @@ function WorkspaceShellContent({
       });
 
       if (!res.ok) {
-        let errDetail = 'Falha ao salvar configurações da coleção.';
+        let errDetail = t('sidebar.failedToSaveCollectionSettings');
         try {
           const json = await res.json();
           errDetail = json.detail || json.title || json.message || errDetail;
@@ -610,17 +614,21 @@ function WorkspaceShellContent({
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>
-              <strong>Sincronização de &ldquo;{auditBanner.collectionName}&rdquo;:</strong>{' '}
-              {auditBanner.report.addedRequests ?? 0} requisições adicionadas,{' '}
-              {auditBanner.report.updatedRequests ?? 0} atualizadas |{' '}
-              {auditBanner.report.fieldsAdded ?? 0} campos adicionados,{' '}
-              {auditBanner.report.fieldsRemoved ?? 0} removidos,{' '}
-              {auditBanner.report.fieldsPreserved ?? 0} preservados intactos.
+              <strong>
+                {t('sidebar.syncNotificationTitle', { name: auditBanner.collectionName })}
+              </strong>{' '}
+              {t('sidebar.syncNotificationDetails', {
+                added: auditBanner.report.addedRequests ?? 0,
+                updated: auditBanner.report.updatedRequests ?? 0,
+                fieldsAdded: auditBanner.report.fieldsAdded ?? 0,
+                fieldsRemoved: auditBanner.report.fieldsRemoved ?? 0,
+                fieldsPreserved: auditBanner.report.fieldsPreserved ?? 0,
+              })}
             </span>
           </div>
           <button
             type="button"
-            aria-label="Fechar notificação de auditoria"
+            aria-label={t('sidebar.closeAuditNotification')}
             onClick={() => setAuditBanner(null)}
             className="p-1 rounded text-emerald-400 hover:text-white hover:bg-emerald-900/60 transition-colors cursor-pointer"
           >
@@ -642,7 +650,7 @@ function WorkspaceShellContent({
           </div>
           <button
             type="button"
-            aria-label="Fechar notificação de erro"
+            aria-label={t('sidebar.closeErrorNotification')}
             onClick={() => setSyncError(null)}
             className="p-1 rounded text-rose-400 hover:text-white hover:bg-rose-900/60 transition-colors cursor-pointer"
           >
@@ -712,7 +720,7 @@ function WorkspaceShellContent({
           activeRequestDetails?.name ||
           (pendingSaveData?.url
             ? pendingSaveData.url.replace(/^https?:\/\//, '')
-            : 'Nova Requisição')
+            : t('sidebar.newRequest'))
         }
         onSave={handleSaveNewRequest}
       />
@@ -734,7 +742,7 @@ function WorkspaceShellContent({
         {/* Divisor Sidebar <-> Workspace */}
         <PanelSplitter
           id="sidebar-splitter"
-          ariaLabel="Redimensionar barra lateral"
+          ariaLabel={t('sidebar.resizeSidebar')}
           valueNow={sidebarWidth}
           valueMin={180}
           valueMax={480}

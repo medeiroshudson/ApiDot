@@ -35,7 +35,7 @@ describe('SpecificationTab', () => {
     expect(screen.getByText('name')).toBeInTheDocument();
     expect(screen.getByText('200')).toBeInTheDocument();
 
-    const generateBtn = screen.getByRole('button', { name: /Gerar Exemplo no Corpo/i });
+    const generateBtn = screen.getByRole('button', { name: /Generate Example in Body/i });
     fireEvent.click(generateBtn);
     expect(onGenerate).toHaveBeenCalledWith(expect.stringContaining('Widget'));
   });
@@ -44,24 +44,24 @@ describe('SpecificationTab', () => {
     const onChange = vi.fn();
     render(<SpecificationTab schemaDefinition="" onChange={onChange} />);
 
-    // Click "Adicionar Propriedade"
-    const addBtn = screen.getByRole('button', { name: /Adicionar Propriedade/i });
+    // Click "Add Property"
+    const addBtn = screen.getByRole('button', { name: /Add Property/i });
     fireEvent.click(addBtn);
 
     // Enter property name
-    const nameInput = screen.getByPlaceholderText('nome');
+    const nameInput = screen.getByPlaceholderText('name');
     fireEvent.change(nameInput, { target: { value: 'price' } });
 
     // Change type to number
-    const typeSelect = screen.getByLabelText(/Tipo da propriedade/i);
+    const typeSelect = screen.getByLabelText(/Property type/i);
     fireEvent.change(typeSelect, { target: { value: 'number' } });
 
     // Set example
-    const exampleInput = screen.getByPlaceholderText('Exemplo...');
+    const exampleInput = screen.getByPlaceholderText('Example...');
     fireEvent.change(exampleInput, { target: { value: '99.9' } });
 
     // Check required
-    const requiredCheckbox = screen.getByRole('checkbox', { name: /Obrigatório/i });
+    const requiredCheckbox = screen.getByRole('checkbox', { name: /Required/i });
     fireEvent.click(requiredCheckbox);
 
     expect(onChange).toHaveBeenCalled();
@@ -92,11 +92,11 @@ describe('SpecificationTab', () => {
     expect(screen.getByText('user')).toBeInTheDocument();
 
     // Click "+ Sub-campo" on user object row
-    const addChildBtn = screen.getByRole('button', { name: /Adicionar subpropriedade a user/i });
+    const addChildBtn = screen.getByRole('button', { name: /Add sub-property to user/i });
     fireEvent.click(addChildBtn);
 
     // New input for child property should be in document
-    const inputs = screen.getAllByPlaceholderText('nome');
+    const inputs = screen.getAllByPlaceholderText('name');
     expect(inputs.length).toBeGreaterThanOrEqual(2);
 
     const childInput = inputs[inputs.length - 1];
@@ -123,7 +123,7 @@ describe('SpecificationTab', () => {
 
     expect(screen.getByText('toDelete')).toBeInTheDocument();
 
-    const deleteBtn = screen.getByRole('button', { name: /Remover propriedade toDelete/i });
+    const deleteBtn = screen.getByRole('button', { name: /Remove property toDelete/i });
     fireEvent.click(deleteBtn);
 
     expect(screen.queryByText('toDelete')).toBeNull();
@@ -136,22 +136,22 @@ describe('SpecificationTab', () => {
     const onChange = vi.fn();
     render(<SpecificationTab schemaDefinition="" onChange={onChange} />);
 
-    // Click "+ Adicionar Resposta"
-    const addRespBtn = screen.getByRole('button', { name: /Adicionar Resposta/i });
+    // Click "+ Add Response"
+    const addRespBtn = screen.getByRole('button', { name: /Add Response/i });
     fireEvent.click(addRespBtn);
 
     expect(screen.getByText('200')).toBeInTheDocument();
 
     // Edit status code to 404
-    const statusInput = screen.getByLabelText(/Código de status HTTP/i);
+    const statusInput = screen.getByLabelText(/HTTP status code/i);
     fireEvent.change(statusInput, { target: { value: '404' } });
 
     // Edit description
-    const descInput = screen.getByLabelText(/Descrição da resposta/i);
+    const descInput = screen.getByLabelText(/Response description/i);
     fireEvent.change(descInput, { target: { value: 'Not Found' } });
 
     // Edit example
-    const exampleInput = screen.getByLabelText(/Exemplo da resposta/i);
+    const exampleInput = screen.getByLabelText(/Response example/i);
     fireEvent.change(exampleInput, { target: { value: '{"error": "not found"}' } });
 
     expect(onChange).toHaveBeenCalled();
@@ -162,7 +162,7 @@ describe('SpecificationTab', () => {
     expect(parsed.responses[0].description).toBe('Not Found');
 
     // Delete response
-    const deleteRespBtn = screen.getByRole('button', { name: /Remover resposta 404/i });
+    const deleteRespBtn = screen.getByRole('button', { name: /Remove response 404/i });
     fireEvent.click(deleteRespBtn);
 
     lastCallArg = onChange.mock.calls[onChange.mock.calls.length - 1][0];
@@ -188,10 +188,10 @@ describe('SpecificationTab', () => {
     const onChange = vi.fn();
     render(<SpecificationTab schemaDefinition="" onChange={onChange} />);
 
-    const summaryInput = screen.getByLabelText(/Resumo da especificação/i);
+    const summaryInput = screen.getByLabelText(/Specification summary/i);
     fireEvent.change(summaryInput, { target: { value: 'Criar Pedido' } });
 
-    const descInput = screen.getByLabelText(/Descrição da especificação/i);
+    const descInput = screen.getByLabelText(/Specification description/i);
     fireEvent.change(descInput, { target: { value: 'Cria um novo pedido no sistema' } });
 
     expect(onChange).toHaveBeenCalled();

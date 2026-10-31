@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface InlineNodeInputProps {
   initialValue?: string;
@@ -13,10 +14,13 @@ export function InlineNodeInput({
   initialValue = '',
   onCommit,
   onCancel,
-  placeholder = 'Nome...',
+  placeholder,
   className = '',
   'aria-label': ariaLabel,
 }: InlineNodeInputProps) {
+  const { t } = useTranslation();
+  const effectivePlaceholder = placeholder ?? t('common.namePlaceholder');
+  const effectiveAriaLabel = ariaLabel || placeholder || t('common.itemName');
   const [value, setValue] = useState(initialValue);
   const inputRef = useRef<HTMLInputElement>(null);
   const isResolvedRef = useRef(false);
@@ -72,9 +76,9 @@ export function InlineNodeInput({
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={handleKeyDown}
       onBlur={handleBlur}
-      placeholder={placeholder}
+      placeholder={effectivePlaceholder}
       autoFocus
-      aria-label={ariaLabel || placeholder || 'Nome do item'}
+      aria-label={effectiveAriaLabel}
       data-testid="inline-node-input"
       className={`w-full bg-zinc-900 border border-blue-500 rounded px-1.5 py-0.5 text-xs text-zinc-100 placeholder-zinc-500 outline-none focus:ring-1 focus:ring-blue-500 transition-colors ${className}`}
     />

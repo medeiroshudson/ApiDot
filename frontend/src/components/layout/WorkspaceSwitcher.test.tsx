@@ -33,7 +33,7 @@ describe('WorkspaceSwitcher', () => {
       expect(screen.queryByTestId('workspace-switcher-dropdown')).toBeNull();
     });
 
-    it('renders fallback label "Selecionar Workspace" when activeWorkspaceId is null', () => {
+    it('renders fallback label "Select Workspace" when activeWorkspaceId is null', () => {
       render(
         <WorkspaceSwitcher
           workspaces={mockWorkspaces}
@@ -43,7 +43,7 @@ describe('WorkspaceSwitcher', () => {
         />
       );
 
-      expect(screen.getByText('Selecionar Workspace')).toBeInTheDocument();
+      expect(screen.getByText('Select Workspace')).toBeInTheDocument();
     });
 
     it('renders fallback label when activeWorkspaceId does not match any workspace', () => {
@@ -56,7 +56,7 @@ describe('WorkspaceSwitcher', () => {
         />
       );
 
-      expect(screen.getByText('Selecionar Workspace')).toBeInTheDocument();
+      expect(screen.getByText('Select Workspace')).toBeInTheDocument();
     });
   });
 
@@ -130,7 +130,7 @@ describe('WorkspaceSwitcher', () => {
   });
 
   describe('Create Workspace Action', () => {
-    it('renders "Novo Workspace" button without "+" in text and calls onCreateWorkspaceClick on click', () => {
+    it('renders "New Workspace" button without "+" in text and calls onCreateWorkspaceClick on click', () => {
       const onCreateWorkspaceClick = vi.fn();
       render(
         <WorkspaceSwitcher
@@ -143,10 +143,10 @@ describe('WorkspaceSwitcher', () => {
 
       fireEvent.click(screen.getByRole('button', { name: /workspace: workspace pessoal/i }));
 
-      const createBtn = screen.getByRole('button', { name: /^novo workspace$/i });
+      const createBtn = screen.getByRole('button', { name: /^new workspace$/i });
       expect(createBtn).toBeInTheDocument();
       // Ensure text is clean without "+" symbol in string
-      expect(createBtn.textContent).toBe('Novo Workspace');
+      expect(createBtn.textContent).toBe('New Workspace');
 
       fireEvent.click(createBtn);
 
@@ -224,9 +224,9 @@ describe('WorkspaceSwitcher', () => {
         />
       );
 
-      fireEvent.click(screen.getByRole('button', { name: /selecionar workspace/i }));
-      expect(screen.getByText('Nenhum workspace')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /^novo workspace$/i })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /select workspace/i }));
+      expect(screen.getByText('No workspaces')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^new workspace$/i })).toBeInTheDocument();
     });
   });
 

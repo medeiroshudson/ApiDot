@@ -22,7 +22,7 @@ describe('CurlImportModal', () => {
       expect(screen.queryByRole('dialog')).toBeNull();
     });
 
-    it('renders dialog title "Importar Requisição via cURL" when isOpen is true', () => {
+    it('renders dialog title "Import Request via cURL" when isOpen is true', () => {
       render(
         <CurlImportModal
           isOpen={true}
@@ -36,7 +36,7 @@ describe('CurlImportModal', () => {
       expect(dialog).toHaveAttribute('aria-modal', 'true');
       expect(dialog).toHaveAttribute('aria-labelledby', 'curl-import-modal-title');
       expect(
-        screen.getByRole('heading', { name: 'Importar Requisição via cURL' })
+        screen.getByRole('heading', { name: /^import request via curl$/i })
       ).toBeInTheDocument();
     });
 
@@ -49,7 +49,7 @@ describe('CurlImportModal', () => {
         />
       );
 
-      const textarea = screen.getByRole('textbox', { name: /comando curl/i });
+      const textarea = screen.getByRole('textbox', { name: /^curl command$/i });
       expect(textarea).toBeInTheDocument();
       expect(textarea).toHaveFocus();
     });
@@ -64,7 +64,7 @@ describe('CurlImportModal', () => {
         />
       );
 
-      const cancelBtn = screen.getByRole('button', { name: /cancelar/i });
+      const cancelBtn = screen.getByRole('button', { name: /^cancel$/i });
       fireEvent.click(cancelBtn);
 
       expect(onClose).toHaveBeenCalledTimes(1);
@@ -80,7 +80,7 @@ describe('CurlImportModal', () => {
         />
       );
 
-      const closeBtn = screen.getByRole('button', { name: /fechar/i });
+      const closeBtn = screen.getByRole('button', { name: /^close$/i });
       fireEvent.click(closeBtn);
 
       expect(onClose).toHaveBeenCalledTimes(1);
@@ -144,7 +144,7 @@ describe('CurlImportModal', () => {
         />
       );
 
-      const submitBtn = screen.getByRole('button', { name: /importar requisição/i });
+      const submitBtn = screen.getByRole('button', { name: /^import request$/i });
       expect(submitBtn).toBeDisabled();
       expect(screen.queryByTestId('curl-preview-card')).toBeNull();
     });
@@ -158,14 +158,14 @@ describe('CurlImportModal', () => {
         />
       );
 
-      const textarea = screen.getByRole('textbox', { name: /comando curl/i });
+      const textarea = screen.getByRole('textbox', { name: /^curl command$/i });
       fireEvent.change(textarea, { target: { value: 'git checkout main' } });
 
       const alert = screen.getByRole('alert');
       expect(alert).toBeInTheDocument();
-      expect(alert).toHaveTextContent(/deve começar com "curl"/i);
+      expect(alert).toHaveTextContent(/Command must start with 'curl'/i);
 
-      const submitBtn = screen.getByRole('button', { name: /importar requisição/i });
+      const submitBtn = screen.getByRole('button', { name: /^import request$/i });
       expect(submitBtn).toBeDisabled();
       expect(screen.queryByTestId('curl-preview-card')).toBeNull();
     });
@@ -179,14 +179,14 @@ describe('CurlImportModal', () => {
         />
       );
 
-      const textarea = screen.getByRole('textbox', { name: /comando curl/i });
+      const textarea = screen.getByRole('textbox', { name: /^curl command$/i });
       fireEvent.change(textarea, { target: { value: 'curl -H "Content-Type: application/json"' } });
 
       const alert = screen.getByRole('alert');
       expect(alert).toBeInTheDocument();
-      expect(alert).toHaveTextContent(/nenhuma url encontrada/i);
+      expect(alert).toHaveTextContent(/No URL found in cURL command/i);
 
-      const submitBtn = screen.getByRole('button', { name: /importar requisição/i });
+      const submitBtn = screen.getByRole('button', { name: /^import request$/i });
       expect(submitBtn).toBeDisabled();
     });
 
@@ -199,7 +199,7 @@ describe('CurlImportModal', () => {
         />
       );
 
-      const textarea = screen.getByRole('textbox', { name: /comando curl/i });
+      const textarea = screen.getByRole('textbox', { name: /^curl command$/i });
       fireEvent.change(textarea, {
         target: {
           value:
@@ -229,7 +229,7 @@ describe('CurlImportModal', () => {
       expect(screen.getByTestId('curl-preview-body-badge')).toHaveTextContent('JSON');
 
       // Submit button is now enabled
-      const submitBtn = screen.getByRole('button', { name: /importar requisição/i });
+      const submitBtn = screen.getByRole('button', { name: /^import request$/i });
       expect(submitBtn).not.toBeDisabled();
     });
 
@@ -242,7 +242,7 @@ describe('CurlImportModal', () => {
         />
       );
 
-      const textarea = screen.getByRole('textbox', { name: /comando curl/i });
+      const textarea = screen.getByRole('textbox', { name: /^curl command$/i });
       fireEvent.change(textarea, {
         target: { value: 'curl https://api.example.com/v1/users' },
       });
@@ -252,7 +252,7 @@ describe('CurlImportModal', () => {
       fireEvent.change(textarea, { target: { value: '' } });
 
       expect(screen.queryByTestId('curl-preview-card')).toBeNull();
-      expect(screen.getByRole('button', { name: /importar requisição/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /^import request$/i })).toBeDisabled();
     });
   });
 
@@ -266,12 +266,12 @@ describe('CurlImportModal', () => {
         />
       );
 
-      const textarea = screen.getByRole('textbox', { name: /comando curl/i });
+      const textarea = screen.getByRole('textbox', { name: /^curl command$/i });
       fireEvent.change(textarea, {
         target: { value: 'curl https://api.example.com/v1/products' },
       });
 
-      const nameInput = screen.getByRole('textbox', { name: /nome da requisição/i });
+      const nameInput = screen.getByRole('textbox', { name: /^request name$/i });
       expect(nameInput).toHaveValue('Products');
 
       // Edit name
@@ -288,12 +288,12 @@ describe('CurlImportModal', () => {
         />
       );
 
-      const textarea = screen.getByRole('textbox', { name: /comando curl/i });
+      const textarea = screen.getByRole('textbox', { name: /^curl command$/i });
       fireEvent.change(textarea, {
         target: { value: 'curl https://api.example.com/v1/products' },
       });
 
-      const nameInput = screen.getByRole('textbox', { name: /nome da requisição/i });
+      const nameInput = screen.getByRole('textbox', { name: /^request name$/i });
       fireEvent.change(nameInput, { target: { value: 'Meu Nome Customizado' } });
 
       // Change cURL to another endpoint
@@ -311,11 +311,11 @@ describe('CurlImportModal', () => {
           isOpen={true}
           onClose={vi.fn()}
           onImport={vi.fn()}
-          targetName="Coleção: Pagamentos"
+          targetName="Collection: Payments"
         />
       );
 
-      expect(screen.getByText(/Coleção: Pagamentos/i)).toBeInTheDocument();
+      expect(screen.getByText(/Collection: Payments/i)).toBeInTheDocument();
     });
 
     it('does not display target destination block when targetName is omitted', () => {
@@ -327,12 +327,12 @@ describe('CurlImportModal', () => {
         />
       );
 
-      expect(screen.queryByText(/destino:/i)).toBeNull();
+      expect(screen.queryByText(/destination:/i)).toBeNull();
     });
   });
 
   describe('Import Action & Lifecycle', () => {
-    it('calls onImport with parsed data and confirmed name when clicking "Importar Requisição"', async () => {
+    it('calls onImport with parsed data and confirmed name when clicking "Import Request"', async () => {
       const onImport = vi.fn().mockResolvedValue(undefined);
       const onClose = vi.fn();
 
@@ -341,11 +341,11 @@ describe('CurlImportModal', () => {
           isOpen={true}
           onClose={onClose}
           onImport={onImport}
-          targetName="Coleção: Clientes"
+          targetName="Collection: Customers"
         />
       );
 
-      const textarea = screen.getByRole('textbox', { name: /comando curl/i });
+      const textarea = screen.getByRole('textbox', { name: /^curl command$/i });
       fireEvent.change(textarea, {
         target: {
           value:
@@ -353,10 +353,10 @@ describe('CurlImportModal', () => {
         },
       });
 
-      const nameInput = screen.getByRole('textbox', { name: /nome da requisição/i });
+      const nameInput = screen.getByRole('textbox', { name: /^request name$/i });
       fireEvent.change(nameInput, { target: { value: 'Atualizar Cliente #42' } });
 
-      const submitBtn = screen.getByRole('button', { name: /importar requisição/i });
+      const submitBtn = screen.getByRole('button', { name: /^import request$/i });
       fireEvent.click(submitBtn);
 
       await waitFor(() => {
@@ -398,15 +398,15 @@ describe('CurlImportModal', () => {
         />
       );
 
-      const textarea = screen.getByRole('textbox', { name: /comando curl/i });
+      const textarea = screen.getByRole('textbox', { name: /^curl command$/i });
       fireEvent.change(textarea, {
         target: { value: 'curl https://api.example.com/v1/categories' },
       });
 
-      const nameInput = screen.getByRole('textbox', { name: /nome da requisição/i });
+      const nameInput = screen.getByRole('textbox', { name: /^request name$/i });
       fireEvent.change(nameInput, { target: { value: '   ' } });
 
-      const submitBtn = screen.getByRole('button', { name: /importar requisição/i });
+      const submitBtn = screen.getByRole('button', { name: /^import request$/i });
       fireEvent.click(submitBtn);
 
       await waitFor(() => {
@@ -431,12 +431,12 @@ describe('CurlImportModal', () => {
         />
       );
 
-      const textarea = screen.getByRole('textbox', { name: /comando curl/i });
+      const textarea = screen.getByRole('textbox', { name: /^curl command$/i });
       fireEvent.change(textarea, {
         target: { value: 'curl https://api.example.com/items' },
       });
 
-      const submitBtn = screen.getByRole('button', { name: /importar requisição/i });
+      const submitBtn = screen.getByRole('button', { name: /^import request$/i });
       fireEvent.click(submitBtn);
 
       await waitFor(() => {
@@ -465,13 +465,13 @@ describe('CurlImportModal', () => {
         />
       );
 
-      const textarea = screen.getByRole('textbox', { name: /comando curl/i });
+      const textarea = screen.getByRole('textbox', { name: /^curl command$/i });
       fireEvent.change(textarea, {
         target: { value: 'curl https://api.example.com/users' },
       });
 
-      const submitBtn = screen.getByRole('button', { name: /importar requisição/i });
-      const cancelBtn = screen.getByRole('button', { name: /cancelar/i });
+      const submitBtn = screen.getByRole('button', { name: /^import request$/i });
+      const cancelBtn = screen.getByRole('button', { name: /^cancel$/i });
 
       fireEvent.click(submitBtn);
 
@@ -497,7 +497,7 @@ describe('CurlImportModal', () => {
         />
       );
 
-      const textarea = screen.getByRole('textbox', { name: /comando curl/i });
+      const textarea = screen.getByRole('textbox', { name: /^curl command$/i });
       fireEvent.change(textarea, {
         target: { value: 'curl https://api.example.com/v1/orders' },
       });
@@ -523,10 +523,10 @@ describe('CurlImportModal', () => {
         />
       );
 
-      const newTextarea = screen.getByRole('textbox', { name: /comando curl/i });
+      const newTextarea = screen.getByRole('textbox', { name: /^curl command$/i });
       expect(newTextarea).toHaveValue('');
       expect(screen.queryByTestId('curl-preview-card')).toBeNull();
-      expect(screen.getByRole('button', { name: /importar requisição/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /^import request$/i })).toBeDisabled();
     });
   });
 });

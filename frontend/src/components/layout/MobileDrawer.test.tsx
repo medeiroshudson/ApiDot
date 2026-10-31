@@ -16,7 +16,7 @@ describe('MobileDrawer', () => {
     expect(drawer.getAttribute('aria-modal')).toBe('true');
     expect(drawer.getAttribute('aria-labelledby')).toBe('drawer-title');
 
-    const title = screen.getByText('Coleções & Pastas');
+    const title = screen.getByText('Collections & Folders');
     expect(title).toBeDefined();
     expect(title.getAttribute('id')).toBe('drawer-title');
 
@@ -26,7 +26,7 @@ describe('MobileDrawer', () => {
   it('triggers onClose callback when close button is clicked', () => {
     const handleClose = vi.fn();
     render(<MobileDrawer isOpen={true} onClose={handleClose} />);
-    const closeButton = screen.getByRole('button', { name: /fechar gaveta|close/i });
+    const closeButton = screen.getByRole('button', { name: /close drawer|close/i });
     fireEvent.click(closeButton);
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
@@ -72,14 +72,14 @@ describe('MobileDrawer', () => {
     fireEvent.click(insideButton);
     expect(handleClose).not.toHaveBeenCalled();
 
-    const title = screen.getByText('Coleções & Pastas');
+    const title = screen.getByText('Collections & Folders');
     fireEvent.click(title);
     expect(handleClose).not.toHaveBeenCalled();
   });
 
   it('auto-focuses the close button when opened', () => {
     render(<MobileDrawer isOpen={true} onClose={() => {}} />);
-    const closeButton = screen.getByRole('button', { name: /fechar gaveta|close/i });
+    const closeButton = screen.getByRole('button', { name: /close drawer|close/i });
     expect(document.activeElement).toBe(closeButton);
   });
 });

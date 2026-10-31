@@ -104,7 +104,7 @@ describe('WorkspaceShell', () => {
     expect(screen.getByText('ApiDot')).toBeInTheDocument();
     expect(screen.getByTestId('test-child')).toBeInTheDocument();
     expect(
-      screen.getByRole('separator', { name: /redimensionar barra lateral/i })
+      screen.getByRole('separator', { name: /resize sidebar/i })
     ).toBeInTheDocument();
 
     await waitFor(() => {
@@ -157,7 +157,7 @@ describe('WorkspaceShell', () => {
       expect(screen.getByText('Test Workspace')).toBeInTheDocument();
     });
 
-    const splitter = screen.getByRole('separator', { name: /redimensionar barra lateral/i });
+    const splitter = screen.getByRole('separator', { name: /resize sidebar/i });
     const initialWidth = useLayoutStore.getState().sidebarWidth;
 
     act(() => {
@@ -190,9 +190,9 @@ describe('WorkspaceShell', () => {
 
     const banner = screen.getByTestId('audit-summary-banner');
     expect(banner).toBeInTheDocument();
-    expect(banner).toHaveTextContent(/Sincronização de “Auth Collection”/);
+    expect(banner).toHaveTextContent(/Sync of “Auth Collection”/);
 
-    const closeBtn = screen.getByRole('button', { name: /fechar notificação de auditoria/i });
+    const closeBtn = screen.getByRole('button', { name: /close audit notification/i });
     act(() => {
       fireEvent.click(closeBtn);
     });
@@ -218,7 +218,7 @@ describe('WorkspaceShell', () => {
     expect(alertBanner).toBeInTheDocument();
     expect(alertBanner).toHaveTextContent('Connection timed out');
 
-    const closeBtn = screen.getByRole('button', { name: /fechar notificação de erro/i });
+    const closeBtn = screen.getByRole('button', { name: /close error notification/i });
     act(() => {
       fireEvent.click(closeBtn);
     });
@@ -243,7 +243,7 @@ describe('WorkspaceShell', () => {
       useLayoutStore.getState().setModalOpen('workspace', true);
     });
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText('Novo Workspace')).toBeInTheDocument();
+    expect(screen.getByText('New Workspace')).toBeInTheDocument();
 
     // Close Workspace Modal
     act(() => {
@@ -255,7 +255,7 @@ describe('WorkspaceShell', () => {
       useLayoutStore.getState().setModalOpen('env', true);
     });
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText('Ambientes e Variáveis')).toBeInTheDocument();
+    expect(screen.getByText(/environments & variables|ambientes e variáveis/i)).toBeInTheDocument();
   });
 
   it('opens GlobalSettingsModal when clicking global settings button in AppHeader', async () => {
@@ -269,11 +269,11 @@ describe('WorkspaceShell', () => {
       expect(screen.getByText('Test Workspace')).toBeInTheDocument();
     });
 
-    const settingsBtn = screen.getByRole('button', { name: 'Configurações Globais' });
+    const settingsBtn = screen.getByRole('button', { name: /global settings|configurações globais/i });
     fireEvent.click(settingsBtn);
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText('Configurações Globais')).toBeInTheDocument();
+    expect(screen.getByText(/global settings|configurações globais/i)).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /local agents/i })).toBeInTheDocument();
   });
 

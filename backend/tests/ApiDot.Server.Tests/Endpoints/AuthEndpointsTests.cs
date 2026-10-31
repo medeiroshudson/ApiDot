@@ -378,7 +378,7 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
         var membership = userWithMemberships.WorkspaceMemberships.First();
         membership.Role.Should().Be(WorkspaceRole.Owner);
         membership.Workspace.Should().NotBeNull();
-        membership.Workspace.Name.Should().Be("Meu Workspace");
+        membership.Workspace.Name.Should().Be("My Workspace");
     }
 
     [Fact]
@@ -564,5 +564,194 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
                 // Ignore
             }
         }
+    }
+
+    private IAuthService GetAuthService()
+    {
+        var scope = _factory.Services.CreateScope();
+        return scope.ServiceProvider.GetRequiredService<IAuthService>();
+    }
+
+    [Fact]
+    public async Task ProcessOidcLogin_WithLocaleClaim_SetsLocale_WhenUserHasNoLocale()
+    {
+        // Arrange
+        var authService = GetAuthService();
+        // Act
+        var user = await authService.ProcessOidcLoginAsync("sub1", "test@test.com", "Test", "iss", "pt-BR", CancellationToken.None);
+        // Assert
+        user.Locale.Should().Be("pt-BR");
+    }
+
+    [Fact]
+    public async Task ProcessOidcLogin_WithLocaleClaim_PreservesExistingUserLocale()
+    {
+        // Arrange
+        var authService = GetAuthService();
+        var user = await authService.ProcessOidcLoginAsync("sub2", "test2@test.com", "Test2", "iss", "en-US", CancellationToken.None);
+        await authService.UpdateUserLocaleAsync(user.Id, "en-US", CancellationToken.None);
+
+        // Act - Login again with different SSO claim
+        var loggedInAgain = await authService.ProcessOidcLoginAsync("sub2", "test2@test.com", "Test2", "iss", "pt-BR", CancellationToken.None);
+
+        // Assert - User explicit choice preserved
+        loggedInAgain.Locale.Should().Be("en-US");
+    }
+
+    [Fact]
+    public async Task ProcessOidcLogin_WhenNewUser_WithoutLocale_DefaultsToEnUs()
+    {
+        var authService = GetAuthService();
+        var user = await authService.ProcessOidcLoginAsync("sub-no-locale", "nolocale@test.com", "No Locale", "iss", null, CancellationToken.None);
+
+        user.Locale.Should().Be("en-US");
+    }
+
+    [Theory]
+    [InlineData("pt", "pt-BR")]
+    [InlineData("pt-BR", "pt-BR")]
+    [InlineData("pt_BR", "pt-BR")]
+    [InlineData("pt-br", "pt-BR")]
+    [InlineData("PT-BR", "pt-BR")]
+    [InlineData("en", "en-US")]
+    [InlineData("en-US", "en-US")]
+    [InlineData("en_US", "en-US")]
+    [InlineData("en-us", "en-US")]
+    [InlineData("EN-US", "en-US")]
+    [InlineData("", null)]
+    [InlineData("   ", null)]
+    [InlineData(null, null)]
+    [InlineData("es", null)]
+    [InlineData("fr-FR", null)]
+    public void NormalizeLocale_ValidAndInvalidInputs_NormalizesCorrectly(string? input, string? expected)
+    {
+        var result = AuthService.NormalizeLocale(input);
+        result.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task UpdateUserLocale_WithValidLocale_UpdatesLocaleAndReturnsTrue()
+    {
+        var authService = GetAuthService();
+        var user = await authService.ProcessOidcLoginAsync("sub-update-test", "update@test.com", "Update", "iss", "en-US", CancellationToken.None);
+
+        var success = await authService.UpdateUserLocaleAsync(user.Id, "pt-BR", CancellationToken.None);
+        success.Should().BeTrue();
+
+        var updatedDto = await authService.GetUserDtoByIdAsync(user.Id, CancellationToken.None);
+        updatedDto.Should().NotBeNull();
+        updatedDto!.Locale.Should().Be("pt-BR");
+    }
+
+    [Fact]
+    public async Task UpdateUserLocale_WithInvalidLocale_ReturnsFalse()
+    {
+        var authService = GetAuthService();
+        var user = await authService.ProcessOidcLoginAsync("sub-invalid-locale", "invalidloc@test.com", "Invalid", "iss", "en-US", CancellationToken.None);
+
+        var success = await authService.UpdateUserLocaleAsync(user.Id, "de-DE", CancellationToken.None);
+        success.Should().BeFalse();
+
+        var dto = await authService.GetUserDtoByIdAsync(user.Id, CancellationToken.None);
+        dto!.Locale.Should().Be("en-US");
+    }
+
+    [Fact]
+    public async Task UpdateUserLocale_NonexistentUser_ReturnsFalse()
+    {
+        var authService = GetAuthService();
+        var success = await authService.UpdateUserLocaleAsync(Guid.NewGuid(), "pt-BR", CancellationToken.None);
+        success.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ProcessOidcLogin_ExistingUser_WithNullLocale_UpdatesLocaleFromClaim()
+    {
+        var authService = GetAuthService();
+        // Create user with null locale initially (e.g. via direct db insertion or local login seed)
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
+        var user = new User
+        {
+            Email = "null-locale-user@test.com",
+            DisplayName = "Null Locale User",
+            OidcSubject = "sub-null-locale",
+            Locale = null,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        // Login with SSO providing pt-BR claim
+        var loggedIn = await authService.ProcessOidcLoginAsync("sub-null-locale", "null-locale-user@test.com", "Null Locale User", "iss", "pt-BR", CancellationToken.None);
+        loggedIn.Locale.Should().Be("pt-BR");
+    }
+
+    [Fact]
+    public async Task PatchLocale_WhenAuthenticated_WithValidLocale_ReturnsNoContent()
+    {
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
+
+        var loginRes = await client.PostAsJsonAsync("/api/auth/local", new LocalLoginRequest(TestRootEmail, TestRootPassword));
+        loginRes.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var response = await client.PatchAsJsonAsync("/api/auth/me/locale", new UpdateLocaleRequest("pt-BR"));
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var meRes = await client.GetFromJsonAsync<AuthUserDto>("/api/auth/me");
+        meRes.Should().NotBeNull();
+        meRes!.Locale.Should().Be("pt-BR");
+    }
+
+    [Fact]
+    public async Task PatchLocale_WithInvalidLocale_ReturnsBadRequest()
+    {
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
+
+        var loginRes = await client.PostAsJsonAsync("/api/auth/local", new LocalLoginRequest(TestRootEmail, TestRootPassword));
+        loginRes.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var response = await client.PatchAsJsonAsync("/api/auth/me/locale", new UpdateLocaleRequest("invalid-locale"));
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task PatchLocale_WithEmptyOrWhitespaceLocale_ReturnsBadRequest()
+    {
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
+
+        var loginRes = await client.PostAsJsonAsync("/api/auth/local", new LocalLoginRequest(TestRootEmail, TestRootPassword));
+        loginRes.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var responseEmpty = await client.PatchAsJsonAsync("/api/auth/me/locale", new UpdateLocaleRequest(""));
+        responseEmpty.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var responseWhitespace = await client.PatchAsJsonAsync("/api/auth/me/locale", new UpdateLocaleRequest("   "));
+        responseWhitespace.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task PatchLocale_WhenUnauthenticated_ReturnsUnauthorized()
+    {
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = false
+        });
+
+        var response = await client.PatchAsJsonAsync("/api/auth/me/locale", new UpdateLocaleRequest("pt-BR"));
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 }

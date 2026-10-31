@@ -15,6 +15,7 @@ import { useRequestStore, CLEAN_SCRATCHPAD, getScratchpadKey } from '@/stores/us
 import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
 import { useDeviceStore } from '@/stores/useDeviceStore';
 import { useWorkspaceContext, findRequestInTree } from '@/context/WorkspaceContext';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface WorkspaceEditorPaneProps {
   workspaceId: string;
@@ -25,6 +26,7 @@ export function WorkspaceEditorPane({
   workspaceId,
   requestId = null,
 }: WorkspaceEditorPaneProps): React.JSX.Element {
+  const { t } = useTranslation();
   const workspaceRef = useRef<HTMLDivElement>(null);
   const [isDesktop, setIsDesktop] = useState(true);
   const [executedCurl, setExecutedCurl] = useState<string | null>(null);
@@ -311,7 +313,7 @@ export function WorkspaceEditorPane({
           activeRequestDetails?.name ||
           (requestId ? findRequestInTree(tree, requestId)?.name : null) ||
           request.url ||
-          'Última Requisição';
+          t('request.lastRequest');
 
         const executedItem: DependencyRequest = {
           id: requestId || 'req-last',
@@ -399,7 +401,7 @@ export function WorkspaceEditorPane({
               : 'text-neutral-400 hover:text-neutral-200'
           }`}
         >
-          Requisição
+          {t('request.mobileRequestTab')}
         </button>
         <button
           type="button"
@@ -410,7 +412,7 @@ export function WorkspaceEditorPane({
               : 'text-neutral-400 hover:text-neutral-200'
           }`}
         >
-          <span>Resposta</span>
+          <span>{t('request.mobileResponseTab')}</span>
           {response && (
             <span
               className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
@@ -452,7 +454,7 @@ export function WorkspaceEditorPane({
       <div className="hidden md:flex items-stretch">
         <PanelSplitter
           id="request-response-splitter"
-          ariaLabel="Redimensionar painéis de requisição e resposta"
+          ariaLabel={t('request.resizeRequestResponse')}
           valueNow={Math.round(requestResponseRatio)}
           valueMin={20}
           valueMax={80}

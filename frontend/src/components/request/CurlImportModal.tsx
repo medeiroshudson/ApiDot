@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { parseCurl, ParsedCurlRequest } from '@/lib/curl/curlParser';
 import { METHOD_COLORS } from './RequestAutocomplete';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface CurlImportModalProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ export function CurlImportModal({
   targetName,
   onImport,
 }: CurlImportModalProps): React.JSX.Element | null {
+  const { t } = useTranslation();
   const [curlInput, setCurlInput] = useState('');
   const [parsedRequest, setParsedRequest] = useState<ParsedCurlRequest | null>(null);
   const [name, setName] = useState('');
@@ -167,7 +169,15 @@ export function CurlImportModal({
       }
     } else {
       setParsedRequest(null);
-      setError(result.error || 'Comando cURL inválido.');
+      let errorMsg = result.error || t('curlImport.invalidCommand');
+      if (result.error) {
+        if (/começar com "curl"|start with.*curl/i.test(result.error)) {
+          errorMsg = t('curlImport.mustStartWithCurl');
+        } else if (/url/i.test(result.error)) {
+          errorMsg = t('curlImport.noUrlFound');
+        }
+      }
+      setError(errorMsg);
     }
   };
 
@@ -184,12 +194,12 @@ export function CurlImportModal({
 
     if (!parsedRequest) {
       if (!curlInput.trim()) {
-        setError('Comando cURL vazio.');
+        setError(t('curlImport.emptyCommand'));
       }
       return;
     }
 
-    const finalName = name.trim() || parsedRequest.name || 'Nova Requisição';
+    const finalName = name.trim() || parsedRequest.name || t('curlImport.defaultRequestName');
 
     setIsSubmitting(true);
     setError(null);
@@ -199,7 +209,7 @@ export function CurlImportModal({
       onClose();
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Falha ao importar requisição.';
+        err instanceof Error ? err.message : t('curlImport.importFailed');
       setError(message);
     } finally {
       setIsSubmitting(false);
@@ -239,10 +249,10 @@ export function CurlImportModal({
                 id="curl-import-modal-title"
                 className="text-sm font-semibold text-neutral-100"
               >
-                Importar Requisição via cURL
+                {t('curlImport.title')}
               </h2>
               <p className="text-xs text-neutral-400 mt-0.5">
-                Cole um comando cURL para criar uma nova requisição automaticamente
+                {t('curlImport.subtitle')}
               </p>
             </div>
           </div>
@@ -250,7 +260,7 @@ export function CurlImportModal({
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            aria-label="Fechar"
+            aria-label={t('curlImport.closeAria')}
             className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 transition-colors disabled:opacity-50"
           >
             <X className="w-4 h-4" />
@@ -262,7 +272,7 @@ export function CurlImportModal({
           <div className="px-5 pt-3 pb-0">
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-950/60 border border-neutral-800/80 text-xs text-neutral-400">
               <Folder className="w-3.5 h-3.5 text-neutral-400 shrink-0" aria-hidden="true" />
-              <span className="text-neutral-400">Destino:</span>
+              <span className="text-neutral-400">{t('curlImport.destinationLabel')}</span>
               <span className="text-neutral-200 font-medium">{targetName}</span>
             </div>
           </div>
@@ -276,14 +286,14 @@ export function CurlImportModal({
               htmlFor="curl-command-input"
               className="block text-xs font-medium text-neutral-300"
             >
-              Comando cURL
+              {t('curlImport.curlCommandLabel')}
             </label>
             <textarea
               id="curl-command-input"
               ref={textareaRef}
               value={curlInput}
               onChange={handleCurlInputChange}
-              placeholder={`curl -X POST https://api.exemplo.com/v1/orders \\\n  -H "Content-Type: application/json" \\\n  -d '{"total": 100}'`}
+              placeholder={t('curlImport.curlPlaceholder')}
               className="w-full h-36 px-3 py-2 text-xs font-mono bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-neutral-600 focus:ring-1 focus:ring-neutral-600 transition-colors resize-none"
               spellCheck={false}
               autoFocus
@@ -309,10 +319,10 @@ export function CurlImportModal({
               className="p-3 rounded-lg bg-neutral-950/80 border border-neutral-800 space-y-2 animate-in fade-in duration-150"
             >
               <div className="flex items-center justify-between text-xs">
-                <span className="font-medium text-neutral-400">Pré-visualização</span>
+                <span className="font-medium text-neutral-400">{t('curlImport.previewTitle')}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-neutral-400 text-xs">
-                    {headerCount} {headerCount === 1 ? 'header' : 'headers'}
+                    {headerCount === 1 ? t('curlImport.headersCount', { count: headerCount }) : t('curlImport.headersCountPlural', { count: headerCount })}
                   </span>
                   {parsedRequest.bodyType !== 'None' && (
                     <span
@@ -348,14 +358,14 @@ export function CurlImportModal({
               htmlFor="curl-request-name"
               className="block text-xs font-medium text-neutral-300"
             >
-              Nome da Requisição
+              {t('curlImport.requestNameLabel')}
             </label>
             <input
               id="curl-request-name"
               type="text"
               value={name}
               onChange={handleNameChange}
-              placeholder="Ex: Minha Requisição"
+              placeholder={t('curlImport.requestNamePlaceholder')}
               disabled={isSubmitting}
               className="w-full px-3 py-2 text-xs bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-neutral-600 focus:ring-1 focus:ring-neutral-600 transition-colors disabled:opacity-50"
             />
@@ -369,7 +379,7 @@ export function CurlImportModal({
               disabled={isSubmitting}
               className="px-3.5 py-2 text-xs font-medium text-neutral-300 hover:text-neutral-100 hover:bg-neutral-800 rounded-lg transition-colors disabled:opacity-50"
             >
-              Cancelar
+              {t('curlImport.cancel')}
             </button>
             <button
               type="submit"
@@ -383,10 +393,10 @@ export function CurlImportModal({
                     className="w-3.5 h-3.5 animate-spin"
                     aria-hidden="true"
                   />
-                  <span>Importando...</span>
+                  <span>{t('curlImport.submitting')}</span>
                 </>
               ) : (
-                <span>Importar Requisição</span>
+                <span>{t('curlImport.submit')}</span>
               )}
             </button>
           </div>
