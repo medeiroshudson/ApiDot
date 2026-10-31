@@ -677,7 +677,7 @@ describe('WorkspaceEditorPane', () => {
     const scratchData = {
       method: 'POST' as const,
       url: 'https://scratchpad.example.com',
-      target: 'Browser' as const,
+      target: 'Inherit' as const,
       headers: '{"x-scratch": "true"}',
       body: '{"draft": true}',
       auth: { type: 'none' as const },

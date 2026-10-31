@@ -168,10 +168,9 @@ describe('useRequestStore', () => {
     body: JSON.stringify({ id: 101, name: 'Alice' }),
     timing: {
       dnsLookupMs: 10,
-      tcpHandshakeMs: 15,
       tlsHandshakeMs: 25,
       timeToFirstByteMs: 50,
-      contentDownloadMs: 42,
+      contentTransferMs: 42,
       totalDurationMs: 142,
     },
   };
@@ -567,8 +566,8 @@ describe('useRequestStore', () => {
 
   describe('11. Multi-Request Response Isolation (responsesByRequestId)', () => {
     it('should isolate responses by requestId without overwriting or leaking across requests', () => {
-      const responseA: ResponseData = { statusCode: 200, body: { data: 'A' } };
-      const responseB: ResponseData = { statusCode: 201, body: { data: 'B' } };
+      const responseA: ResponseData = { statusCode: 200, body: JSON.stringify({ data: 'A' }) };
+      const responseB: ResponseData = { statusCode: 201, body: JSON.stringify({ data: 'B' }) };
 
       // Set active request A and assign response
       useRequestStore.getState().setActiveRequest('req-a', { ...sampleRequestDetails, id: 'req-a' });
