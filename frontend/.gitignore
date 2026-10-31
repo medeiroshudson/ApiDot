@@ -3,6 +3,7 @@
 out/
 
 # Dependencies
+node_modules
 node_modules/
 .pnp
 .pnp.js
