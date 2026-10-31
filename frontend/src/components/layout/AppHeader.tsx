@@ -241,6 +241,7 @@ export function AppHeader({
                   </div>
                   <button
                     type="button"
+                    role="menuitem"
                     data-testid="language-toggle"
                     aria-label={`${t('settings.language')}: ${locale === 'en-US' ? t('settings.english') : t('settings.portuguese')}`}
                     onClick={() => void setLocale(locale === 'en-US' ? 'pt-BR' : 'en-US')}
