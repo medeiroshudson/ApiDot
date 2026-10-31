@@ -8,7 +8,7 @@ import {
 } from '@/i18n';
 
 export interface UseTranslationReturn {
-  t: (key: TranslationKey | string, params?: InterpolationParams) => string;
+  t: (key: TranslationKey | (string & {}), params?: InterpolationParams) => string;
   locale: Locale;
   setLocale: (locale: Locale, syncBackend?: boolean) => Promise<void>;
   isLoaded: boolean;

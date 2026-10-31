@@ -23,7 +23,13 @@ const customStorage: PersistStorage<PersistedState> = {
       try {
         const parsed = JSON.parse(item);
         if (parsed && typeof parsed === 'object' && 'state' in parsed) {
-          return parsed;
+          const loc = (parsed as any).state?.locale;
+          return {
+            ...parsed,
+            state: {
+              locale: isValidLocale(loc) ? loc : DEFAULT_LOCALE,
+            },
+          };
         }
       } catch {
         // Raw string in localStorage
@@ -66,6 +72,7 @@ export const useI18nStore = create<I18nState>()(
 
       setLocale: async (locale: Locale, syncBackend = true) => {
         const nextLocale = isValidLocale(locale) ? locale : DEFAULT_LOCALE;
+        const currentLocale = useI18nStore.getState().locale;
         set({ locale: nextLocale });
 
         try {
@@ -76,9 +83,13 @@ export const useI18nStore = create<I18nState>()(
           // ignore localStorage access errors
         }
 
-        if (syncBackend !== false && useAuthStore.getState().isAuthenticated) {
+        if (syncBackend !== false && useAuthStore.getState().isAuthenticated && currentLocale !== nextLocale) {
           try {
             await patchUserLocale(nextLocale);
+            const currentUser = useAuthStore.getState().user;
+            if (currentUser && currentUser.locale !== nextLocale) {
+              useAuthStore.setState({ user: { ...currentUser, locale: nextLocale } });
+            }
           } catch (err) {
             console.error('Failed to update locale preference on server:', err);
           }
