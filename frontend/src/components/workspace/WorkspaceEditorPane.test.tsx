@@ -118,8 +118,8 @@ describe('WorkspaceEditorPane', () => {
     // Verify main components are present
     expect(screen.getByRole('main')).toBeInTheDocument();
     expect(screen.getByTestId('panel-splitter-request-response-splitter')).toBeInTheDocument();
-    expect(screen.getByText('Requisição')).toBeInTheDocument();
-    expect(screen.getByText('Resposta')).toBeInTheDocument();
+    expect(screen.getByText('Request')).toBeInTheDocument();
+    expect(screen.getByText('Response')).toBeInTheDocument();
     expect(screen.getByText(/Send a request to see the response|Dispare uma requisição/i)).toBeInTheDocument();
   });
 
@@ -134,14 +134,14 @@ describe('WorkspaceEditorPane', () => {
   it('switches between request and response views on mobile', async () => {
     await renderEditorPane('ws-1', null);
 
-    // Click on mobile 'Resposta' button
-    const responseBtn = screen.getByRole('button', { name: /Resposta/i });
+    // Click on mobile 'Response' button
+    const responseBtn = screen.getByRole('button', { name: /Response/i });
     fireEvent.click(responseBtn);
 
     expect(useLayoutStore.getState().activeMobilePane).toBe('response');
 
-    // Click back to 'Requisição' button
-    const requestBtn = screen.getByRole('button', { name: /^Requisição$/i });
+    // Click back to 'Request' button
+    const requestBtn = screen.getByRole('button', { name: /^Request$/i });
     fireEvent.click(requestBtn);
 
     expect(useLayoutStore.getState().activeMobilePane).toBe('request');

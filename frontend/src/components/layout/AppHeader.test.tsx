@@ -18,6 +18,15 @@ vi.mock('next/navigation', () => ({
 describe('AppHeader', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+        json: async () => ({}),
+        text: async () => '',
+      })
+    );
     useAuthStore.getState().reset();
     useWorkspaceStore.getState().reset();
     useI18nStore.setState({ locale: 'en-US' });
