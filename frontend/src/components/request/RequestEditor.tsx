@@ -18,6 +18,7 @@ import { CodeEditor } from '../common/CodeEditor';
 import { Input } from '../common/Input';
 import { ParamsTab } from './ParamsTab';
 import { SpecificationTab, extractSchemaProperties } from './SpecificationTab';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export { SaveRequestModal } from './SaveRequestModal';
 export type { SaveRequestModalProps, CollectionOption, FolderOption } from './SaveRequestModal';
@@ -124,6 +125,7 @@ export function RequestEditor({
   availableRequests = [],
   availableVariables = [],
 }: RequestEditorProps) {
+  const { t } = useTranslation();
   const [method, setMethod] = useState(initialRequest?.method || 'GET');
   const [url, setUrl] = useState(initialRequest?.url || '');
   const [target, setTarget] = useState<ExecutionTarget>(initialRequest?.target || 'Inherit');
@@ -347,10 +349,10 @@ export function RequestEditor({
       const parsed = JSON.parse(body);
       const formatted = JSON.stringify(parsed, null, 2);
       handleBodyChange(formatted);
-      setFormatNotice({ target: 'body', message: 'Formatado com sucesso!' });
+      setFormatNotice({ target: 'body', message: t('request.formatSuccess') });
       setTimeout(() => setFormatNotice(null), 2500);
     } catch {
-      setFormatNotice({ target: 'body', message: 'JSON inválido para formatação', isError: true });
+      setFormatNotice({ target: 'body', message: t('request.formatError'), isError: true });
       setTimeout(() => setFormatNotice(null), 3000);
     }
   };
@@ -361,10 +363,10 @@ export function RequestEditor({
       const parsed = JSON.parse(headers);
       const formatted = JSON.stringify(parsed, null, 2);
       handleHeadersChange(formatted);
-      setFormatNotice({ target: 'headers', message: 'Formatado com sucesso!' });
+      setFormatNotice({ target: 'headers', message: t('request.formatSuccess') });
       setTimeout(() => setFormatNotice(null), 2500);
     } catch {
-      setFormatNotice({ target: 'headers', message: 'JSON inválido para formatação', isError: true });
+      setFormatNotice({ target: 'headers', message: t('request.formatError'), isError: true });
       setTimeout(() => setFormatNotice(null), 3000);
     }
   };
@@ -385,7 +387,7 @@ export function RequestEditor({
     if (isLoading) return;
     const trimmedUrl = url.trim();
     if (!trimmedUrl) {
-      setUrlError('A URL é obrigatória');
+      setUrlError(t('request.urlRequired'));
       return;
     }
     setUrlError(null);
@@ -426,27 +428,35 @@ export function RequestEditor({
     }
   };
 
+  const tabLabels: Record<TabType, string> = {
+    specification: t('request.tabSpec'),
+    params: t('request.tabParams'),
+    headers: t('request.tabHeaders'),
+    body: t('request.tabBody'),
+    auth: t('request.tabAuth'),
+  };
+
   return (
     <div className="flex flex-col h-full bg-neutral-950 text-neutral-100 overflow-hidden">
       {/* Title Bar: Request Name, Dirty State, Save Action */}
       <div className="h-9 px-3 sm:px-4 border-b border-neutral-800 bg-neutral-900/60 flex items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider shrink-0">
-            Requisição:
+            {t('request.requestTitlePrefix')}
           </span>
           <span
             data-testid="request-title"
             className="text-xs font-medium text-neutral-200 truncate"
-            title={requestName || 'Nova Requisição'}
+            title={requestName || t('request.newRequest')}
           >
-            {requestName || 'Nova Requisição'}
+            {requestName || t('request.newRequest')}
           </span>
           {isDirty && (
             <span
               data-testid="dirty-indicator"
               className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"
-              title="Alterações não salvas"
-              aria-label="Alterações não salvas"
+              title={t('request.unsavedChanges')}
+              aria-label={t('request.unsavedChanges')}
             />
           )}
         </div>
@@ -454,8 +464,8 @@ export function RequestEditor({
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            aria-label="Salvar requisição"
-            title="Salvar (Ctrl+S / Cmd+S)"
+            aria-label={t('request.saveRequest')}
+            title={t('request.saveTooltip')}
             onClick={handleSave}
             disabled={isLoading || isSaving}
             className="h-7 px-2.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-colors border border-neutral-700/60 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
@@ -465,7 +475,7 @@ export function RequestEditor({
             ) : (
               <Save className="w-3.5 h-3.5 text-neutral-400" aria-hidden="true" />
             )}
-            <span>{isSaving ? 'Salvando...' : 'Salvar'}</span>
+            <span>{isSaving ? t('request.saving') : t('request.save')}</span>
             {isDirty && (
               <span
                 data-testid="save-button-dirty-dot"
@@ -482,7 +492,7 @@ export function RequestEditor({
         <div className="flex flex-col sm:flex-row gap-2 items-start w-full">
           <div className="flex items-start gap-2 flex-1 min-w-0">
             <select
-              aria-label="Método HTTP"
+              aria-label={t('request.httpMethodAria')}
               value={method}
               disabled={isLoading}
               onChange={(e) => handleMethodChange(e.target.value)}
@@ -501,7 +511,7 @@ export function RequestEditor({
               <Input
                 ref={urlInputRef}
                 autoGrow
-                aria-label="URL da requisição"
+                aria-label={t('request.urlAria')}
                 placeholder="https://api.exemplo.com/v1/recurso"
                 value={url}
                 disabled={isLoading}
@@ -531,7 +541,7 @@ export function RequestEditor({
               {url && !isLoading && (
                 <button
                   type="button"
-                  aria-label="Limpar URL"
+                  aria-label={t('request.clearUrl')}
                   onClick={() => handleUrlChange('')}
                   className="absolute right-2 top-2.5 text-neutral-400 hover:text-neutral-200 p-1 rounded hover:bg-neutral-800 transition-colors focus:outline-none"
                 >
@@ -545,13 +555,13 @@ export function RequestEditor({
           <div ref={sendMenuRef} className="relative inline-flex rounded-md shadow-sm h-9 shrink-0 items-start">
             <button
               type="button"
-              aria-label="Enviar requisição"
+              aria-label={t('request.sendRequest')}
               onClick={() => handleSend(defaultExecutionTarget)}
               disabled={isLoading}
               title={
                 defaultExecutionTarget === 'Agent'
-                  ? 'Enviar via Agent Local'
-                  : 'Enviar via Servidor Nuvem'
+                  ? t('request.sendViaAgent')
+                  : t('request.sendViaServer')
               }
               className="h-9 px-3.5 rounded-l-md bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-400"
             >
@@ -562,12 +572,12 @@ export function RequestEditor({
               ) : (
                 <Send className="w-3.5 h-3.5" aria-hidden="true" />
               )}
-              <span>{isLoading ? 'Enviando...' : 'Enviar'}</span>
+              <span>{isLoading ? t('request.sending') : t('request.send')}</span>
             </button>
 
             <button
               type="button"
-              aria-label="Opções de envio e alvo"
+              aria-label={t('request.sendOptions')}
               aria-haspopup="true"
               aria-expanded={isSendMenuOpen}
               onClick={() => setIsSendMenuOpen((prev) => !prev)}
@@ -584,7 +594,7 @@ export function RequestEditor({
                 className="absolute right-0 top-full mt-1 w-56 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl shadow-black/80 py-1 z-50 text-xs animate-in fade-in duration-75"
               >
                 <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-neutral-400 border-b border-neutral-800/80">
-                  Alvo Alternativo
+                  {t('request.alternativeTarget')}
                 </div>
 
                 {alternateTarget === 'Server' ? (
@@ -596,9 +606,9 @@ export function RequestEditor({
                   >
                     <Server className="w-3.5 h-3.5 text-neutral-400" />
                     <div className="flex flex-col">
-                      <span className="font-medium">Executar no Servidor Nuvem</span>
+                      <span className="font-medium">{t('request.executeOnServer')}</span>
                       <span className="text-[10px] text-neutral-500">
-                        Disparo direto sem passar pelo Agent
+                        {t('request.executeOnServerDesc')}
                       </span>
                     </div>
                   </button>
@@ -616,9 +626,9 @@ export function RequestEditor({
                   >
                     <Cpu className={`w-3.5 h-3.5 ${isAgentOnline ? 'text-emerald-400' : 'text-neutral-500'}`} />
                     <div className="flex flex-col">
-                      <span className="font-medium">Executar no Agent Local</span>
+                      <span className="font-medium">{t('request.executeOnAgent')}</span>
                       <span className="text-[10px] text-neutral-500">
-                        {isAgentOnline ? 'Disparo em rede local / localhost' : 'Agent offline'}
+                        {isAgentOnline ? t('request.executeOnAgentDescOnline') : t('request.executeOnAgentDescOffline')}
                       </span>
                     </div>
                   </button>
@@ -639,7 +649,7 @@ export function RequestEditor({
       <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/20 px-3 sm:px-4 shrink-0">
         <div
           role="tablist"
-          aria-label="Abas de configuração da requisição"
+          aria-label={t('request.tabsAria')}
           className="flex"
         >
           {TABS.map((tab, index) => {
@@ -669,7 +679,7 @@ export function RequestEditor({
                     : 'border-transparent text-neutral-400 hover:text-neutral-200'
                 }`}
               >
-                {tab.label}
+                {tabLabels[tab.id]}
               </button>
             );
           })}
@@ -724,7 +734,7 @@ export function RequestEditor({
         >
           <div className="flex items-center justify-between mb-2 shrink-0">
             <span className="text-xs text-neutral-400 font-medium">
-              Cabeçalhos HTTP:
+              {t('request.httpHeaders')}
             </span>
             <div className="flex items-center gap-2">
               {formatNotice?.target === 'headers' && (
@@ -740,13 +750,13 @@ export function RequestEditor({
               )}
               <button
                 type="button"
-                aria-label="Formatar cabeçalhos"
+                aria-label={t('request.formatHeadersAria')}
                 onClick={handleFormatHeaders}
                 disabled={isLoading || !headers.trim()}
                 className="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors border border-neutral-700/60 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <Sparkles className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
-                <span>Formatar JSON</span>
+                <span>{t('request.formatJson')}</span>
               </button>
             </div>
           </div>
@@ -763,7 +773,7 @@ export function RequestEditor({
               onSpecialKeyDown={(key) => autocompleteNavRef.current?.onKeyDown(key) ?? false}
               language="json"
               placeholder={`{\n  "Content-Type": "application/json",\n  "Authorization": "Bearer token"\n}`}
-              ariaLabel="Cabeçalhos HTTP"
+              ariaLabel={t('request.headersAria')}
               testId="headers-code-editor"
               minHeight="100%"
               disabled={isLoading}
@@ -795,13 +805,13 @@ export function RequestEditor({
           <div className="flex items-center justify-between mb-2 shrink-0">
             <div className="flex items-center gap-3">
               <span className="text-xs text-neutral-400 font-medium">
-                Corpo da Requisição:
+                {t('request.requestBody')}
               </span>
 
               {/* Body Type Selector (None / JSON / Text) */}
               <div
                 role="radiogroup"
-                aria-label="Tipo de Corpo"
+                aria-label={t('request.bodyTypeAria')}
                 className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 rounded p-0.5 text-xs"
               >
                 <button
@@ -815,7 +825,7 @@ export function RequestEditor({
                       : 'text-neutral-400 hover:text-neutral-200'
                   }`}
                 >
-                  Nenhum
+                  {t('request.bodyNone')}
                 </button>
                 <button
                   type="button"
@@ -828,7 +838,7 @@ export function RequestEditor({
                       : 'text-neutral-400 hover:text-neutral-200'
                   }`}
                 >
-                  Texto
+                  {t('request.bodyText')}
                 </button>
                 <button
                   type="button"
@@ -841,7 +851,7 @@ export function RequestEditor({
                       : 'text-neutral-400 hover:text-neutral-200'
                   }`}
                 >
-                  JSON
+                  {t('request.bodyJson')}
                 </button>
               </div>
             </div>
@@ -861,13 +871,13 @@ export function RequestEditor({
               {bodyFormat === 'json' && (
                 <button
                   type="button"
-                  aria-label="Formatar JSON"
+                  aria-label={t('request.formatJson')}
                   onClick={handleFormatJson}
                   disabled={isLoading || !body.trim()}
                   className="text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors border border-neutral-700/60 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-blue-400" aria-hidden="true" />
-                  <span>Formatar JSON</span>
+                  <span>{t('request.formatJson')}</span>
                 </button>
               )}
             </div>
@@ -881,10 +891,10 @@ export function RequestEditor({
               >
                 <FileCode className="w-8 h-8 mb-2 opacity-40 text-neutral-600" />
                 <p className="text-xs font-medium text-neutral-300">
-                  Esta requisição não possui corpo (body).
+                  {t('request.emptyBodyTitle')}
                 </p>
                 <p className="text-[11px] text-neutral-500 mt-1 max-w-xs">
-                  Selecione <strong className="text-neutral-400">JSON</strong> ou <strong className="text-neutral-400">Texto</strong> acima para enviar dados.
+                  {t('request.emptyBodyDesc')}
                 </p>
               </div>
             ) : (
@@ -898,8 +908,8 @@ export function RequestEditor({
                 }}
                 onSpecialKeyDown={(key) => autocompleteNavRef.current?.onKeyDown(key) ?? false}
                 language={bodyFormat === 'json' ? 'json' : 'text'}
-                placeholder={bodyFormat === 'json' ? '{\n  "key": "value"\n}' : 'Conteúdo do corpo...'}
-                ariaLabel="Corpo da requisição"
+                placeholder={bodyFormat === 'json' ? '{\n  "key": "value"\n}' : t('request.bodyPlaceholderText')}
+                ariaLabel={t('request.bodyAria')}
                 testId="body-code-editor"
                 minHeight="100%"
                 disabled={isLoading}
@@ -932,41 +942,41 @@ export function RequestEditor({
         >
           <div className="space-y-1">
             <label htmlFor="auth-type-select" className="text-xs text-neutral-400 font-medium">
-              Tipo de Autenticação:
+              {t('request.authType')}
             </label>
             <select
               id="auth-type-select"
-              aria-label="Tipo de Autenticação"
+              aria-label={t('request.authTypeAria')}
               value={auth.type}
               disabled={isLoading}
               onChange={(e) => handleAuthTypeChange(e.target.value as AuthConfig['type'])}
               className="bg-neutral-900 border border-neutral-800 text-xs rounded-md px-3 py-1.5 text-neutral-200 outline-none focus:ring-1 focus:ring-blue-500 block w-full sm:w-64"
             >
-              <option value="inherit">Herdar da Coleção</option>
-              <option value="none">Nenhuma Autenticação</option>
-              <option value="bearer">Bearer Token</option>
-              <option value="basic">Basic Auth</option>
-              <option value="apikey">API Key</option>
+              <option value="inherit">{t('request.authInherit')}</option>
+              <option value="none">{t('request.authNone')}</option>
+              <option value="bearer">{t('request.authBearer')}</option>
+              <option value="basic">{t('request.authBasic')}</option>
+              <option value="apikey">{t('request.authApiKey')}</option>
             </select>
           </div>
 
           {auth.type === 'inherit' && (
             <div className="p-3.5 rounded-lg bg-neutral-900/40 border border-neutral-800 text-neutral-400 text-xs flex items-center gap-2.5">
               <Shield className="w-4 h-4 text-blue-400 shrink-0" />
-              <span>Esta requisição herda a autenticação configurada na Coleção.</span>
+              <span>{t('request.authInheritNotice')}</span>
             </div>
           )}
 
           {auth.type === 'bearer' && (
             <div className="space-y-1">
               <label htmlFor="bearer-token-input" className="text-xs text-neutral-400 font-medium">
-                Token:
+                {t('request.tokenLabel')}
               </label>
               <input
                 id="bearer-token-input"
                 type="text"
-                aria-label="Bearer Token"
-                placeholder="Insira o token ou use {{variavel}}"
+                aria-label={t('request.tokenAria')}
+                placeholder={t('request.tokenPlaceholder')}
                 value={auth.token || ''}
                 disabled={isLoading}
                 onChange={(e) => handleAuthFieldChange('token', e.target.value)}
@@ -979,13 +989,13 @@ export function RequestEditor({
             <div className="space-y-3">
               <div className="space-y-1">
                 <label htmlFor="basic-username-input" className="text-xs text-neutral-400 font-medium">
-                  Usuário:
+                  {t('request.usernameLabel')}
                 </label>
                 <input
                   id="basic-username-input"
                   type="text"
-                  aria-label="Usuário Basic Auth"
-                  placeholder="Nome de usuário"
+                  aria-label={t('request.usernameAria')}
+                  placeholder={t('request.usernamePlaceholder')}
                   value={auth.username || ''}
                   disabled={isLoading}
                   onChange={(e) => handleAuthFieldChange('username', e.target.value)}
@@ -994,13 +1004,13 @@ export function RequestEditor({
               </div>
               <div className="space-y-1">
                 <label htmlFor="basic-password-input" className="text-xs text-neutral-400 font-medium">
-                  Senha:
+                  {t('request.passwordLabel')}
                 </label>
                 <input
                   id="basic-password-input"
                   type="password"
-                  aria-label="Senha Basic Auth"
-                  placeholder="Senha"
+                  aria-label={t('request.passwordAria')}
+                  placeholder={t('request.passwordPlaceholder')}
                   value={auth.password || ''}
                   disabled={isLoading}
                   onChange={(e) => handleAuthFieldChange('password', e.target.value)}
@@ -1014,13 +1024,13 @@ export function RequestEditor({
             <div className="space-y-3">
               <div className="space-y-1">
                 <label htmlFor="apikey-key-input" className="text-xs text-neutral-400 font-medium">
-                  Chave do Cabeçalho / Parâmetro:
+                  {t('request.apiKeyLabel')}
                 </label>
                 <input
                   id="apikey-key-input"
                   type="text"
-                  aria-label="Nome da Chave API"
-                  placeholder="ex: X-API-Key"
+                  aria-label={t('request.apiKeyAria')}
+                  placeholder={t('request.apiKeyPlaceholder')}
                   value={auth.key || ''}
                   disabled={isLoading}
                   onChange={(e) => handleAuthFieldChange('key', e.target.value)}
@@ -1029,13 +1039,13 @@ export function RequestEditor({
               </div>
               <div className="space-y-1">
                 <label htmlFor="apikey-value-input" className="text-xs text-neutral-400 font-medium">
-                  Valor:
+                  {t('request.apiValueLabel')}
                 </label>
                 <input
                   id="apikey-value-input"
                   type="text"
-                  aria-label="Valor da Chave API"
-                  placeholder="Insira o valor"
+                  aria-label={t('request.apiValueAria')}
+                  placeholder={t('request.apiValuePlaceholder')}
                   value={auth.value || ''}
                   disabled={isLoading}
                   onChange={(e) => handleAuthFieldChange('value', e.target.value)}

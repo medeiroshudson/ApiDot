@@ -9,6 +9,7 @@ import {
   FileText,
   HelpCircle,
 } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 import type { SchemaPropertyItem } from './RequestAutocomplete';
 
 export type { SchemaPropertyItem };
@@ -482,6 +483,7 @@ export function SpecificationTab({
   onGenerateBodyExample,
   disabled = false,
 }: SpecificationTabProps) {
+  const { t } = useTranslation();
   const isSelfUpdatingRef = useRef(false);
 
   const initialParsed = useMemo(() => {
@@ -670,7 +672,7 @@ export function SpecificationTab({
           <div className="flex items-center gap-2">
             <FileText className="w-4 h-4 text-blue-400" />
             <span className="text-xs font-semibold text-neutral-200">
-              {summary ? summary : 'Especificação da API'}
+              {summary ? summary : t('request.apiSpecification')}
             </span>
           </div>
         </div>
@@ -681,13 +683,13 @@ export function SpecificationTab({
               htmlFor="spec-summary-input"
               className="block text-[11px] font-medium text-neutral-400 mb-1"
             >
-              Resumo (Summary)
+              {t('request.summaryLabel')}
             </label>
             <input
               id="spec-summary-input"
               type="text"
-              aria-label="Resumo da especificação"
-              placeholder="ex: Obter detalhes do item"
+              aria-label={t('request.summaryAria')}
+              placeholder={t('request.summaryPlaceholder')}
               value={summary}
               disabled={disabled}
               onChange={(e) => handleSummaryChange(e.target.value)}
@@ -700,13 +702,13 @@ export function SpecificationTab({
               htmlFor="spec-description-input"
               className="block text-[11px] font-medium text-neutral-400 mb-1"
             >
-              Descrição (Description)
+              {t('request.descriptionLabel')}
             </label>
             <input
               id="spec-description-input"
               type="text"
-              aria-label="Descrição da especificação"
-              placeholder="ex: Retorna os dados completos do item a partir do seu ID"
+              aria-label={t('request.descriptionAria')}
+              placeholder={t('request.descriptionPlaceholder')}
               value={description}
               disabled={disabled}
               onChange={(e) => handleDescriptionChange(e.target.value)}
@@ -722,42 +724,42 @@ export function SpecificationTab({
           <div className="flex items-center gap-2">
             <Layers className="w-3.5 h-3.5 text-blue-400" />
             <span className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
-              Corpo da Requisição (Schema)
+              {t('request.requestBodySchema')}
             </span>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               type="button"
-              aria-label="Gerar Exemplo no Corpo"
-              title="Gerar JSON no corpo da requisição baseado no schema"
+              aria-label={t('request.generateBodyExample')}
+              title={t('request.generateBodyExampleTitle')}
               disabled={disabled}
               onClick={handleGenerateClick}
               className="h-7 px-2.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-sm"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Gerar Exemplo no Corpo</span>
+              <span>{t('request.generateBodyExample')}</span>
             </button>
 
             <button
               type="button"
-              aria-label="Adicionar Propriedade"
-              title="Adicionar nova propriedade ao schema"
+              aria-label={t('request.addProperty')}
+              title={t('request.addPropertyTitle')}
               disabled={disabled}
               onClick={handleAddRootProperty}
               className="h-7 px-2.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white font-medium text-xs flex items-center gap-1 transition-colors border border-neutral-700/60 disabled:opacity-50 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Adicionar Propriedade</span>
+              <span>{t('request.addProperty')}</span>
             </button>
           </div>
         </div>
 
         {flatProperties.length === 0 ? (
           <div className="p-6 text-center border border-dashed border-neutral-800 rounded-lg bg-neutral-900/20 text-neutral-500 text-xs">
-            <p>Nenhuma propriedade definida no corpo da requisição.</p>
+            <p>{t('request.noProperties')}</p>
             <p className="mt-1 text-[11px] text-neutral-600">
-              Clique em &quot;Adicionar Propriedade&quot; acima para estruturar o schema.
+              {t('request.noPropertiesHint')}
             </p>
           </div>
         ) : (
@@ -765,12 +767,12 @@ export function SpecificationTab({
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-neutral-900/80 text-[11px] font-medium text-neutral-400 uppercase tracking-wider border-b border-neutral-800">
-                  <th className="py-2 px-3 min-w-[200px] w-1/3">Propriedade</th>
-                  <th className="py-2 px-2 w-28">Tipo</th>
-                  <th className="py-2 px-2 w-24 text-center">Obrigatório</th>
-                  <th className="py-2 px-2 w-1/4">Descrição</th>
-                  <th className="py-2 px-2 w-1/4">Exemplo</th>
-                  <th className="py-2 px-2 w-20 text-right">Ações</th>
+                  <th className="py-2 px-3 min-w-[200px] w-1/3">{t('request.property')}</th>
+                  <th className="py-2 px-2 w-28">{t('request.type')}</th>
+                  <th className="py-2 px-2 w-24 text-center">{t('request.required')}</th>
+                  <th className="py-2 px-2 w-1/4">{t('request.description')}</th>
+                  <th className="py-2 px-2 w-1/4">{t('request.example')}</th>
+                  <th className="py-2 px-2 w-20 text-right">{t('request.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -798,8 +800,8 @@ export function SpecificationTab({
                         </span>
                         <input
                           type="text"
-                          aria-label={`Nome da propriedade ${row.name || 'nova'}`}
-                          placeholder="nome"
+                          aria-label={t('request.propertyNameAria', { name: row.name || 'nova' })}
+                          placeholder={t('request.propertyPlaceholder')}
                           value={row.name}
                           disabled={disabled}
                           onChange={(e) =>
@@ -813,7 +815,7 @@ export function SpecificationTab({
                     {/* Tipo */}
                     <td className="py-1.5 px-2">
                       <select
-                        aria-label={`Tipo da propriedade ${row.name || 'nova'}`}
+                        aria-label={t('request.propertyTypeAria', { name: row.name || 'nova' })}
                         value={row.type}
                         disabled={disabled}
                         onChange={(e) =>
@@ -837,7 +839,7 @@ export function SpecificationTab({
                     <td className="py-1.5 px-2 text-center">
                       <input
                         type="checkbox"
-                        aria-label={`Obrigatório ${row.name || 'nova'}`}
+                        aria-label={t('request.propertyRequiredAria', { name: row.name || 'nova' })}
                         checked={row.required}
                         disabled={disabled}
                         onChange={(e) =>
@@ -853,8 +855,8 @@ export function SpecificationTab({
                     <td className="py-1.5 px-2">
                       <input
                         type="text"
-                        aria-label={`Descrição da propriedade ${row.name || 'nova'}`}
-                        placeholder="Descrição..."
+                        aria-label={t('request.propertyDescAria', { name: row.name || 'nova' })}
+                        placeholder={t('request.propertyDescPlaceholder')}
                         value={row.description}
                         disabled={disabled}
                         onChange={(e) =>
@@ -870,8 +872,8 @@ export function SpecificationTab({
                     <td className="py-1.5 px-2">
                       <input
                         type="text"
-                        aria-label={`Exemplo da propriedade ${row.name || 'nova'}`}
-                        placeholder="Exemplo..."
+                        aria-label={t('request.propertyExampleAria', { name: row.name || 'nova' })}
+                        placeholder={t('request.propertyExamplePlaceholder')}
                         value={row.example}
                         disabled={disabled}
                         onChange={(e) =>
@@ -889,10 +891,10 @@ export function SpecificationTab({
                         {row.type === 'object' && (
                           <button
                             type="button"
-                            aria-label={`Adicionar subpropriedade a ${
-                              row.name || 'objeto'
-                            }`}
-                            title="Adicionar subpropriedade"
+                            aria-label={t('request.addChildPropertyAria', {
+                              name: row.name || 'objeto',
+                            })}
+                            title={t('request.addChildProperty')}
                             disabled={disabled}
                             onClick={() => handleAddChildProperty(row.id)}
                             className="p-1 rounded text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
@@ -902,8 +904,8 @@ export function SpecificationTab({
                         )}
                         <button
                           type="button"
-                          aria-label={`Remover propriedade ${row.name || 'nova'}`}
-                          title="Remover propriedade"
+                          aria-label={t('request.removePropertyAria', { name: row.name || 'nova' })}
+                          title={t('request.removeProperty')}
                           disabled={disabled}
                           onClick={() => handleRemoveProperty(row.id)}
                           className="p-1 rounded text-neutral-400 hover:text-rose-400 hover:bg-rose-950/30 transition-colors cursor-pointer"
@@ -924,27 +926,27 @@ export function SpecificationTab({
       <div className="space-y-2">
         <div className="flex items-center justify-between mb-2 shrink-0">
           <span className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
-            Respostas Esperadas (Responses)
+            {t('request.expectedResponses')}
           </span>
 
           <button
             type="button"
-            aria-label="Adicionar Resposta"
-            title="Adicionar resposta esperada"
+            aria-label={t('request.addResponse')}
+            title={t('request.addResponseTitle')}
             disabled={disabled}
             onClick={handleAddResponse}
             className="h-7 px-2.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white font-medium text-xs flex items-center gap-1 transition-colors border border-neutral-700/60 disabled:opacity-50 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Adicionar Resposta</span>
+            <span>{t('request.addResponse')}</span>
           </button>
         </div>
 
         {responses.length === 0 ? (
           <div className="p-6 text-center border border-dashed border-neutral-800 rounded-lg bg-neutral-900/20 text-neutral-500 text-xs">
-            <p>Nenhuma resposta esperada documentada.</p>
+            <p>{t('request.noResponses')}</p>
             <p className="mt-1 text-[11px] text-neutral-600">
-              Clique em &quot;Adicionar Resposta&quot; para registrar os status HTTP suportados.
+              {t('request.noResponsesHint')}
             </p>
           </div>
         ) : (
@@ -952,10 +954,10 @@ export function SpecificationTab({
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-neutral-900/80 text-[11px] font-medium text-neutral-400 uppercase tracking-wider border-b border-neutral-800">
-                  <th className="py-2 px-3 w-40">Código HTTP</th>
-                  <th className="py-2 px-2 w-1/3">Descrição</th>
-                  <th className="py-2 px-2 w-1/2">Exemplo / Schema</th>
-                  <th className="py-2 px-2 w-16 text-right">Ações</th>
+                  <th className="py-2 px-3 w-40">{t('request.httpCode')}</th>
+                  <th className="py-2 px-2 w-1/3">{t('request.description')}</th>
+                  <th className="py-2 px-2 w-1/2">{t('request.exampleOrSchema')}</th>
+                  <th className="py-2 px-2 w-16 text-right">{t('request.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -976,8 +978,8 @@ export function SpecificationTab({
                         </span>
                         <input
                           type="text"
-                          aria-label="Código de status HTTP"
-                          placeholder="200"
+                          aria-label={t('request.statusCodeAria')}
+                          placeholder={t('request.statusCodePlaceholder')}
                           value={resp.statusCode}
                           disabled={disabled}
                           onChange={(e) =>
@@ -994,8 +996,8 @@ export function SpecificationTab({
                     <td className="py-1.5 px-2">
                       <input
                         type="text"
-                        aria-label="Descrição da resposta"
-                        placeholder="ex: Operação bem-sucedida"
+                        aria-label={t('request.responseDescAria')}
+                        placeholder={t('request.responseDescPlaceholder')}
                         value={resp.description}
                         disabled={disabled}
                         onChange={(e) =>
@@ -1011,8 +1013,8 @@ export function SpecificationTab({
                     <td className="py-1.5 px-2">
                       <input
                         type="text"
-                        aria-label="Exemplo da resposta"
-                        placeholder='ex: {"id": 1, "status": "ok"}'
+                        aria-label={t('request.responseExampleAria')}
+                        placeholder={t('request.responseExamplePlaceholder')}
                         value={resp.example}
                         disabled={disabled}
                         onChange={(e) =>
@@ -1028,8 +1030,8 @@ export function SpecificationTab({
                     <td className="py-1.5 px-2 text-right">
                       <button
                         type="button"
-                        aria-label={`Remover resposta ${resp.statusCode || '200'}`}
-                        title="Remover resposta"
+                        aria-label={t('request.removeResponseAria', { code: resp.statusCode || '200' })}
+                        title={t('request.removeResponse')}
                         disabled={disabled}
                         onClick={() => handleRemoveResponse(resp.id)}
                         className="p-1 rounded text-neutral-400 hover:text-rose-400 hover:bg-rose-950/30 transition-colors cursor-pointer"

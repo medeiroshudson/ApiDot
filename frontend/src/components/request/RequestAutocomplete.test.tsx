@@ -262,11 +262,11 @@ describe('RequestAutocomplete', () => {
     fireEvent.change(input, { target: { value: '{{' } });
 
     // 3 mock variables + 3 tokens = 6 suggestions
-    expect(status).toHaveTextContent(/6 sugestões disponíveis/i);
+    expect(status).toHaveTextContent(/6 suggestions available/i);
 
     // Filtering down to 1 suggestion updates live announcement
     fireEvent.change(input, { target: { value: '{{base' } });
-    expect(status).toHaveTextContent(/1 sugestão disponível/i);
+    expect(status).toHaveTextContent(/1 suggestion available/i);
 
     // Escape dismisses and clears live announcement
     fireEvent.keyDown(input, { key: 'Escape' });

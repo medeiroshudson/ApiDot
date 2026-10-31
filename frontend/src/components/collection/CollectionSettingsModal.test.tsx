@@ -91,7 +91,7 @@ describe('CollectionSettingsModal', () => {
 
       // Tab 1 (General) is active by default
       expect(screen.getByLabelText(/nome da coleção/i)).toBeInTheDocument();
-      expect(screen.getByRole('combobox', { name: /target de execução/i })).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: /execution target|target de execução/i })).toBeInTheDocument();
 
       // Switch to Auth tab
       fireEvent.click(tabAuth);
@@ -161,7 +161,7 @@ describe('CollectionSettingsModal', () => {
       const nameInput = screen.getByLabelText(/nome da coleção/i);
       fireEvent.change(nameInput, { target: { value: 'Nova Coleção Renomeada' } });
 
-      const targetSelect = screen.getByRole('combobox', { name: /target de execução/i });
+      const targetSelect = screen.getByRole('combobox', { name: /execution target|target de execução/i });
       fireEvent.change(targetSelect, { target: { value: 'Agent' } });
 
       const saveBtn = screen.getByRole('button', { name: /salvar alterações/i });

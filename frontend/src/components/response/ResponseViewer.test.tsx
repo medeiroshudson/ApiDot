@@ -15,7 +15,7 @@ describe('ResponseViewer', () => {
   it('renders empty/idle state when response is null and isLoading is false', () => {
     render(<ResponseViewer response={null} isLoading={false} />);
     expect(
-      screen.getByText('Dispare uma requisição para visualizar a resposta')
+      screen.getByText('Send a request to see the response')
     ).toBeInTheDocument();
   });
 
@@ -23,10 +23,10 @@ describe('ResponseViewer', () => {
     it('renders loading skeleton and spinner when isLoading is true', () => {
       render(<ResponseViewer response={null} isLoading={true} />);
 
-      expect(screen.getByText('Enviando requisição...')).toBeInTheDocument();
+      expect(screen.getByText('Sending request...')).toBeInTheDocument();
       expect(screen.getByTestId('response-loading')).toBeInTheDocument();
       expect(
-        screen.queryByText('Dispare uma requisição para visualizar a resposta')
+        screen.queryByText('Send a request to see the response')
       ).not.toBeInTheDocument();
     });
 
@@ -40,7 +40,7 @@ describe('ResponseViewer', () => {
 
       render(<ResponseViewer response={response} isLoading={true} />);
 
-      expect(screen.getByText('Enviando requisição...')).toBeInTheDocument();
+      expect(screen.getByText('Sending request...')).toBeInTheDocument();
       expect(screen.queryByTestId('status-badge')).not.toBeInTheDocument();
     });
   });
@@ -305,9 +305,9 @@ describe('ResponseViewer', () => {
       render(<ResponseViewer response={response} />);
 
       const copyButton = screen.getByRole('button', {
-        name: 'Copiar corpo da resposta',
+        name: 'Copy response body',
       });
-      expect(copyButton).toHaveAttribute('aria-label', 'Copiar corpo da resposta');
+      expect(copyButton).toHaveAttribute('aria-label', 'Copy response body');
 
       const liveRegion = screen.getByRole('status');
       expect(liveRegion).toHaveTextContent('');
@@ -315,14 +315,14 @@ describe('ResponseViewer', () => {
       fireEvent.click(copyButton);
 
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith('{\"foo\":\"bar\"}');
-      expect(await screen.findByText('Copiado!')).toBeInTheDocument();
+      expect(await screen.findByText('Copied!')).toBeInTheDocument();
 
       // Dynamic aria-label on the copy button
-      expect(copyButton).toHaveAttribute('aria-label', 'Corpo da resposta copiado');
+      expect(copyButton).toHaveAttribute('aria-label', 'Response body copied');
 
       // sr-only aria-live polite announcement
       expect(liveRegion).toHaveTextContent(
-        'Corpo da resposta copiado para a área de transferência'
+        'Response body copied to clipboard'
       );
     });
 
@@ -343,16 +343,16 @@ describe('ResponseViewer', () => {
       render(<ResponseViewer response={response} />);
 
       const copyButton = screen.getByRole('button', {
-        name: 'Copiar corpo da resposta',
+        name: 'Copy response body',
       });
       fireEvent.click(copyButton);
 
       await waitFor(() => {
-        expect(screen.getByText('Falha ao copiar')).toBeInTheDocument();
+        expect(screen.getByText('Failed to copy')).toBeInTheDocument();
       });
 
       const liveRegion = screen.getByRole('status');
-      expect(liveRegion).toHaveTextContent('Falha ao copiar corpo da resposta');
+      expect(liveRegion).toHaveTextContent('Failed to copy response body');
     });
   });
 
@@ -364,7 +364,7 @@ describe('ResponseViewer', () => {
       body: '{"status":"success"}',
     };
 
-    it('renders "Copiar cURL" button in top bar next to "Copiar" body button when response is present', () => {
+    it('renders "Copy cURL" button in top bar next to "Copy" body button when response is present', () => {
       render(
         <ResponseViewer
           response={mockResponse}
@@ -373,21 +373,21 @@ describe('ResponseViewer', () => {
       );
 
       const copyCurlBtn = screen.getByRole('button', {
-        name: 'Copiar cURL da requisição',
+        name: 'Copy request cURL',
       });
       expect(copyCurlBtn).toBeInTheDocument();
 
       const copyBodyBtn = screen.getByRole('button', {
-        name: 'Copiar corpo da resposta',
+        name: 'Copy response body',
       });
       expect(copyCurlBtn.parentElement).toBe(copyBodyBtn.parentElement);
     });
 
-    it('disables "Copiar cURL" button when executedCurl is not provided or is empty/whitespace', () => {
+    it('disables "Copy cURL" button when executedCurl is not provided or is empty/whitespace', () => {
       const { rerender } = render(<ResponseViewer response={mockResponse} />);
 
       const copyCurlBtn = screen.getByRole('button', {
-        name: 'Copiar cURL da requisição',
+        name: 'Copy request cURL',
       });
       expect(copyCurlBtn).toBeDisabled();
 
@@ -398,7 +398,7 @@ describe('ResponseViewer', () => {
       expect(copyCurlBtn).toBeDisabled();
     });
 
-    it('enables "Copiar cURL" button when executedCurl is passed with non-empty content', () => {
+    it('enables "Copy cURL" button when executedCurl is passed with non-empty content', () => {
       render(
         <ResponseViewer
           response={mockResponse}
@@ -407,12 +407,12 @@ describe('ResponseViewer', () => {
       );
 
       const copyCurlBtn = screen.getByRole('button', {
-        name: 'Copiar cURL da requisição',
+        name: 'Copy request cURL',
       });
       expect(copyCurlBtn).toBeEnabled();
     });
 
-    it('clicking "Copiar cURL" calls navigator.clipboard.writeText with executedCurl and displays "Copiado!" feedback for 2000ms', async () => {
+    it('clicking "Copy cURL" calls navigator.clipboard.writeText with executedCurl and displays "Copied!" feedback for 2000ms', async () => {
       vi.useFakeTimers();
       try {
         const curlCommand =
@@ -426,10 +426,10 @@ describe('ResponseViewer', () => {
         );
 
         const copyCurlBtn = screen.getByRole('button', {
-          name: 'Copiar cURL da requisição',
+          name: 'Copy request cURL',
         });
-        expect(screen.queryByText('Copiado!')).toBeNull();
-        expect(screen.getByText('Copiar cURL')).toBeInTheDocument();
+        expect(screen.queryByText('Copied!')).toBeNull();
+        expect(screen.getByText('Copy cURL')).toBeInTheDocument();
 
         await act(async () => {
           fireEvent.click(copyCurlBtn);
@@ -438,13 +438,13 @@ describe('ResponseViewer', () => {
         expect(navigator.clipboard.writeText).toHaveBeenCalledWith(curlCommand);
 
         // Feedback in UI and dynamic ARIA label
-        expect(copyCurlBtn).toHaveAttribute('aria-label', 'Comando cURL copiado');
-        expect(screen.getByText('Copiado!')).toBeInTheDocument();
+        expect(copyCurlBtn).toHaveAttribute('aria-label', 'cURL command copied');
+        expect(screen.getByText('Copied!')).toBeInTheDocument();
 
         // sr-only polite announcement
         const liveRegion = screen.getByRole('status');
         expect(liveRegion).toHaveTextContent(
-          'Comando cURL copiado para a área de transferência'
+          'cURL command copied to clipboard'
         );
 
         // Advance timers by 2000ms
@@ -453,8 +453,8 @@ describe('ResponseViewer', () => {
         });
 
         // Reverts back to initial state
-        expect(copyCurlBtn).toHaveAttribute('aria-label', 'Copiar cURL da requisição');
-        expect(screen.getByText('Copiar cURL')).toBeInTheDocument();
+        expect(copyCurlBtn).toHaveAttribute('aria-label', 'Copy request cURL');
+        expect(screen.getByText('Copy cURL')).toBeInTheDocument();
       } finally {
         vi.useRealTimers();
       }
@@ -475,7 +475,7 @@ describe('ResponseViewer', () => {
       );
 
       const copyCurlBtn = screen.getByRole('button', {
-        name: 'Copiar cURL da requisição',
+        name: 'Copy request cURL',
       });
 
       await act(async () => {
@@ -499,7 +499,7 @@ describe('ResponseViewer', () => {
         );
 
         const copyCurlBtn = screen.getByRole('button', {
-          name: 'Copiar cURL da requisição',
+          name: 'Copy request cURL',
         });
 
         await act(async () => {
@@ -524,7 +524,7 @@ describe('ResponseViewer', () => {
         );
 
         const copyCurlBtn = screen.getByRole('button', {
-          name: 'Copiar cURL da requisição',
+          name: 'Copy request cURL',
         });
 
         act(() => {

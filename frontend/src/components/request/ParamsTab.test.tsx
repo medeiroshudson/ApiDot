@@ -21,7 +21,7 @@ describe('ParamsTab', () => {
     expect(screen.getByText('petId')).toBeInTheDocument();
     expect(screen.getByDisplayValue('10')).toBeInTheDocument();
 
-    const addQueryKey = screen.getByPlaceholderText(/Novo parâmetro/i);
+    const addQueryKey = screen.getByPlaceholderText(/New parameter/i);
     fireEvent.change(addQueryKey, { target: { value: 'page' } });
     fireEvent.blur(addQueryKey);
 
@@ -41,7 +41,7 @@ describe('ParamsTab', () => {
     expect(screen.getByText('storeId')).toBeInTheDocument();
     expect(screen.getByText('petId')).toBeInTheDocument();
 
-    const storeInput = screen.getByPlaceholderText('Valor para :storeId');
+    const storeInput = screen.getByPlaceholderText('Value for :storeId');
     fireEvent.change(storeInput, { target: { value: 'store_99' } });
 
     expect(onPathParamsChange).toHaveBeenCalledWith(
@@ -73,7 +73,7 @@ describe('ParamsTab', () => {
     );
 
     expect(
-      screen.getByText(/Nenhum parâmetro de rota detectado/i)
+      screen.getByText(/No path parameters detected/i)
     ).toBeInTheDocument();
   });
 
@@ -90,7 +90,7 @@ describe('ParamsTab', () => {
     expect(screen.getByDisplayValue('limit')).toBeInTheDocument();
     expect(screen.getByDisplayValue('20')).toBeInTheDocument();
 
-    const checkboxes = screen.getAllByRole('checkbox', { name: /Ativar parâmetro/i });
+    const checkboxes = screen.getAllByRole('checkbox', { name: /Enable parameter/i });
     expect(checkboxes).toHaveLength(2);
     expect(checkboxes[0]).toBeChecked();
     expect(checkboxes[1]).toBeChecked();
@@ -135,7 +135,7 @@ describe('ParamsTab', () => {
       />
     );
 
-    const checkbox = screen.getByRole('checkbox', { name: /Ativar parâmetro/i });
+    const checkbox = screen.getByRole('checkbox', { name: /Enable parameter/i });
     expect(checkbox).toBeChecked();
 
     fireEvent.click(checkbox);
@@ -152,7 +152,7 @@ describe('ParamsTab', () => {
       />
     );
 
-    const checkbox = screen.getByRole('checkbox', { name: /Ativar parâmetro/i });
+    const checkbox = screen.getByRole('checkbox', { name: /Enable parameter/i });
     fireEvent.click(checkbox);
     expect(onUrlChange).toHaveBeenCalledWith('https://api.com/pets');
 
@@ -178,7 +178,7 @@ describe('ParamsTab', () => {
       />
     );
 
-    const deleteButtons = screen.getAllByRole('button', { name: /Remover parâmetro/i });
+    const deleteButtons = screen.getAllByRole('button', { name: /Remove parameter/i });
     expect(deleteButtons).toHaveLength(2);
 
     fireEvent.click(deleteButtons[0]);
@@ -227,7 +227,7 @@ describe('ParamsTab', () => {
     expect(screen.getByDisplayValue('Rex The Dog')).toBeInTheDocument();
   });
 
-  it('adds a new query parameter via the Adicionar Parâmetro button', () => {
+  it('adds a new query parameter via the Add Parameter button', () => {
     const onUrlChange = vi.fn();
     render(
       <ParamsTab
@@ -236,10 +236,10 @@ describe('ParamsTab', () => {
       />
     );
 
-    const addQueryKey = screen.getByPlaceholderText(/Novo parâmetro/i);
+    const addQueryKey = screen.getByPlaceholderText(/New parameter/i);
     fireEvent.change(addQueryKey, { target: { value: 'tag' } });
 
-    const addBtn = screen.getByRole('button', { name: /Adicionar Parâmetro/i });
+    const addBtn = screen.getByRole('button', { name: /Add Parameter/i });
     fireEvent.click(addBtn);
 
     expect(onUrlChange).toHaveBeenCalledWith('https://api.com/pets?tag=');

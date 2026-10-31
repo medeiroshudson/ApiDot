@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Copy, Check, Clock, Server, FileCode, Layers, Loader2, Terminal } from 'lucide-react';
 import { TimingWaterfall, TimingBreakdown } from './TimingWaterfall';
 import { CodeEditor } from '../common/CodeEditor';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface ResponseData {
   statusCode: number;
@@ -62,6 +63,7 @@ export function ResponseViewer({
   className = '',
   executedCurl,
 }: ResponseViewerProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<ResponseTabType>('pretty');
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
@@ -208,10 +210,10 @@ export function ResponseViewer({
           <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
         </div>
         <p className="text-sm font-medium text-neutral-300">
-          Enviando requisição...
+          {t('response.sendingRequest')}
         </p>
         <p className="text-xs text-neutral-600 mt-1 max-w-xs">
-          Aguardando resposta do servidor
+          {t('response.waitingResponse')}
         </p>
         <div className="w-48 max-w-full space-y-2 mt-4 animate-pulse" aria-hidden="true">
           <div className="h-2 bg-neutral-800 rounded w-3/4 mx-auto" />
@@ -230,10 +232,10 @@ export function ResponseViewer({
           <Server className="w-5 h-5" aria-hidden="true" />
         </div>
         <p className="text-sm font-medium text-neutral-400">
-          Dispare uma requisição para visualizar a resposta
+          {t('response.emptyResponse')}
         </p>
         <p className="text-xs text-neutral-600 mt-1 max-w-xs">
-          Os detalhes de status, latência por etapa, cabeçalhos e payload aparecerão aqui.
+          {t('response.emptyResponseDesc')}
         </p>
       </div>
     );
@@ -291,8 +293,8 @@ export function ResponseViewer({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            aria-label={copiedCurl ? 'Comando cURL copiado' : 'Copiar cURL da requisição'}
-            title={copiedCurl ? 'Comando cURL copiado' : 'Copiar cURL da requisição'}
+            aria-label={copiedCurl ? t('response.copiedCurlAria') : t('response.copyCurlAria')}
+            title={copiedCurl ? t('response.copiedCurlAria') : t('response.copyCurlAria')}
             onClick={handleCopyCurl}
             disabled={!executedCurl || !executedCurl.trim()}
             className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded text-neutral-400 hover:text-white hover:bg-neutral-800/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -300,19 +302,19 @@ export function ResponseViewer({
             {copiedCurl ? (
               <>
                 <Check className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
-                <span className="text-emerald-400">Copiado!</span>
+                <span className="text-emerald-400">{t('response.copied')}</span>
               </>
             ) : (
               <>
                 <Terminal className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Copiar cURL</span>
+                <span>{t('response.copyCurl')}</span>
               </>
             )}
           </button>
 
           <button
             type="button"
-            aria-label={copied ? 'Corpo da resposta copiado' : 'Copiar corpo da resposta'}
+            aria-label={copied ? t('response.copiedBodyAria') : t('response.copyBodyAria')}
             onClick={handleCopyBody}
             disabled={!response.body}
             className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded text-neutral-400 hover:text-white hover:bg-neutral-800/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -320,27 +322,27 @@ export function ResponseViewer({
             {copied ? (
               <>
                 <Check className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
-                <span className="text-emerald-400">Copiado!</span>
+                <span className="text-emerald-400">{t('response.copied')}</span>
               </>
             ) : copyFailed ? (
               <>
                 <Copy className="w-3.5 h-3.5 text-rose-400" aria-hidden="true" />
-                <span className="text-rose-400">Falha ao copiar</span>
+                <span className="text-rose-400">{t('response.copyFailed')}</span>
               </>
             ) : (
               <>
                 <Copy className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Copiar</span>
+                <span>{t('response.copy')}</span>
               </>
             )}
           </button>
           <span className="sr-only" role="status" aria-live="polite">
             {copied
-              ? 'Corpo da resposta copiado para a área de transferência'
+              ? t('response.copiedBodyAnnouncement')
               : copyFailed
-              ? 'Falha ao copiar corpo da resposta'
+              ? t('response.copyFailedAnnouncement')
               : copiedCurl
-              ? 'Comando cURL copiado para a área de transferência'
+              ? t('response.copiedCurlAnnouncement')
               : ''}
           </span>
         </div>
@@ -349,7 +351,7 @@ export function ResponseViewer({
       {/* Tabs list with roving tabIndex */}
       <div
         role="tablist"
-        aria-label="Abas de visualização da resposta"
+        aria-label={t('response.tabsAria')}
         className="flex border-b border-neutral-800 bg-neutral-900/20 px-3 sm:px-4"
       >
         {RESPONSE_TABS.map((tab, index) => {
@@ -399,13 +401,13 @@ export function ResponseViewer({
                 value={prettyBody}
                 language={isPrettyJson ? 'json' : 'text'}
                 readOnly
-                ariaLabel="Corpo da resposta formatado"
+                ariaLabel={t('response.formattedBodyAria')}
                 testId="response-pretty-content"
                 minHeight="100%"
                 className="flex-1 h-full"
               />
             ) : (
-              <div className="text-xs text-neutral-500 italic p-2">Corpo vazio</div>
+              <div className="text-xs text-neutral-500 italic p-2">{t('response.emptyBody')}</div>
             )
           )}
         </div>
@@ -425,13 +427,13 @@ export function ResponseViewer({
                 value={response.body}
                 language="text"
                 readOnly
-                ariaLabel="Corpo da resposta bruto"
+                ariaLabel={t('response.rawBodyAria')}
                 testId="response-raw-content"
                 minHeight="100%"
                 className="flex-1 h-full"
               />
             ) : (
-              <div className="text-xs text-neutral-500 italic p-2">Corpo vazio</div>
+              <div className="text-xs text-neutral-500 italic p-2">{t('response.emptyBody')}</div>
             )
           )}
         </div>
@@ -464,7 +466,7 @@ export function ResponseViewer({
               </div>
             ) : (
               <div className="text-xs text-neutral-500 italic p-2">
-                Nenhum cabeçalho retornado
+                {t('response.noHeaders')}
               </div>
             )
           )}

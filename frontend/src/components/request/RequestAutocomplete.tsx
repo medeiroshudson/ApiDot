@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, useId } from 'react';
 import { Variable, Shuffle, Clock, Link2 } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface AutocompleteVariable {
   key: string;
@@ -224,6 +225,7 @@ export function RequestAutocomplete({
   className = '',
   children,
 }: RequestAutocompleteProps) {
+  const { t } = useTranslation();
   const baseId = useId();
   const listboxId = `${baseId}-listbox`;
   const getOptionId = (index: number) => `${baseId}-option-${index}`;
@@ -330,19 +332,19 @@ export function RequestAutocomplete({
         id: '$guid',
         name: '$guid',
         type: 'token' as const,
-        detail: 'UUID v4 aleatório',
+        detail: t('request.randomGuid'),
       },
       {
         id: '$timestamp',
         name: '$timestamp',
         type: 'token' as const,
-        detail: 'Timestamp Unix atual',
+        detail: t('request.currentTimestamp'),
       },
       {
         id: '$request[...]',
         name: '$request[...]',
         type: 'token' as const,
-        detail: 'Response chaining de outra requisição',
+        detail: t('request.requestChaining'),
       },
     ];
 
@@ -605,7 +607,9 @@ export function RequestAutocomplete({
   const liveRegion = (
     <span className="sr-only" role="status" aria-live="polite">
       {isOpen && suggestions.length > 0
-        ? `${suggestions.length} ${suggestions.length === 1 ? 'sugestão disponível' : 'sugestões disponíveis'}`
+        ? suggestions.length === 1
+          ? t('request.suggestionAvailable')
+          : t('request.suggestionsAvailable', { count: suggestions.length })
         : ''}
     </span>
   );
@@ -614,7 +618,7 @@ export function RequestAutocomplete({
     <div
       role="listbox"
       id={listboxId}
-      aria-label="Sugestões de autocompletar"
+      aria-label={t('request.autocompleteSuggestions')}
       style={
         cursorCoords
           ? {

@@ -6,22 +6,22 @@ describe('RequestEditor', () => {
   it('renders all key elements: method selector, URL input, and split send button', () => {
     render(<RequestEditor />);
 
-    expect(screen.getByRole('combobox', { name: /método http/i })).toBeDefined();
-    expect(screen.getByRole('textbox', { name: /url da requisição/i })).toBeDefined();
-    expect(screen.getByRole('button', { name: /enviar requisição/i })).toBeDefined();
-    expect(screen.getByRole('button', { name: /opções de envio e alvo/i })).toBeDefined();
+    expect(screen.getByRole('combobox', { name: /http method/i })).toBeDefined();
+    expect(screen.getByRole('textbox', { name: /request url/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /send request/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /send and target options/i })).toBeDefined();
   });
 
   it('allows changing the HTTP method', () => {
     const onSend = vi.fn();
     render(<RequestEditor onSend={onSend} initialRequest={{ method: 'GET', url: 'https://api.example.com' }} />);
 
-    const methodSelect = screen.getByRole('combobox', { name: /método http/i });
+    const methodSelect = screen.getByRole('combobox', { name: /http method/i });
     fireEvent.change(methodSelect, { target: { value: 'POST' } });
 
     expect(methodSelect).toHaveValue('POST');
 
-    const sendBtn = screen.getByRole('button', { name: /enviar requisição/i });
+    const sendBtn = screen.getByRole('button', { name: /send request/i });
     fireEvent.click(sendBtn);
 
     expect(onSend).toHaveBeenCalledWith(
@@ -36,12 +36,12 @@ describe('RequestEditor', () => {
     const onSend = vi.fn();
     render(<RequestEditor onSend={onSend} />);
 
-    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    const urlInput = screen.getByRole('textbox', { name: /request url/i });
     fireEvent.change(urlInput, { target: { value: 'https://api.example.com/users' } });
 
     expect(urlInput).toHaveValue('https://api.example.com/users');
 
-    const sendBtn = screen.getByRole('button', { name: /enviar requisição/i });
+    const sendBtn = screen.getByRole('button', { name: /send request/i });
     fireEvent.click(sendBtn);
 
     expect(onSend).toHaveBeenCalledWith(
@@ -54,11 +54,11 @@ describe('RequestEditor', () => {
   it('switches between Specification, Params, Headers, Body, and Auth tabs', () => {
     render(<RequestEditor />);
 
-    const specTab = screen.getByRole('tab', { name: /especificação/i });
-    const paramsTab = screen.getByRole('tab', { name: /parâmetros/i });
-    const headersTab = screen.getByRole('tab', { name: /cabeçalhos|headers/i });
-    const bodyTab = screen.getByRole('tab', { name: /corpo|body/i });
-    const authTab = screen.getByRole('tab', { name: /autenticação|auth/i });
+    const specTab = screen.getByRole('tab', { name: /specification/i });
+    const paramsTab = screen.getByRole('tab', { name: /params/i });
+    const headersTab = screen.getByRole('tab', { name: /headers/i });
+    const bodyTab = screen.getByRole('tab', { name: /body/i });
+    const authTab = screen.getByRole('tab', { name: /auth/i });
 
     expect(specTab).toBeDefined();
     expect(paramsTab).toBeDefined();
@@ -66,30 +66,30 @@ describe('RequestEditor', () => {
     expect(bodyTab).toBeDefined();
     expect(authTab).toBeDefined();
 
-    // Default tab is Parâmetros
+    // Default tab is Params
     expect(document.getElementById('panel-params')).not.toHaveAttribute('hidden');
 
-    // Switch to Cabeçalhos tab
+    // Switch to Headers tab
     fireEvent.click(headersTab);
     expect(screen.getByTestId('headers-code-editor')).toBeDefined();
 
-    // Switch to Corpo tab
+    // Switch to Body tab
     fireEvent.click(bodyTab);
     expect(screen.getByTestId('body-empty-placeholder')).toBeInTheDocument();
 
     const radios = screen.getAllByRole('radio');
-    expect(radios[0]).toHaveTextContent(/nenhum/i);
-    expect(radios[1]).toHaveTextContent(/texto/i);
+    expect(radios[0]).toHaveTextContent(/none/i);
+    expect(radios[1]).toHaveTextContent(/text/i);
     expect(radios[2]).toHaveTextContent(/json/i);
 
     fireEvent.click(screen.getByRole('radio', { name: /json/i }));
     expect(screen.getByTestId('body-code-editor')).toBeDefined();
 
-    // Switch to Autenticação tab
+    // Switch to Auth tab
     fireEvent.click(authTab);
-    expect(screen.getByRole('combobox', { name: /tipo de autenticação/i })).toBeDefined();
+    expect(screen.getByRole('combobox', { name: /authentication type/i })).toBeDefined();
 
-    // Switch to Especificação tab
+    // Switch to Specification tab
     fireEvent.click(specTab);
     expect(screen.getByTestId('specification-panel')).toBeInTheDocument();
   });
@@ -97,11 +97,11 @@ describe('RequestEditor', () => {
   it('navigates tabs using ArrowRight and ArrowLeft with roving tabIndex', () => {
     render(<RequestEditor />);
 
-    const specTab = screen.getByRole('tab', { name: /especificação/i });
-    const paramsTab = screen.getByRole('tab', { name: /parâmetros/i });
-    const headersTab = screen.getByRole('tab', { name: /cabeçalhos|headers/i });
-    const bodyTab = screen.getByRole('tab', { name: /corpo|body/i });
-    const authTab = screen.getByRole('tab', { name: /autenticação|auth/i });
+    const specTab = screen.getByRole('tab', { name: /specification/i });
+    const paramsTab = screen.getByRole('tab', { name: /params/i });
+    const headersTab = screen.getByRole('tab', { name: /headers/i });
+    const bodyTab = screen.getByRole('tab', { name: /body/i });
+    const authTab = screen.getByRole('tab', { name: /auth/i });
 
     // Params is active by default (index 1)
     expect(paramsTab).toHaveAttribute('tabindex', '0');
@@ -136,7 +136,7 @@ describe('RequestEditor', () => {
     expect(bodyPanel).toHaveAttribute('hidden');
     expect(authPanel).toHaveAttribute('hidden');
 
-    const headersTab = screen.getByRole('tab', { name: /cabeçalhos|headers/i });
+    const headersTab = screen.getByRole('tab', { name: /headers/i });
     fireEvent.click(headersTab);
 
     expect(paramsPanel).toHaveAttribute('hidden');
@@ -147,18 +147,18 @@ describe('RequestEditor', () => {
     const onSend = vi.fn();
     render(<RequestEditor onSend={onSend} initialRequest={{ url: 'https://api.example.com' }} />);
 
-    const authTab = screen.getByRole('tab', { name: /autenticação|auth/i });
+    const authTab = screen.getByRole('tab', { name: /auth/i });
     fireEvent.click(authTab);
 
-    const authTypeSelect = screen.getByRole('combobox', { name: /tipo de autenticação/i });
+    const authTypeSelect = screen.getByRole('combobox', { name: /authentication type/i });
     fireEvent.change(authTypeSelect, { target: { value: 'apikey' } });
 
-    const keyInput = screen.getByRole('textbox', { name: /nome da chave api/i });
-    const valInput = screen.getByRole('textbox', { name: /valor da chave api/i });
+    const keyInput = screen.getByRole('textbox', { name: /api key name/i });
+    const valInput = screen.getByRole('textbox', { name: /api key value/i });
     fireEvent.change(keyInput, { target: { value: 'X-Custom-Header' } });
     fireEvent.change(valInput, { target: { value: 'tok_12345' } });
 
-    const sendBtn = screen.getByRole('button', { name: /enviar requisição/i });
+    const sendBtn = screen.getByRole('button', { name: /send request/i });
     fireEvent.click(sendBtn);
 
     expect(onSend).toHaveBeenCalledWith(
@@ -186,7 +186,7 @@ describe('RequestEditor', () => {
     );
 
     // Clicking main send button should prioritize Agent
-    const sendBtn = screen.getByRole('button', { name: /enviar requisição/i });
+    const sendBtn = screen.getByRole('button', { name: /send request/i });
     fireEvent.click(sendBtn);
 
     expect(onSend).toHaveBeenCalledWith(
@@ -195,11 +195,11 @@ describe('RequestEditor', () => {
       })
     );
 
-    // Clicking chevron opens dropdown with "Executar no Servidor Nuvem"
-    const chevronBtn = screen.getByRole('button', { name: /opções de envio e alvo/i });
+    // Clicking chevron opens dropdown with "Execute on Cloud Server"
+    const chevronBtn = screen.getByRole('button', { name: /send and target options/i });
     fireEvent.click(chevronBtn);
 
-    const serverOption = screen.getByRole('menuitem', { name: /executar no servidor nuvem/i });
+    const serverOption = screen.getByRole('menuitem', { name: /execute on cloud server/i });
     expect(serverOption).toBeInTheDocument();
     fireEvent.click(serverOption);
 
@@ -224,7 +224,7 @@ describe('RequestEditor', () => {
     );
 
     // Main button sends to Server
-    const sendBtn = screen.getByRole('button', { name: /enviar requisição/i });
+    const sendBtn = screen.getByRole('button', { name: /send request/i });
     fireEvent.click(sendBtn);
 
     expect(onSend).toHaveBeenCalledWith(
@@ -234,23 +234,23 @@ describe('RequestEditor', () => {
     );
 
     // Dropdown shows Agent option disabled
-    const chevronBtn = screen.getByRole('button', { name: /opções de envio e alvo/i });
+    const chevronBtn = screen.getByRole('button', { name: /send and target options/i });
     fireEvent.click(chevronBtn);
 
-    const agentOption = screen.getByRole('menuitem', { name: /executar no agent local/i });
+    const agentOption = screen.getByRole('menuitem', { name: /execute on local agent/i });
     expect(agentOption).toBeDisabled();
   });
 
   it('formats unformatted JSON in the body when clicking the format button', () => {
     render(<RequestEditor initialRequest={{ body: '{"name":"api","age":30}' }} />);
 
-    const bodyTab = screen.getByRole('tab', { name: /corpo|body/i });
+    const bodyTab = screen.getByRole('tab', { name: /body/i });
     fireEvent.click(bodyTab);
 
-    const formatBtn = screen.getByRole('button', { name: /formatar json/i });
+    const formatBtn = screen.getByRole('button', { name: /format json/i });
     fireEvent.click(formatBtn);
 
-    expect(screen.getByTestId('format-notice')).toHaveTextContent(/formatado com sucesso/i);
+    expect(screen.getByTestId('format-notice')).toHaveTextContent(/formatted successfully/i);
   });
 
   it('renders request title bar, dirty indicator, and handles save action', () => {
@@ -268,12 +268,12 @@ describe('RequestEditor', () => {
     expect(screen.queryByTestId('dirty-indicator')).toBeNull();
 
     // Change URL to trigger dirty indicator
-    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    const urlInput = screen.getByRole('textbox', { name: /request url/i });
     fireEvent.change(urlInput, { target: { value: 'https://api.com/users/new' } });
 
     expect(screen.getByTestId('dirty-indicator')).toBeInTheDocument();
 
-    const saveBtn = screen.getByRole('button', { name: /salvar requisição/i });
+    const saveBtn = screen.getByRole('button', { name: /save request/i });
     fireEvent.click(saveBtn);
 
     expect(onSaveExisting).toHaveBeenCalledWith(
@@ -309,10 +309,10 @@ describe('RequestEditor', () => {
     );
 
     // Path param input should be rendered by ParamsTab
-    const pathParamInput = screen.getByPlaceholderText('Valor para :petId');
+    const pathParamInput = screen.getByPlaceholderText('Value for :petId');
     fireEvent.change(pathParamInput, { target: { value: '42' } });
 
-    const sendBtn = screen.getByRole('button', { name: /enviar requisição/i });
+    const sendBtn = screen.getByRole('button', { name: /send request/i });
     fireEvent.click(sendBtn);
 
     expect(onSend).toHaveBeenCalledWith(
@@ -333,11 +333,11 @@ describe('RequestEditor', () => {
       />
     );
 
-    const addQueryKey = screen.getByPlaceholderText(/Novo parâmetro/i);
+    const addQueryKey = screen.getByPlaceholderText(/New parameter/i);
     fireEvent.change(addQueryKey, { target: { value: 'limit' } });
     fireEvent.blur(addQueryKey);
 
-    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    const urlInput = screen.getByRole('textbox', { name: /request url/i });
     expect(urlInput).toHaveValue('https://api.com/pets?limit=');
   });
 
@@ -370,18 +370,18 @@ describe('RequestEditor', () => {
       />
     );
 
-    // Switch to Especificação tab
-    const specTab = screen.getByRole('tab', { name: /especificação/i });
+    // Switch to Specification tab
+    const specTab = screen.getByRole('tab', { name: /specification/i });
     fireEvent.click(specTab);
 
     expect(screen.getByText('Buscar Pet')).toBeInTheDocument();
     expect(screen.getByText('name')).toBeInTheDocument();
 
-    // Click "Gerar Exemplo no Corpo"
-    const generateBtn = screen.getByRole('button', { name: /Gerar Exemplo no Corpo/i });
+    // Click "Generate Example in Body"
+    const generateBtn = screen.getByRole('button', { name: /Generate Example in Body/i });
     fireEvent.click(generateBtn);
 
-    // Should switch to Corpo tab and have JSON body
+    // Should switch to Body tab and have JSON body
     expect(document.getElementById('panel-body')).not.toHaveAttribute('hidden');
     expect(screen.getByTestId('body-code-editor')).toBeInTheDocument();
     expect(screen.getByTestId('dirty-indicator')).toBeInTheDocument();
@@ -409,7 +409,7 @@ describe('RequestEditor', () => {
     );
 
     // Save request
-    const saveBtn = screen.getByRole('button', { name: /salvar requisição/i });
+    const saveBtn = screen.getByRole('button', { name: /save request/i });
     fireEvent.click(saveBtn);
 
     expect(onSaveExisting).toHaveBeenCalledWith(
@@ -419,7 +419,7 @@ describe('RequestEditor', () => {
     );
 
     // Send request
-    const sendBtn = screen.getByRole('button', { name: /enviar requisição/i });
+    const sendBtn = screen.getByRole('button', { name: /send request/i });
     fireEvent.click(sendBtn);
 
     expect(onSend).toHaveBeenCalledWith(
@@ -451,8 +451,8 @@ describe('RequestEditor', () => {
       />
     );
 
-    // Switch to Corpo tab
-    const bodyTab = screen.getByRole('tab', { name: /corpo/i });
+    // Switch to Body tab
+    const bodyTab = screen.getByRole('tab', { name: /body/i });
     fireEvent.click(bodyTab);
 
     // The CodeEditor for body is present
@@ -462,7 +462,7 @@ describe('RequestEditor', () => {
   it('renders URL field with autoGrow behavior (textarea with rows="1" and break-all)', () => {
     render(<RequestEditor initialRequest={{ url: 'https://api.example.com/long/path' }} />);
 
-    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    const urlInput = screen.getByRole('textbox', { name: /request url/i });
     expect(urlInput.tagName).toBe('TEXTAREA');
     expect(urlInput).toHaveAttribute('rows', '1');
     expect(urlInput).toHaveClass('break-all');
@@ -471,11 +471,11 @@ describe('RequestEditor', () => {
   it('keeps method selector, URL input, and Send button aligned to top with items-start', () => {
     render(<RequestEditor />);
 
-    const methodSelect = screen.getByRole('combobox', { name: /método http/i });
+    const methodSelect = screen.getByRole('combobox', { name: /http method/i });
     const controlsContainer = methodSelect.parentElement;
     expect(controlsContainer).toHaveClass('items-start');
 
-    const sendBtn = screen.getByRole('button', { name: /enviar requisição/i });
+    const sendBtn = screen.getByRole('button', { name: /send request/i });
     const sendContainer = sendBtn.parentElement;
     expect(sendContainer).toHaveClass('items-start');
   });
@@ -489,7 +489,7 @@ describe('RequestEditor', () => {
       />
     );
 
-    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    const urlInput = screen.getByRole('textbox', { name: /request url/i });
     fireEvent.keyDown(urlInput, { key: 'Enter', code: 'Enter' });
 
     expect(onSend).toHaveBeenCalledWith(
@@ -503,16 +503,16 @@ describe('RequestEditor', () => {
   it('clears URL when clicking clear button (X) in autoGrow input', () => {
     render(<RequestEditor initialRequest={{ url: 'https://api.example.com/data' }} />);
 
-    const urlInput = screen.getByRole('textbox', { name: /url da requisição/i });
+    const urlInput = screen.getByRole('textbox', { name: /request url/i });
     expect(urlInput).toHaveValue('https://api.example.com/data');
 
-    const clearBtn = screen.getByRole('button', { name: /limpar url/i });
+    const clearBtn = screen.getByRole('button', { name: /clear url/i });
     expect(clearBtn).toBeInTheDocument();
     expect(clearBtn).toHaveClass('top-2.5');
 
     fireEvent.click(clearBtn);
 
     expect(urlInput).toHaveValue('');
-    expect(screen.queryByRole('button', { name: /limpar url/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /clear url/i })).toBeNull();
   });
 });
