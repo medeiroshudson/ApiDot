@@ -269,11 +269,11 @@ describe('WorkspaceShell', () => {
       expect(screen.getByText('Test Workspace')).toBeInTheDocument();
     });
 
-    const settingsBtn = screen.getByRole('button', { name: 'Configurações Globais' });
+    const settingsBtn = screen.getByRole('button', { name: /global settings|configurações globais/i });
     fireEvent.click(settingsBtn);
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText('Configurações Globais')).toBeInTheDocument();
+    expect(screen.getByText(/global settings|configurações globais/i)).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /local agents/i })).toBeInTheDocument();
   });
 

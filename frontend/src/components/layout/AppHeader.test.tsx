@@ -1,10 +1,11 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AppHeader } from './AppHeader';
 import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useRequestStore } from '@/stores/useRequestStore';
+import { useI18nStore } from '@/stores/useI18nStore';
 
 const mockReplace = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -19,6 +20,7 @@ describe('AppHeader', () => {
     vi.clearAllMocks();
     useAuthStore.getState().reset();
     useWorkspaceStore.getState().reset();
+    useI18nStore.setState({ locale: 'en-US' });
   });
   it('renders workspace title and default fallback', () => {
     const { rerender } = render(<AppHeader title="My Custom Workspace" />);
@@ -44,16 +46,16 @@ describe('AppHeader', () => {
   it('calls onOpenSettings when clicking the global settings button', () => {
     const handleOpenSettings = vi.fn();
     render(<AppHeader onOpenSettings={handleOpenSettings} />);
-    const settingsButton = screen.getByRole('button', { name: 'Configurações Globais' });
+    const settingsButton = screen.getByRole('button', { name: 'Global Settings' });
     fireEvent.click(settingsButton);
     expect(handleOpenSettings).toHaveBeenCalledTimes(1);
   });
 
   it('exposes accessible ARIA attributes for global settings trigger', () => {
     render(<AppHeader />);
-    const settingsButton = screen.getByRole('button', { name: 'Configurações Globais' });
-    expect(settingsButton.getAttribute('aria-label')).toBe('Configurações Globais');
-    expect(settingsButton.getAttribute('title')).toBe('Configurações Globais');
+    const settingsButton = screen.getByRole('button', { name: 'Global Settings' });
+    expect(settingsButton.getAttribute('aria-label')).toBe('Global Settings');
+    expect(settingsButton.getAttribute('title')).toBe('Global Settings');
     expect(settingsButton.getAttribute('aria-haspopup')).toBe('dialog');
     expect(settingsButton.getAttribute('type')).toBe('button');
   });
@@ -76,14 +78,14 @@ describe('AppHeader', () => {
     expect(toggleButton.getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('renders environment dropdown selector with available environments and "Sem Ambiente"', () => {
+  it('renders environment dropdown selector with available environments and "No Environment"', () => {
     const { rerender } = render(<AppHeader environments={['Development', 'Staging', 'Production']} />);
     const select = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' }) as HTMLSelectElement;
     expect(select).toBeDefined();
 
     const options = Array.from(select.options).map((opt) => ({ text: opt.text, value: opt.value }));
     expect(options).toEqual([
-      { text: 'Sem Ambiente', value: '' },
+      { text: 'No Environment', value: '' },
       { text: 'Development', value: 'Development' },
       { text: 'Staging', value: 'Staging' },
       { text: 'Production', value: 'Production' },
@@ -94,7 +96,7 @@ describe('AppHeader', () => {
     const updatedSelect = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' }) as HTMLSelectElement;
     const updatedOptions = Array.from(updatedSelect.options).map((opt) => ({ text: opt.text, value: opt.value }));
     expect(updatedOptions).toEqual([
-      { text: 'Sem Ambiente', value: '' },
+      { text: 'No Environment', value: '' },
       { text: 'Local', value: 'Local' },
       { text: 'Testing', value: 'Testing' },
     ]);
@@ -105,10 +107,10 @@ describe('AppHeader', () => {
     render(<AppHeader />);
     const select = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' }) as HTMLSelectElement;
     const options = Array.from(select.options).map((opt) => ({ text: opt.text, value: opt.value }));
-    expect(options).toEqual([{ text: 'Sem Ambiente', value: '' }]);
+    expect(options).toEqual([{ text: 'No Environment', value: '' }]);
   });
 
-  it('calls onSelectEnvironment with environment name or null when "Sem Ambiente" is selected', () => {
+  it('calls onSelectEnvironment with environment name or null when "No Environment" is selected', () => {
     const handleSelect = vi.fn();
     render(
       <AppHeader
@@ -149,7 +151,7 @@ describe('AppHeader', () => {
     render(<AppHeader environments={['Dev', 'Dev']} />);
     const select = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' }) as HTMLSelectElement;
     const options = Array.from(select.options).map((opt) => opt.text);
-    expect(options).toEqual(['Sem Ambiente', 'Dev', 'Dev']);
+    expect(options).toEqual(['No Environment', 'Dev', 'Dev']);
   });
 
   describe('User Profile Menu and Authentication', () => {
@@ -204,7 +206,7 @@ describe('AppHeader', () => {
       const userTrigger = screen.getByRole('button', { name: /menu do usuário/i });
       fireEvent.click(userTrigger);
 
-      const logoutBtn = screen.getByRole('menuitem', { name: /sair/i });
+      const logoutBtn = screen.getByRole('menuitem', { name: /log out/i });
       expect(logoutBtn).toHaveAttribute('role', 'menuitem');
       fireEvent.click(logoutBtn);
 
@@ -240,6 +242,59 @@ describe('AppHeader', () => {
 
       fireEvent.keyDown(window, { key: 'Escape' });
       expect(screen.queryByTestId('user-dropdown-menu')).toBeNull();
+    });
+
+    it('renders in English by default ("Global Settings", "No Environment")', () => {
+      render(<AppHeader />);
+      expect(screen.getByRole('button', { name: 'Global Settings' })).toBeInTheDocument();
+      const select = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' }) as HTMLSelectElement;
+      expect(select.options[0].text).toBe('No Environment');
+    });
+
+    it('shows active language in user menu and allows quick toggle between en-US and pt-BR', async () => {
+      useAuthStore.setState({
+        isAuthenticated: true,
+        isLoading: false,
+        user: {
+          id: 'u-1',
+          email: 'hudson@example.com',
+          displayName: 'Hudson Medeiros',
+          isRoot: false,
+          workspaces: [{ id: 'ws-main', name: 'Main Workspace', role: 'Owner' }],
+        },
+      });
+
+      render(<AppHeader />);
+
+      const userTrigger = screen.getByRole('button', { name: /menu do usuário/i });
+      fireEvent.click(userTrigger);
+
+      expect(screen.getByTestId('user-dropdown-menu')).toBeInTheDocument();
+      expect(screen.getByText('Language')).toBeInTheDocument();
+
+      const toggleBtn = screen.getByTestId('language-toggle');
+      expect(toggleBtn).toBeInTheDocument();
+      expect(toggleBtn).toHaveTextContent(/english/i);
+
+      // Toggle to Portuguese
+      await act(async () => {
+        fireEvent.click(toggleBtn);
+      });
+
+      expect(useI18nStore.getState().locale).toBe('pt-BR');
+      expect(screen.getByRole('button', { name: 'Configurações Globais' })).toBeInTheDocument();
+      expect(screen.getByText('Idioma')).toBeInTheDocument();
+      expect(toggleBtn).toHaveTextContent(/português/i);
+
+      // Toggle back to English
+      await act(async () => {
+        fireEvent.click(toggleBtn);
+      });
+
+      expect(useI18nStore.getState().locale).toBe('en-US');
+      expect(screen.getByRole('button', { name: 'Global Settings' })).toBeInTheDocument();
+      expect(screen.getByText('Language')).toBeInTheDocument();
+      expect(toggleBtn).toHaveTextContent(/english/i);
     });
   });
 });
