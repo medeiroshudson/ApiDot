@@ -12,6 +12,8 @@ namespace ApiDot.Server.Endpoints;
 
 public static class AuthEndpoints
 {
+    private static readonly string[] SupportedLocales = ["en-US", "pt-BR"];
+
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         ArgumentNullException.ThrowIfNull(app);
@@ -132,8 +134,7 @@ public static class AuthEndpoints
                 return Results.BadRequest(new { message = "Locale is required." });
             }
 
-            var validLocales = new[] { "en-US", "pt-BR" };
-            if (!validLocales.Contains(request.Locale, StringComparer.OrdinalIgnoreCase))
+            if (!SupportedLocales.Contains(request.Locale, StringComparer.OrdinalIgnoreCase))
             {
                 return Results.BadRequest(new { message = "Supported locales are: en-US, pt-BR." });
             }
