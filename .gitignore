@@ -494,4 +494,6 @@ screenshots/
 scripts/
 !backend/src/ApiDot.Server/Scripts/
 web/tsconfig.tsbuildinfo
+frontend/tsconfig.tsbuildinfo
+*.tsbuildinfo
 
