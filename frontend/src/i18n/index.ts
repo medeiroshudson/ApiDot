@@ -26,7 +26,12 @@ function getNestedValue(obj: unknown, path: string): unknown {
   const parts = path.split('.');
   let current: any = obj;
   for (const part of parts) {
-    if (current === null || current === undefined || typeof current !== 'object') {
+    if (
+      current === null ||
+      current === undefined ||
+      typeof current !== 'object' ||
+      !Object.prototype.hasOwnProperty.call(current, part)
+    ) {
       return undefined;
     }
     current = current[part];
@@ -37,7 +42,9 @@ function getNestedValue(obj: unknown, path: string): unknown {
 export function interpolate(template: string, params?: InterpolationParams): string {
   if (!params) return template;
   return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, paramKey) => {
-    const val = params[paramKey];
+    const val = Object.prototype.hasOwnProperty.call(params, paramKey)
+      ? params[paramKey]
+      : undefined;
     if (val !== undefined && val !== null) {
       return String(val);
     }
