@@ -193,4 +193,39 @@ public class AuthFlowE2ETests : IClassFixture<WebApplicationFactory<Program>>, I
             string.Join(";", cookies).Should().NotContain("apidot_session=");
         }
     }
+
+    [Fact]
+    public async Task PatchLocale_Lifecycle_UpdatesAndPersistsUserLocale()
+    {
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
+
+        var loginRes = await client.PostAsJsonAsync("/api/auth/local", new LocalLoginRequest(RootEmail, RootPassword));
+        loginRes.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Initial locale should be en-US
+        var initialMe = await client.GetFromJsonAsync<AuthUserDto>("/api/auth/me");
+        initialMe.Should().NotBeNull();
+        initialMe!.Locale.Should().Be("en-US");
+
+        // Patch to pt-BR
+        var patchRes = await client.PatchAsJsonAsync("/api/auth/me/locale", new UpdateLocaleRequest("pt-BR"));
+        patchRes.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        // Verify GET /api/auth/me returns pt-BR
+        var updatedMe = await client.GetFromJsonAsync<AuthUserDto>("/api/auth/me");
+        updatedMe.Should().NotBeNull();
+        updatedMe!.Locale.Should().Be("pt-BR");
+
+        // Patch back to en-US
+        var patchBackRes = await client.PatchAsJsonAsync("/api/auth/me/locale", new UpdateLocaleRequest("en-US"));
+        patchBackRes.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var finalMe = await client.GetFromJsonAsync<AuthUserDto>("/api/auth/me");
+        finalMe.Should().NotBeNull();
+        finalMe!.Locale.Should().Be("en-US");
+    }
 }

@@ -59,7 +59,8 @@ public class UserSeeder(
                 DisplayName = DefaultDisplayName,
                 PasswordHash = initialHash,
                 PasswordSalt = initialSalt,
-                IsRoot = true
+                IsRoot = true,
+                Locale = "en-US"
             };
             dbContext.Users.Add(rootUser);
             logger?.LogInformation("Created root user {Email}.", normalizedEmail);
@@ -71,6 +72,11 @@ public class UserSeeder(
             if (string.IsNullOrWhiteSpace(rootUser.DisplayName) || rootUser.DisplayName == "Root Administrator")
             {
                 rootUser.DisplayName = DefaultDisplayName;
+            }
+
+            if (string.IsNullOrWhiteSpace(rootUser.Locale))
+            {
+                rootUser.Locale = "en-US";
             }
 
             bool passwordMatches = !string.IsNullOrEmpty(rootUser.PasswordHash)

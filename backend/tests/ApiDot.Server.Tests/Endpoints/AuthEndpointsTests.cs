@@ -686,4 +686,72 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
         var loggedIn = await authService.ProcessOidcLoginAsync("sub-null-locale", "null-locale-user@test.com", "Null Locale User", "iss", "pt-BR", CancellationToken.None);
         loggedIn.Locale.Should().Be("pt-BR");
     }
+
+    [Fact]
+    public async Task PatchLocale_WhenAuthenticated_WithValidLocale_ReturnsNoContent()
+    {
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
+
+        var loginRes = await client.PostAsJsonAsync("/api/auth/local", new LocalLoginRequest(TestRootEmail, TestRootPassword));
+        loginRes.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var response = await client.PatchAsJsonAsync("/api/auth/me/locale", new UpdateLocaleRequest("pt-BR"));
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var meRes = await client.GetFromJsonAsync<AuthUserDto>("/api/auth/me");
+        meRes.Should().NotBeNull();
+        meRes!.Locale.Should().Be("pt-BR");
+    }
+
+    [Fact]
+    public async Task PatchLocale_WithInvalidLocale_ReturnsBadRequest()
+    {
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
+
+        var loginRes = await client.PostAsJsonAsync("/api/auth/local", new LocalLoginRequest(TestRootEmail, TestRootPassword));
+        loginRes.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var response = await client.PatchAsJsonAsync("/api/auth/me/locale", new UpdateLocaleRequest("invalid-locale"));
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task PatchLocale_WithEmptyOrWhitespaceLocale_ReturnsBadRequest()
+    {
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
+
+        var loginRes = await client.PostAsJsonAsync("/api/auth/local", new LocalLoginRequest(TestRootEmail, TestRootPassword));
+        loginRes.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var responseEmpty = await client.PatchAsJsonAsync("/api/auth/me/locale", new UpdateLocaleRequest(""));
+        responseEmpty.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var responseWhitespace = await client.PatchAsJsonAsync("/api/auth/me/locale", new UpdateLocaleRequest("   "));
+        responseWhitespace.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task PatchLocale_WhenUnauthenticated_ReturnsUnauthorized()
+    {
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = false
+        });
+
+        var response = await client.PatchAsJsonAsync("/api/auth/me/locale", new UpdateLocaleRequest("pt-BR"));
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
 }
