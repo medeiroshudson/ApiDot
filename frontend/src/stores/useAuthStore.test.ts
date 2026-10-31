@@ -5,6 +5,7 @@ import {
   useAuthStore,
   INITIAL_AUTH_STATE,
 } from './useAuthStore';
+import { useI18nStore } from './useI18nStore';
 
 vi.mock('@/lib/authApi', async () => {
   return {
@@ -82,6 +83,20 @@ describe('useAuthStore', () => {
       expect(state.error).toBeNull();
     });
 
+    it('initializes useI18nStore with user locale when user has locale preference', async () => {
+      const userWithLocale: AuthUser = {
+        ...mockUser,
+        locale: 'pt-BR',
+      };
+      vi.mocked(authApi.getCurrentUser).mockResolvedValueOnce(userWithLocale);
+      const initSpy = vi.spyOn(useI18nStore.getState(), 'initFromUser');
+
+      await useAuthStore.getState().checkAuth();
+
+      expect(initSpy).toHaveBeenCalledWith('pt-BR');
+      initSpy.mockRestore();
+    });
+
     it('sets user to null and isAuthenticated: false when /api/auth/me returns null (401)', async () => {
       vi.mocked(authApi.getCurrentUser).mockResolvedValueOnce(null);
 
@@ -156,6 +171,20 @@ describe('useAuthStore', () => {
       expect(state.isAuthenticated).toBe(true);
       expect(state.isLoading).toBe(false);
       expect(state.error).toBeNull();
+    });
+
+    it('initializes useI18nStore with user locale when logged-in user has locale preference', async () => {
+      const userWithLocale: AuthUser = {
+        ...mockUser,
+        locale: 'pt-BR',
+      };
+      vi.mocked(authApi.loginLocal).mockResolvedValueOnce(userWithLocale);
+      const initSpy = vi.spyOn(useI18nStore.getState(), 'initFromUser');
+
+      await useAuthStore.getState().loginLocal('admin@apidot.dev', 'password');
+
+      expect(initSpy).toHaveBeenCalledWith('pt-BR');
+      initSpy.mockRestore();
     });
 
     it('sets error and rethrows when local login fails', async () => {
