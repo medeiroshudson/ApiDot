@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, useId } from 'react';
 import { Variable, Shuffle, Clock, Link2 } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
+import { MethodBadge, HTTP_METHOD_BADGES, METHOD_COLORS } from '@/components/common/MethodBadge';
 
 export interface AutocompleteVariable {
   key: string;
@@ -56,17 +57,7 @@ interface SuggestionItem {
   description?: string;
 }
 
-export const HTTP_METHOD_BADGES: Record<string, string> = {
-  GET: 'text-emerald-400 bg-emerald-950/60 border-emerald-800/80',
-  POST: 'text-blue-400 bg-blue-950/60 border-blue-800/80',
-  PUT: 'text-amber-400 bg-amber-950/60 border-amber-800/80',
-  PATCH: 'text-purple-400 bg-purple-950/60 border-purple-800/80',
-  DELETE: 'text-rose-400 bg-rose-950/60 border-rose-800/80',
-  HEAD: 'text-neutral-400 bg-neutral-900 border-neutral-700',
-  OPTIONS: 'text-cyan-400 bg-cyan-950/60 border-cyan-800/80',
-};
-
-export const METHOD_COLORS = HTTP_METHOD_BADGES;
+export { HTTP_METHOD_BADGES, METHOD_COLORS };
 
 export const SCHEMA_TYPE_BADGES: Record<string, string> = {
   string: 'text-emerald-400 bg-emerald-950/60 border-emerald-800/80',
@@ -637,7 +628,6 @@ export function RequestAutocomplete({
     >
       {suggestions.map((item, index) => {
         const isSelected = index === selectedIndex;
-        const method = item.method?.toUpperCase() || 'GET';
         return (
           <div
             key={`${item.type}-${item.id}-${index}`}
@@ -660,13 +650,7 @@ export function RequestAutocomplete({
             <div className="flex items-center gap-2 min-w-0">
               {item.type === 'request' ? (
                 <>
-                  <span
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border shrink-0 ${
-                      HTTP_METHOD_BADGES[method] || HTTP_METHOD_BADGES.GET
-                    }`}
-                  >
-                    {method}
-                  </span>
+                  <MethodBadge method={item.method} />
                   <span className="truncate">{item.name}</span>
                 </>
               ) : item.type === 'token' ? (

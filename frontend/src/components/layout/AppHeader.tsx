@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useRequestStore } from '@/stores/useRequestStore';
 import { useTranslation } from '@/hooks/useTranslation';
+import { Select } from '@/components/common/Select';
 
 export interface AppHeaderProps {
   title?: string;
@@ -139,11 +140,12 @@ export function AppHeader({
 
       <div className="flex items-center gap-2 sm:gap-3">
         <div className="flex items-center gap-1.5">
-          <select
+          <Select
+            sizeVariant="sm"
             value={activeEnvironment ?? ''}
             onChange={(e) => onSelectEnvironment?.(e.target.value === '' ? null : e.target.value)}
             aria-label="Selecionar ambiente ativo"
-            className="bg-neutral-900 border border-neutral-800 text-xs text-neutral-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-neutral-400 cursor-pointer hover:border-neutral-700 transition-colors max-w-[120px] sm:max-w-[200px] truncate"
+            className="max-w-[120px] sm:max-w-[200px] truncate hover:border-neutral-700"
           >
             <option value="">{t('header.noEnvironment')}</option>
             {(environments ?? []).map((env, idx) => (
@@ -151,7 +153,7 @@ export function AppHeader({
                 {env}
               </option>
             ))}
-          </select>
+          </Select>
           <button
             type="button"
             onClick={onOpenEnvironmentSettings}

@@ -7,6 +7,7 @@ import {
   getChildPath,
   isValidIdentifier,
 } from './DependencyLinkerModal';
+import { HTTP_METHOD_BADGES } from '@/components/common/MethodBadge';
 
 describe('DependencyLinkerModal', () => {
   const mockRequests: DependencyRequest[] = [
@@ -164,11 +165,15 @@ describe('DependencyLinkerModal', () => {
 
       // Available requests should be displayed
       expect(screen.getByText('Login Auth')).toBeInTheDocument();
-      expect(screen.getByText('POST')).toBeInTheDocument();
+      const postBadge = screen.getByText('POST');
+      expect(postBadge).toBeInTheDocument();
+      expect(postBadge.className).toContain(HTTP_METHOD_BADGES.POST);
       expect(screen.getByText('https://api.example.com/v1/auth/login')).toBeInTheDocument();
 
       expect(screen.getByText('Get Users List')).toBeInTheDocument();
-      expect(screen.getByText('GET')).toBeInTheDocument();
+      const getBadge = screen.getByText('GET');
+      expect(getBadge).toBeInTheDocument();
+      expect(getBadge.className).toContain(HTTP_METHOD_BADGES.GET);
       expect(screen.getByText('https://api.example.com/v1/users')).toBeInTheDocument();
     });
 
