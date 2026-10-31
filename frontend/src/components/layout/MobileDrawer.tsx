@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface MobileDrawerProps {
   isOpen: boolean;
@@ -8,6 +9,7 @@ export interface MobileDrawerProps {
 }
 
 export function MobileDrawer({ isOpen, onClose, children }: MobileDrawerProps) {
+  const { t } = useTranslation();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -50,13 +52,13 @@ export function MobileDrawer({ isOpen, onClose, children }: MobileDrawerProps) {
       >
         <div className="flex justify-between items-center mb-4 border-b border-neutral-800 pb-2">
           <span id="drawer-title" className="font-semibold text-sm">
-            Coleções & Pastas
+            {t('sidebar.collections')}
           </span>
           <button
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            aria-label="Fechar gaveta"
+            aria-label={t('sidebar.closeDrawer')}
             className="p-1 rounded hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-400"
           >
             <X className="w-5 h-5" aria-hidden="true" />

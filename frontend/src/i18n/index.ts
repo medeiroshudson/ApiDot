@@ -76,3 +76,5 @@ export function translate(
 
   return interpolate(rawValue, params);
 }
+
+export { useTranslation } from '@/hooks/useTranslation';

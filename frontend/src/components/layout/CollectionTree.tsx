@@ -26,6 +26,7 @@ import {
 } from '@/lib/treeApi';
 import { filterTree, ActiveTreeItem, ActiveTreeItemType } from '@/hooks/useCollectionTree';
 import { ContextMenu, ContextMenuItem, ContextMenuPosition } from '@/components/common/ContextMenu';
+import { useTranslation } from '@/hooks/useTranslation';
 import { InlineNodeInput } from './InlineNodeInput';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
@@ -182,6 +183,7 @@ export function CollectionTree({
   onCreateWorkspaceClick,
   isWorkspacesLoading = false,
 }: CollectionTreeProps) {
+  const { t } = useTranslation();
   const treeContainerRef = useRef<HTMLDivElement>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
   const [localFilter, setLocalFilter] = useState('');
@@ -417,25 +419,25 @@ export function CollectionTree({
       return [
         {
           id: 'col-new-folder',
-          label: 'Nova Pasta',
+          label: t('sidebar.newFolder'),
           icon: <Folder className="w-4 h-4 text-amber-400" />,
           onClick: () => handleStartCreate('folder', col.id, col.id, null),
         },
         {
           id: 'col-new-request',
-          label: 'Nova Requisição',
+          label: t('sidebar.newRequest'),
           icon: <Plus className="w-4 h-4 text-blue-400" />,
           onClick: () => handleStartCreate('request', col.id, col.id, null),
         },
         {
           id: 'col-import-curl',
-          label: 'Importar cURL',
+          label: t('sidebar.importCurl'),
           icon: <Terminal className="w-4 h-4 text-emerald-400" />,
           onClick: () => onImportCurl?.(col.id, null),
         },
         {
           id: 'col-rename',
-          label: 'Renomear',
+          label: t('sidebar.rename'),
           icon: <Pencil className="w-4 h-4 text-zinc-400" />,
           onClick: () => handleStartRename('collection', col.id, col.name),
         },
@@ -444,7 +446,7 @@ export function CollectionTree({
           ? [
               {
                 id: 'col-sync',
-                label: 'Sincronizar OpenAPI',
+                label: t('sidebar.syncOpenApi'),
                 icon: <RefreshCw className="w-4 h-4 text-emerald-400" />,
                 onClick: () => {
                   (onSyncCollection ?? onSync)?.(col);
@@ -456,7 +458,7 @@ export function CollectionTree({
           ? [
               {
                 id: 'col-settings',
-                label: 'Configurações',
+                label: t('sidebar.settings'),
                 icon: <Settings className="w-4 h-4 text-zinc-400" />,
                 onClick: () => {
                   (onOpenCollectionSettings ?? onOpenSettings)?.(col);
@@ -467,7 +469,7 @@ export function CollectionTree({
         { isDivider: true },
         {
           id: 'col-delete',
-          label: 'Excluir',
+          label: t('sidebar.deleteConfirm'),
           icon: <Trash2 className="w-4 h-4 text-rose-400" />,
           danger: true,
           onClick: () => handleRequestDelete('collection', col),
@@ -480,32 +482,32 @@ export function CollectionTree({
       return [
         {
           id: 'folder-new-folder',
-          label: 'Nova Pasta',
+          label: t('sidebar.newFolder'),
           icon: <Folder className="w-4 h-4 text-amber-400" />,
           onClick: () => handleStartCreate('folder', folder.id, folder.collectionId, folder.id),
         },
         {
           id: 'folder-new-request',
-          label: 'Nova Requisição',
+          label: t('sidebar.newRequest'),
           icon: <Plus className="w-4 h-4 text-blue-400" />,
           onClick: () => handleStartCreate('request', folder.id, folder.collectionId, folder.id),
         },
         {
           id: 'folder-import-curl',
-          label: 'Importar cURL',
+          label: t('sidebar.importCurl'),
           icon: <Terminal className="w-4 h-4 text-emerald-400" />,
           onClick: () => onImportCurl?.(folder.collectionId, folder.id),
         },
         {
           id: 'folder-rename',
-          label: 'Renomear',
+          label: t('sidebar.rename'),
           icon: <Pencil className="w-4 h-4 text-zinc-400" />,
           onClick: () => handleStartRename('folder', folder.id, folder.name),
         },
         { isDivider: true },
         {
           id: 'folder-delete',
-          label: 'Excluir',
+          label: t('sidebar.deleteConfirm'),
           icon: <Trash2 className="w-4 h-4 text-rose-400" />,
           danger: true,
           onClick: () => handleRequestDelete('folder', folder),
@@ -518,26 +520,26 @@ export function CollectionTree({
       return [
         {
           id: 'req-copy-curl',
-          label: 'Copiar cURL',
+          label: t('sidebar.copyCurl'),
           icon: <Terminal className="w-4 h-4 text-emerald-400" />,
           onClick: () => onCopyCurl?.(req),
         },
         {
           id: 'req-duplicate',
-          label: 'Duplicar',
+          label: t('sidebar.duplicate'),
           icon: <Copy className="w-4 h-4 text-blue-400" />,
           onClick: () => onDuplicateRequest?.(req.id),
         },
         {
           id: 'req-rename',
-          label: 'Renomear',
+          label: t('sidebar.rename'),
           icon: <Pencil className="w-4 h-4 text-zinc-400" />,
           onClick: () => handleStartRename('request', req.id, req.name),
         },
         { isDivider: true },
         {
           id: 'req-delete',
-          label: 'Excluir',
+          label: t('sidebar.deleteConfirm'),
           icon: <Trash2 className="w-4 h-4 text-rose-400" />,
           danger: true,
           onClick: () => handleRequestDelete('request', req),
@@ -549,20 +551,20 @@ export function CollectionTree({
     return [
       {
         id: 'empty-new-collection',
-        label: 'Nova Coleção',
+        label: t('sidebar.newCollection'),
         icon: <Layers className="w-4 h-4 text-emerald-400" />,
         onClick: () => handleStartCreate('collection', null),
       },
       {
         id: 'empty-import-openapi',
-        label: 'Importar OpenAPI',
+        label: t('sidebar.importOpenApi'),
         icon: <Download className="w-4 h-4 text-purple-400" />,
         onClick: () => onImportOpenApi?.(),
       },
       { isDivider: true },
       {
         id: 'empty-reload',
-        label: 'Recarregar Árvore',
+        label: t('sidebar.reloadTree'),
         icon: <RefreshCw className="w-4 h-4 text-zinc-400" />,
         onClick: () => onReload?.(),
       },
@@ -572,26 +574,26 @@ export function CollectionTree({
   const newMenuItems: ContextMenuItem[] = [
     {
       id: 'create-collection',
-      label: 'Nova Coleção',
+      label: t('sidebar.newCollection'),
       icon: <Layers className="w-4 h-4 text-emerald-400" />,
       onClick: () => handleNewOptionClick('collection'),
     },
     {
       id: 'create-folder',
-      label: 'Nova Pasta',
+      label: t('sidebar.newFolder'),
       icon: <Folder className="w-4 h-4 text-amber-400" />,
       onClick: () => handleNewOptionClick('folder'),
     },
     {
       id: 'create-request',
-      label: 'Nova Requisição',
+      label: t('sidebar.newRequest'),
       icon: <Plus className="w-4 h-4 text-blue-400" />,
       onClick: () => handleNewOptionClick('request'),
     },
     { isDivider: true },
     {
       id: 'import-openapi-top',
-      label: 'Importar OpenAPI',
+      label: t('sidebar.importOpenApi'),
       icon: <Download className="w-4 h-4 text-purple-400" />,
       onClick: () => onImportOpenApi?.(),
     },
@@ -628,8 +630,8 @@ export function CollectionTree({
           {isEditing ? (
             <InlineNodeInput
               initialValue={req.name}
-              placeholder="Nome da requisição..."
-              aria-label={`Renomear requisição ${req.name}`}
+              placeholder={t('sidebar.requestNamePlaceholder')}
+              aria-label={t('sidebar.renameRequest', { name: req.name })}
               onCommit={(newName) => handleCommitRename('request', req.id, newName)}
               onCancel={handleCancelRename}
             />
@@ -664,7 +666,11 @@ export function CollectionTree({
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
             <button
               type="button"
-              aria-label={isExpanded ? `Recolher pasta ${folder.name}` : `Expandir pasta ${folder.name}`}
+              aria-label={
+                isExpanded
+                  ? t('sidebar.collapseFolder', { name: folder.name })
+                  : t('sidebar.expandFolder', { name: folder.name })
+              }
               onClick={(e) => toggleCollapse(folder.id, e)}
               className="p-0.5 text-neutral-400 hover:text-white rounded"
             >
@@ -684,8 +690,8 @@ export function CollectionTree({
             {isEditing ? (
               <InlineNodeInput
                 initialValue={folder.name}
-                placeholder="Nome da pasta..."
-                aria-label={`Renomear pasta ${folder.name}`}
+                placeholder={t('sidebar.folderNamePlaceholder')}
+                aria-label={t('sidebar.renameFolder', { name: folder.name })}
                 onCommit={(newName) => handleCommitRename('folder', folder.id, newName)}
                 onCancel={handleCancelRename}
               />
@@ -709,8 +715,8 @@ export function CollectionTree({
                 <Folder className="w-4 h-4 text-amber-400/70 shrink-0" />
                 <InlineNodeInput
                   initialValue=""
-                  placeholder="Nome da pasta..."
-                  aria-label="Nova subpasta"
+                  placeholder={t('sidebar.folderNamePlaceholder')}
+                  aria-label={t('sidebar.newSubfolder')}
                   onCommit={handleCommitCreate}
                   onCancel={handleCancelCreate}
                 />
@@ -731,8 +737,8 @@ export function CollectionTree({
                 </span>
                 <InlineNodeInput
                   initialValue=""
-                  placeholder="Nome da requisição..."
-                  aria-label="Nova requisição"
+                  placeholder={t('sidebar.requestNamePlaceholder')}
+                  aria-label={t('sidebar.newRequestAria')}
                   onCommit={handleCommitCreate}
                   onCancel={handleCancelCreate}
                 />
@@ -769,7 +775,11 @@ export function CollectionTree({
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
             <button
               type="button"
-              aria-label={isExpanded ? `Recolher coleção ${col.name}` : `Expandir coleção ${col.name}`}
+              aria-label={
+                isExpanded
+                  ? t('sidebar.collapseCollection', { name: col.name })
+                  : t('sidebar.expandCollection', { name: col.name })
+              }
               onClick={(e) => toggleCollapse(col.id, e)}
               className="p-0.5 text-neutral-400 hover:text-white rounded"
             >
@@ -785,8 +795,8 @@ export function CollectionTree({
             {isEditing ? (
               <InlineNodeInput
                 initialValue={col.name}
-                placeholder="Nome da coleção..."
-                aria-label={`Renomear coleção ${col.name}`}
+                placeholder={t('sidebar.collectionNamePlaceholder')}
+                aria-label={t('sidebar.renameCollection', { name: col.name })}
                 onCommit={(newName) => handleCommitRename('collection', col.id, newName)}
                 onCancel={handleCancelRename}
               />
@@ -812,8 +822,8 @@ export function CollectionTree({
               {(onOpenCollectionSettings || onOpenSettings) && (
                 <button
                   type="button"
-                  title={`Configurações da coleção ${col.name}`}
-                  aria-label={`Configurações da coleção ${col.name}`}
+                  title={t('sidebar.collectionSettingsAria', { name: col.name })}
+                  aria-label={t('sidebar.collectionSettingsAria', { name: col.name })}
                   onClick={(e) => {
                     e.stopPropagation();
                     (onOpenCollectionSettings ?? onOpenSettings)?.(col);
@@ -841,8 +851,8 @@ export function CollectionTree({
                 <Folder className="w-4 h-4 text-amber-400/70 shrink-0" />
                 <InlineNodeInput
                   initialValue=""
-                  placeholder="Nome da pasta..."
-                  aria-label="Nova pasta"
+                  placeholder={t('sidebar.folderNamePlaceholder')}
+                  aria-label={t('sidebar.newFolderAria')}
                   onCommit={handleCommitCreate}
                   onCancel={handleCancelCreate}
                 />
@@ -863,8 +873,8 @@ export function CollectionTree({
                 </span>
                 <InlineNodeInput
                   initialValue=""
-                  placeholder="Nome da requisição..."
-                  aria-label="Nova requisição"
+                  placeholder={t('sidebar.requestNamePlaceholder')}
+                  aria-label={t('sidebar.newRequestAria')}
                   onCommit={handleCommitCreate}
                   onCancel={handleCancelCreate}
                 />
@@ -906,20 +916,20 @@ export function CollectionTree({
             <div className={`flex items-center gap-1.5 shrink-0 ${!hasWorkspaces ? 'w-full justify-between' : ''}`}>
               <button
                 type="button"
-                aria-label="Novo"
+                aria-label={t('sidebar.new')}
                 aria-haspopup="true"
                 aria-expanded={isNewMenuOpen}
                 onClick={handleNewButtonClick}
                 className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors cursor-pointer shadow-sm"
               >
                 <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Novo</span>
+                <span>{t('sidebar.new')}</span>
               </button>
 
               <button
                 type="button"
-                title="Recarregar árvore"
-                aria-label="Recarregar árvore"
+                title={t('sidebar.reloadTree')}
+                aria-label={t('sidebar.reloadTree')}
                 disabled={isLoading}
                 onClick={() => onReload?.()}
                 className="p-1 rounded text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors disabled:opacity-40 cursor-pointer"
@@ -943,8 +953,8 @@ export function CollectionTree({
               type="text"
               value={effectiveFilter}
               onChange={(e) => handleFilterChange(e.target.value)}
-              placeholder="Filtrar por nome ou rota..."
-              aria-label="Filtrar coleções, pastas e requisições"
+              placeholder={t('sidebar.filterPlaceholder')}
+              aria-label={t('sidebar.filterAriaLabel')}
               className="w-full bg-neutral-900 border border-neutral-800 rounded px-2 pl-7 py-1 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-neutral-700 focus:ring-1 focus:ring-neutral-700 transition-colors"
             />
           </div>
@@ -957,7 +967,7 @@ export function CollectionTree({
           data-testid="sidebar-workspaces-loading"
           className="flex-1 flex items-center justify-center text-center p-4 text-xs text-neutral-500"
         >
-          Carregando workspaces...
+          {t('sidebar.loadingWorkspaces')}
         </div>
       ) : hasWorkspaces && workspaces.length === 0 ? (
         <div
@@ -968,10 +978,10 @@ export function CollectionTree({
             <Briefcase className="w-5 h-5" aria-hidden="true" />
           </div>
           <h3 className="text-xs font-semibold text-neutral-200 mb-1">
-            Comece criando seu Workspace
+            {t('sidebar.startCreatingWorkspace')}
           </h3>
           <p className="text-[11px] text-neutral-400 mb-4 max-w-[200px]">
-            Workspaces isolam suas coleções, variáveis e requisições para cada projeto.
+            {t('sidebar.workspaceDescription')}
           </p>
           <button
             type="button"
@@ -980,20 +990,20 @@ export function CollectionTree({
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors cursor-pointer shadow-sm"
           >
             <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Criar Workspace</span>
+            <span>{t('sidebar.createWorkspace')}</span>
           </button>
         </div>
       ) : (
         <div
           role="tree"
-          aria-label="Árvore de Coleções"
+          aria-label={t('sidebar.collectionsTree')}
           className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden space-y-0.5 min-h-[120px] focus:outline-none"
         >
           {displayedTree && displayedTree.collections.length > 0 ? (
             displayedTree.collections.map(renderCollection)
           ) : !inlineCreating ? (
             <div className="py-6 text-center text-xs text-neutral-500">
-              {effectiveFilter ? 'Nenhum item encontrado.' : 'Nenhuma coleção disponível.'}
+              {effectiveFilter ? t('sidebar.noItemsFound') : t('sidebar.noCollectionsAvailable')}
             </div>
           ) : null}
 
@@ -1002,8 +1012,8 @@ export function CollectionTree({
               <Layers className="w-4 h-4 text-blue-400/70 shrink-0" />
               <InlineNodeInput
                 initialValue=""
-                placeholder="Nome da coleção..."
-                aria-label="Nova coleção"
+                placeholder={t('sidebar.collectionNamePlaceholder')}
+                aria-label={t('sidebar.newCollectionAria')}
                 onCommit={handleCommitCreate}
                 onCancel={handleCancelCreate}
               />
@@ -1059,12 +1069,14 @@ export function CollectionTree({
               </div>
               <div>
                 <h3 id="confirm-delete-title" className="text-sm font-semibold text-zinc-100">
-                  {deleteModal.type === 'collection' ? 'Excluir Coleção' : 'Excluir Pasta'}
+                  {deleteModal.type === 'collection'
+                    ? t('sidebar.deleteCollectionTitle')
+                    : t('sidebar.deleteFolderTitle')}
                 </h3>
                 <p className="text-xs text-zinc-400 mt-1">
                   {deleteModal.type === 'collection'
-                    ? `A coleção "${deleteModal.name}" não está vazia. Todos os itens contidos nela serão excluídos permanentemente.`
-                    : `A pasta "${deleteModal.name}" não está vazia. Todos os itens contidos nela serão excluídos permanentemente.`}
+                    ? t('sidebar.deleteCollectionWarning', { name: deleteModal.name })
+                    : t('sidebar.deleteFolderWarning', { name: deleteModal.name })}
                 </p>
               </div>
             </div>
@@ -1074,7 +1086,7 @@ export function CollectionTree({
                 onClick={() => setDeleteModal(null)}
                 className="px-3 py-1.5 text-xs font-medium rounded text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
               >
-                Cancelar
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -1089,7 +1101,7 @@ export function CollectionTree({
                 }}
                 className="px-3 py-1.5 text-xs font-medium rounded bg-rose-600 hover:bg-rose-500 text-white transition-colors"
               >
-                Excluir
+                {t('common.delete')}
               </button>
             </div>
           </div>

@@ -30,7 +30,7 @@ describe('WorkspaceModal', () => {
       expect(dialog).toBeInTheDocument();
       expect(dialog).toHaveAttribute('aria-modal', 'true');
       expect(dialog).toHaveAttribute('aria-labelledby', 'workspace-modal-title');
-      expect(screen.getByRole('heading', { name: /novo workspace/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /new workspace/i })).toBeInTheDocument();
     });
 
     it('renders input and buttons when isOpen is true', () => {
@@ -42,13 +42,13 @@ describe('WorkspaceModal', () => {
         />
       );
 
-      expect(screen.getByRole('textbox', { name: /nome do workspace/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /cancelar/i })).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: /workspace name/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
 
-      const submitBtn = screen.getByRole('button', { name: /^criar workspace$/i });
+      const submitBtn = screen.getByRole('button', { name: /^create workspace$/i });
       expect(submitBtn).toBeInTheDocument();
       // Ensure text is clean without "+" symbol in string
-      expect(submitBtn.textContent).toBe('Criar Workspace');
+      expect(submitBtn.textContent).toBe('Create Workspace');
     });
 
     it('focuses input on open', () => {
@@ -60,7 +60,7 @@ describe('WorkspaceModal', () => {
         />
       );
 
-      const input = screen.getByRole('textbox', { name: /nome do workspace/i });
+      const input = screen.getByRole('textbox', { name: /workspace name/i });
       expect(input).toHaveFocus();
     });
   });
@@ -75,7 +75,7 @@ describe('WorkspaceModal', () => {
         />
       );
 
-      const submitBtn = screen.getByRole('button', { name: /^criar workspace$/i });
+      const submitBtn = screen.getByRole('button', { name: /^create workspace$/i });
       expect(submitBtn).toBeDisabled();
     });
 
@@ -88,10 +88,10 @@ describe('WorkspaceModal', () => {
         />
       );
 
-      const input = screen.getByRole('textbox', { name: /nome do workspace/i });
+      const input = screen.getByRole('textbox', { name: /workspace name/i });
       fireEvent.change(input, { target: { value: '    ' } });
 
-      const submitBtn = screen.getByRole('button', { name: /^criar workspace$/i });
+      const submitBtn = screen.getByRole('button', { name: /^create workspace$/i });
       expect(submitBtn).toBeDisabled();
     });
 
@@ -104,10 +104,10 @@ describe('WorkspaceModal', () => {
         />
       );
 
-      const input = screen.getByRole('textbox', { name: /nome do workspace/i });
+      const input = screen.getByRole('textbox', { name: /workspace name/i });
       fireEvent.change(input, { target: { value: 'Meu Workspace' } });
 
-      const submitBtn = screen.getByRole('button', { name: /^criar workspace$/i });
+      const submitBtn = screen.getByRole('button', { name: /^create workspace$/i });
       expect(submitBtn).not.toBeDisabled();
     });
 
@@ -120,10 +120,10 @@ describe('WorkspaceModal', () => {
         />
       );
 
-      const input = screen.getByRole('textbox', { name: /nome do workspace/i });
+      const input = screen.getByRole('textbox', { name: /workspace name/i });
       fireEvent.change(input, { target: { value: 'a'.repeat(201) } });
 
-      const submitBtn = screen.getByRole('button', { name: /^criar workspace$/i });
+      const submitBtn = screen.getByRole('button', { name: /^create workspace$/i });
       expect(submitBtn).toBeDisabled();
     });
   });
@@ -141,10 +141,10 @@ describe('WorkspaceModal', () => {
         />
       );
 
-      const input = screen.getByRole('textbox', { name: /nome do workspace/i });
+      const input = screen.getByRole('textbox', { name: /workspace name/i });
       fireEvent.change(input, { target: { value: '   Projeto Alpha   ' } });
 
-      const submitBtn = screen.getByRole('button', { name: /^criar workspace$/i });
+      const submitBtn = screen.getByRole('button', { name: /^create workspace$/i });
       fireEvent.click(submitBtn);
 
       await waitFor(() => {
@@ -166,7 +166,7 @@ describe('WorkspaceModal', () => {
         />
       );
 
-      const input = screen.getByRole('textbox', { name: /nome do workspace/i });
+      const input = screen.getByRole('textbox', { name: /workspace name/i });
       fireEvent.change(input, { target: { value: 'Finanças' } });
       fireEvent.submit(input.closest('form')!);
 
@@ -193,15 +193,15 @@ describe('WorkspaceModal', () => {
         />
       );
 
-      const input = screen.getByRole('textbox', { name: /nome do workspace/i });
+      const input = screen.getByRole('textbox', { name: /workspace name/i });
       fireEvent.change(input, { target: { value: 'Workspace Lento' } });
 
-      const submitBtn = screen.getByRole('button', { name: /^criar workspace$/i });
+      const submitBtn = screen.getByRole('button', { name: /^create workspace$/i });
       fireEvent.click(submitBtn);
 
-      expect(screen.getByText(/criando\.\.\./i)).toBeInTheDocument();
+      expect(screen.getByText(/creating\.\.\./i)).toBeInTheDocument();
       expect(submitBtn).toBeDisabled();
-      expect(screen.getByRole('button', { name: /cancelar/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled();
       expect(input).toBeDisabled();
 
       resolvePromise();
@@ -222,10 +222,10 @@ describe('WorkspaceModal', () => {
         />
       );
 
-      const input = screen.getByRole('textbox', { name: /nome do workspace/i });
+      const input = screen.getByRole('textbox', { name: /workspace name/i });
       fireEvent.change(input, { target: { value: 'Workspace Duplicado' } });
 
-      const submitBtn = screen.getByRole('button', { name: /^criar workspace$/i });
+      const submitBtn = screen.getByRole('button', { name: /^create workspace$/i });
       fireEvent.click(submitBtn);
 
       await waitFor(() => {
@@ -248,7 +248,7 @@ describe('WorkspaceModal', () => {
         />
       );
 
-      fireEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+      fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
       expect(onClose).toHaveBeenCalledTimes(1);
     });
 
@@ -262,7 +262,7 @@ describe('WorkspaceModal', () => {
         />
       );
 
-      fireEvent.click(screen.getByRole('button', { name: /fechar/i }));
+      fireEvent.click(screen.getByRole('button', { name: /close/i }));
       expect(onClose).toHaveBeenCalledTimes(1);
     });
 

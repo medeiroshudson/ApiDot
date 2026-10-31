@@ -114,21 +114,21 @@ const mockTree: WorkspaceTreeDto = {
 describe('CollectionTree', () => {
   it('renders single Novo button without chevron and filter bar', () => {
     render(<CollectionTree tree={mockTree} />);
-    const btn = screen.getByRole('button', { name: /novo/i });
+    const btn = screen.getByRole('button', { name: /new/i });
     expect(btn).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/filtrar/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/filter/i)).toBeInTheDocument();
   });
 
   it('opens creation dropdown on Novo click and triggers creation', async () => {
     const onStartCreate = vi.fn();
     render(<CollectionTree tree={mockTree} onStartCreate={onStartCreate} />);
-    fireEvent.click(screen.getByRole('button', { name: /novo/i }));
+    fireEvent.click(screen.getByRole('button', { name: /new/i }));
 
-    expect(screen.getByText(/nova coleção/i)).toBeInTheDocument();
-    expect(screen.getByText(/nova pasta/i)).toBeInTheDocument();
-    expect(screen.getByText(/nova requisição/i)).toBeInTheDocument();
+    expect(screen.getByText(/new collection/i)).toBeInTheDocument();
+    expect(screen.getByText(/new folder/i)).toBeInTheDocument();
+    expect(screen.getByText(/new request/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText(/nova coleção/i));
+    fireEvent.click(screen.getByText(/new collection/i));
     expect(onStartCreate).toHaveBeenCalledWith('collection', null);
   });
 
@@ -137,10 +137,10 @@ describe('CollectionTree', () => {
     const reqNode = screen.getByText('Login');
     fireEvent.contextMenu(reqNode);
 
-    expect(screen.getByText(/copiar curl/i)).toBeInTheDocument();
-    expect(screen.getByText(/duplicar/i)).toBeInTheDocument();
-    expect(screen.getByText(/renomear/i)).toBeInTheDocument();
-    expect(screen.getByText(/excluir/i)).toBeInTheDocument();
+    expect(screen.getByText(/copy curl/i)).toBeInTheDocument();
+    expect(screen.getByText(/duplicate/i)).toBeInTheDocument();
+    expect(screen.getByText(/rename/i)).toBeInTheDocument();
+    expect(screen.getByText('Delete')).toBeInTheDocument();
   });
 
   it('renders collections, nested folders, and requests with correct HTTP method badges', () => {
@@ -166,21 +166,21 @@ describe('CollectionTree', () => {
     expect(screen.getByText('Login')).toBeInTheDocument();
 
     // Click collapse on V1 folder
-    const v1CollapseBtn = screen.getByRole('button', { name: /recolher pasta v1/i });
+    const v1CollapseBtn = screen.getByRole('button', { name: /collapse folder v1/i });
     fireEvent.click(v1CollapseBtn);
 
     // Login is collapsed/hidden
     expect(screen.queryByText('Login')).not.toBeInTheDocument();
 
     // Click expand on V1 folder
-    const v1ExpandBtn = screen.getByRole('button', { name: /expandir pasta v1/i });
+    const v1ExpandBtn = screen.getByRole('button', { name: /expand folder v1/i });
     fireEvent.click(v1ExpandBtn);
 
     // Login is visible again
     expect(screen.getByText('Login')).toBeInTheDocument();
 
     // Click collapse on collection Auth API
-    const authCollapseBtn = screen.getByRole('button', { name: /recolher coleção auth api/i });
+    const authCollapseBtn = screen.getByRole('button', { name: /collapse collection auth api/i });
     fireEvent.click(authCollapseBtn);
 
     expect(screen.queryByText('V1')).not.toBeInTheDocument();
@@ -222,7 +222,7 @@ describe('CollectionTree', () => {
   it('filters tree items based on text typed in the search bar', () => {
     render(<CollectionTree tree={mockTree} />);
 
-    const searchInput = screen.getByPlaceholderText(/filtrar/i);
+    const searchInput = screen.getByPlaceholderText(/filter/i);
     fireEvent.change(searchInput, { target: { value: 'Login' } });
 
     // Login should be visible
@@ -239,7 +239,7 @@ describe('CollectionTree', () => {
     const onFilterChange = vi.fn();
     render(<CollectionTree tree={mockTree} filterText="" onFilterChange={onFilterChange} />);
 
-    const searchInput = screen.getByPlaceholderText(/filtrar/i);
+    const searchInput = screen.getByPlaceholderText(/filter/i);
     fireEvent.change(searchInput, { target: { value: 'test' } });
 
     expect(onFilterChange).toHaveBeenCalledWith('test');
@@ -249,7 +249,7 @@ describe('CollectionTree', () => {
     const onReload = vi.fn();
     render(<CollectionTree tree={mockTree} onReload={onReload} />);
 
-    const reloadBtn = screen.getByRole('button', { name: /recarregar/i });
+    const reloadBtn = screen.getByRole('button', { name: /reload tree/i });
     fireEvent.click(reloadBtn);
 
     expect(onReload).toHaveBeenCalledTimes(1);
@@ -262,15 +262,15 @@ describe('CollectionTree', () => {
     const colNode = screen.getByText('Auth API');
     fireEvent.contextMenu(colNode);
 
-    expect(screen.getByText(/nova pasta/i)).toBeInTheDocument();
-    expect(screen.getByText(/nova requisição/i)).toBeInTheDocument();
-    expect(screen.getByText(/importar curl/i)).toBeInTheDocument();
-    expect(screen.getByText(/renomear/i)).toBeInTheDocument();
-    expect(screen.getByText(/sincronizar openapi/i)).toBeInTheDocument();
-    expect(screen.getByText(/excluir/i)).toBeInTheDocument();
+    expect(screen.getByText(/new folder/i)).toBeInTheDocument();
+    expect(screen.getByText(/new request/i)).toBeInTheDocument();
+    expect(screen.getByText(/import curl/i)).toBeInTheDocument();
+    expect(screen.getByText(/rename/i)).toBeInTheDocument();
+    expect(screen.getByText(/sync openapi/i)).toBeInTheDocument();
+    expect(screen.getByText('Delete')).toBeInTheDocument();
 
-    // Click Nova Pasta on collection
-    fireEvent.click(screen.getByText(/nova pasta/i));
+    // Click New Folder on collection
+    fireEvent.click(screen.getByText(/new folder/i));
     expect(onStartCreate).toHaveBeenCalledWith('folder', 'coll-1');
   });
 
@@ -281,14 +281,14 @@ describe('CollectionTree', () => {
     const folderNode = screen.getByText('V1');
     fireEvent.contextMenu(folderNode);
 
-    expect(screen.getByText(/nova pasta/i)).toBeInTheDocument();
-    expect(screen.getByText(/nova requisição/i)).toBeInTheDocument();
-    expect(screen.getByText(/importar curl/i)).toBeInTheDocument();
-    expect(screen.getByText(/renomear/i)).toBeInTheDocument();
-    expect(screen.getByText(/excluir/i)).toBeInTheDocument();
+    expect(screen.getByText(/new folder/i)).toBeInTheDocument();
+    expect(screen.getByText(/new request/i)).toBeInTheDocument();
+    expect(screen.getByText(/import curl/i)).toBeInTheDocument();
+    expect(screen.getByText(/rename/i)).toBeInTheDocument();
+    expect(screen.getByText('Delete')).toBeInTheDocument();
 
-    // Click Nova Requisição on folder
-    fireEvent.click(screen.getByText(/nova requisição/i));
+    // Click New Request on folder
+    fireEvent.click(screen.getByText(/new request/i));
     expect(onStartCreate).toHaveBeenCalledWith('request', 'fold-1');
   });
 
@@ -309,12 +309,12 @@ describe('CollectionTree', () => {
     const emptyArea = screen.getByTestId('collection-tree-empty-area');
     fireEvent.contextMenu(emptyArea);
 
-    expect(screen.getByText(/nova coleção/i)).toBeInTheDocument();
-    expect(screen.getByText(/importar openapi/i)).toBeInTheDocument();
-    expect(screen.getByText(/recarregar árvore/i)).toBeInTheDocument();
+    expect(screen.getByText(/new collection/i)).toBeInTheDocument();
+    expect(screen.getByText(/import openapi/i)).toBeInTheDocument();
+    expect(screen.getByText(/reload tree/i)).toBeInTheDocument();
 
-    // Click Nova Coleção
-    fireEvent.click(screen.getByText(/nova coleção/i));
+    // Click New Collection
+    fireEvent.click(screen.getByText(/new collection/i));
     expect(onStartCreate).toHaveBeenCalledWith('collection', null);
   });
 
@@ -325,7 +325,7 @@ describe('CollectionTree', () => {
     const reqNode = screen.getByText('Login');
     fireEvent.contextMenu(reqNode);
 
-    fireEvent.click(screen.getByText(/duplicar/i));
+    fireEvent.click(screen.getByText(/duplicate/i));
     expect(onDuplicateRequest).toHaveBeenCalledWith('req-1');
   });
 
@@ -337,7 +337,7 @@ describe('CollectionTree', () => {
       const colNode = screen.getByText('Auth API');
       fireEvent.contextMenu(colNode);
 
-      const importCurlItem = screen.getByText('Importar cURL');
+      const importCurlItem = screen.getByText('Import cURL');
       expect(importCurlItem).toBeInTheDocument();
 
       fireEvent.click(importCurlItem);
@@ -352,7 +352,7 @@ describe('CollectionTree', () => {
       const folderNode = screen.getByText('V1');
       fireEvent.contextMenu(folderNode);
 
-      const importCurlItem = screen.getByText('Importar cURL');
+      const importCurlItem = screen.getByText('Import cURL');
       expect(importCurlItem).toBeInTheDocument();
 
       fireEvent.click(importCurlItem);
@@ -367,7 +367,7 @@ describe('CollectionTree', () => {
       const reqNode = screen.getByText('Login');
       fireEvent.contextMenu(reqNode);
 
-      const copyCurlItem = screen.getByText('Copiar cURL');
+      const copyCurlItem = screen.getByText('Copy cURL');
       expect(copyCurlItem).toBeInTheDocument();
 
       fireEvent.click(copyCurlItem);
@@ -384,20 +384,20 @@ describe('CollectionTree', () => {
       );
     });
 
-    it('does not throw when clicking Importar cURL or Copiar cURL if callbacks are undefined', () => {
+    it('does not throw when clicking Import cURL or Copy cURL if callbacks are undefined', () => {
       render(<CollectionTree tree={mockTree} />);
 
       // Collection context menu
       fireEvent.contextMenu(screen.getByText('Auth API'));
-      expect(() => fireEvent.click(screen.getByText('Importar cURL'))).not.toThrow();
+      expect(() => fireEvent.click(screen.getByText('Import cURL'))).not.toThrow();
 
       // Folder context menu
       fireEvent.contextMenu(screen.getByText('V1'));
-      expect(() => fireEvent.click(screen.getByText('Importar cURL'))).not.toThrow();
+      expect(() => fireEvent.click(screen.getByText('Import cURL'))).not.toThrow();
 
       // Request context menu
       fireEvent.contextMenu(screen.getByText('Login'));
-      expect(() => fireEvent.click(screen.getByText('Copiar cURL'))).not.toThrow();
+      expect(() => fireEvent.click(screen.getByText('Copy cURL'))).not.toThrow();
     });
   });
 
@@ -405,12 +405,12 @@ describe('CollectionTree', () => {
     const onUpdateCollection = vi.fn();
     render(<CollectionTree tree={mockTree} onUpdateCollection={onUpdateCollection} />);
 
-    // Right-click collection and choose Renomear
+    // Right-click collection and choose Rename
     fireEvent.contextMenu(screen.getByText('Auth API'));
-    fireEvent.click(screen.getByText(/renomear/i));
+    fireEvent.click(screen.getByText(/rename/i));
 
     // Inline input should be present
-    const inlineInput = screen.getByRole('textbox', { name: /renomear coleção/i });
+    const inlineInput = screen.getByRole('textbox', { name: /rename collection/i });
     expect(inlineInput).toBeInTheDocument();
     expect(inlineInput).toHaveValue('Auth API');
 
@@ -425,11 +425,11 @@ describe('CollectionTree', () => {
     const onUpdateRequest = vi.fn();
     render(<CollectionTree tree={mockTree} onUpdateRequest={onUpdateRequest} />);
 
-    // Right-click request and choose Renomear
+    // Right-click request and choose Rename
     fireEvent.contextMenu(screen.getByText('Login'));
-    fireEvent.click(screen.getByText(/renomear/i));
+    fireEvent.click(screen.getByText(/rename/i));
 
-    const inlineInput = screen.getByRole('textbox', { name: /renomear requisição/i });
+    const inlineInput = screen.getByRole('textbox', { name: /rename request/i });
     expect(inlineInput).toBeInTheDocument();
 
     // Press Escape
@@ -443,18 +443,18 @@ describe('CollectionTree', () => {
     const onDeleteCollection = vi.fn();
     render(<CollectionTree tree={mockTree} onDeleteCollection={onDeleteCollection} />);
 
-    // Right-click non-empty collection and choose Excluir
+    // Right-click non-empty collection and choose Delete
     fireEvent.contextMenu(screen.getByText('Auth API'));
-    fireEvent.click(screen.getByText(/excluir/i));
+    fireEvent.click(screen.getByText('Delete'));
 
     // Modal dialog should appear
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(
-      screen.getByText(/a coleção "auth api" não está vazia\. todos os itens contidos nela serão excluídos permanentemente\./i)
+      screen.getByText(/collection "auth api" is not empty\. all items inside it will be permanently deleted\./i)
     ).toBeInTheDocument();
 
     // Confirm deletion
-    const confirmBtn = screen.getByRole('button', { name: /^excluir$/i });
+    const confirmBtn = screen.getByRole('button', { name: /^delete$/i });
     fireEvent.click(confirmBtn);
 
     expect(onDeleteCollection).toHaveBeenCalledWith('coll-1');
@@ -466,11 +466,11 @@ describe('CollectionTree', () => {
     render(<CollectionTree tree={mockTree} onDeleteCollection={onDeleteCollection} />);
 
     fireEvent.contextMenu(screen.getByText('Auth API'));
-    fireEvent.click(screen.getByText(/excluir/i));
+    fireEvent.click(screen.getByText('Delete'));
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
 
-    const cancelBtn = screen.getByRole('button', { name: /cancelar/i });
+    const cancelBtn = screen.getByRole('button', { name: /cancel/i });
     fireEvent.click(cancelBtn);
 
     expect(onDeleteCollection).not.toHaveBeenCalled();
@@ -482,7 +482,7 @@ describe('CollectionTree', () => {
     render(<CollectionTree tree={mockTree} onDeleteCollection={onDeleteCollection} />);
 
     fireEvent.contextMenu(screen.getByText('Empty Collection'));
-    fireEvent.click(screen.getByText(/excluir/i));
+    fireEvent.click(screen.getByText('Delete'));
 
     // Dialog should NOT appear because collection is empty
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -494,14 +494,14 @@ describe('CollectionTree', () => {
     render(<CollectionTree tree={mockTree} onDeleteFolder={onDeleteFolder} />);
 
     fireEvent.contextMenu(screen.getByText('V1'));
-    fireEvent.click(screen.getByText(/excluir/i));
+    fireEvent.click(screen.getByText('Delete'));
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(
-      screen.getByText(/a pasta "v1" não está vazia/i)
+      screen.getByText(/folder "v1" is not empty/i)
     ).toBeInTheDocument();
 
-    const confirmBtn = screen.getByRole('button', { name: /^excluir$/i });
+    const confirmBtn = screen.getByRole('button', { name: /^delete$/i });
     fireEvent.click(confirmBtn);
 
     expect(onDeleteFolder).toHaveBeenCalledWith('fold-1');
@@ -512,7 +512,7 @@ describe('CollectionTree', () => {
     render(<CollectionTree tree={mockTree} onDeleteRequest={onDeleteRequest} />);
 
     fireEvent.contextMenu(screen.getByText('Login'));
-    fireEvent.click(screen.getByText(/excluir/i));
+    fireEvent.click(screen.getByText('Delete'));
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(onDeleteRequest).toHaveBeenCalledWith('req-1');
@@ -522,11 +522,11 @@ describe('CollectionTree', () => {
     const onCreateCollection = vi.fn();
     render(<CollectionTree tree={mockTree} onCreateCollection={onCreateCollection} />);
 
-    // Click Novo -> Nova Coleção
-    fireEvent.click(screen.getByRole('button', { name: /novo/i }));
-    fireEvent.click(screen.getByText(/nova coleção/i));
+    // Click New -> New Collection
+    fireEvent.click(screen.getByRole('button', { name: /new/i }));
+    fireEvent.click(screen.getByText(/new collection/i));
 
-    const inlineInput = screen.getByRole('textbox', { name: /nova coleção/i });
+    const inlineInput = screen.getByRole('textbox', { name: /new collection/i });
     expect(inlineInput).toBeInTheDocument();
 
     fireEvent.change(inlineInput, { target: { value: 'Payments API' } });
@@ -539,8 +539,8 @@ describe('CollectionTree', () => {
     const onStartCreate = vi.fn();
     render(<CollectionTree tree={mockTree} selectedId="coll-1" onStartCreate={onStartCreate} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /novo/i }));
-    fireEvent.click(screen.getByText(/nova pasta/i));
+    fireEvent.click(screen.getByRole('button', { name: /new/i }));
+    fireEvent.click(screen.getByText(/new folder/i));
 
     expect(onStartCreate).toHaveBeenCalledWith('folder', 'coll-1');
   });
@@ -549,8 +549,8 @@ describe('CollectionTree', () => {
     const onStartCreate = vi.fn();
     render(<CollectionTree tree={mockTree} selectedId="fold-1" onStartCreate={onStartCreate} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /novo/i }));
-    fireEvent.click(screen.getByText(/nova requisição/i));
+    fireEvent.click(screen.getByRole('button', { name: /new/i }));
+    fireEvent.click(screen.getByText(/new request/i));
 
     expect(onStartCreate).toHaveBeenCalledWith('request', 'fold-1');
   });
@@ -566,9 +566,9 @@ describe('CollectionTree', () => {
     );
 
     // Sync button should NOT be in the collection row
-    expect(screen.queryByRole('button', { name: /sincronizar coleção auth api/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /sync collection auth api/i })).toBeNull();
 
-    const settingsBtn = screen.getByRole('button', { name: /configurações da coleção auth api/i });
+    const settingsBtn = screen.getByRole('button', { name: /collection settings auth api/i });
     expect(settingsBtn).toBeInTheDocument();
     fireEvent.click(settingsBtn);
     expect(onOpenCollectionSettings).toHaveBeenCalledWith(
@@ -587,8 +587,8 @@ describe('CollectionTree', () => {
       );
 
       const switcherBtn = screen.getByRole('button', { name: /workspace: workspace pessoal/i });
-      const novoBtn = screen.getByRole('button', { name: /^novo$/i });
-      const reloadBtn = screen.getByRole('button', { name: /recarregar árvore/i });
+      const novoBtn = screen.getByRole('button', { name: /^new$/i });
+      const reloadBtn = screen.getByRole('button', { name: /reload tree/i });
 
       expect(switcherBtn).toBeInTheDocument();
       expect(novoBtn).toBeInTheDocument();
@@ -609,21 +609,21 @@ describe('CollectionTree', () => {
       );
 
       expect(screen.getByTestId('sidebar-empty-workspace')).toBeInTheDocument();
-      expect(screen.getByText('Comece criando seu Workspace')).toBeInTheDocument();
+      expect(screen.getByText('Start by creating your Workspace')).toBeInTheDocument();
       expect(
-        screen.getByText(/workspaces isolam suas coleções, variáveis e requisições para cada projeto/i)
+        screen.getByText(/workspaces isolate your collections, variables and requests for each project/i)
       ).toBeInTheDocument();
 
-      const createBtn = screen.getByRole('button', { name: /^criar workspace$/i });
+      const createBtn = screen.getByRole('button', { name: /^create workspace$/i });
       expect(createBtn).toBeInTheDocument();
-      expect(createBtn.textContent).toBe('Criar Workspace');
+      expect(createBtn.textContent).toBe('Create Workspace');
 
       fireEvent.click(createBtn);
       expect(onCreateWorkspaceClick).toHaveBeenCalledTimes(1);
 
       // Novo button and search bar should NOT be rendered in zero-workspaces state
-      expect(screen.queryByRole('button', { name: /^novo$/i })).toBeNull();
-      expect(screen.queryByPlaceholderText(/filtrar/i)).toBeNull();
+      expect(screen.queryByRole('button', { name: /^new$/i })).toBeNull();
+      expect(screen.queryByPlaceholderText(/filter/i)).toBeNull();
     });
 
     it('renders active workspace name, Novo button, search input, and tree when workspaces has items', () => {
@@ -638,8 +638,8 @@ describe('CollectionTree', () => {
       );
 
       expect(screen.getByText('Workspace Pessoal')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /^novo$/i })).toBeInTheDocument();
-      expect(screen.getByPlaceholderText(/filtrar/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^new$/i })).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/filter/i)).toBeInTheDocument();
       expect(screen.getByText('Auth API')).toBeInTheDocument();
 
       // Select another workspace via the dropdown
@@ -658,9 +658,9 @@ describe('CollectionTree', () => {
       );
 
       expect(screen.getByTestId('sidebar-workspaces-loading')).toBeInTheDocument();
-      expect(screen.getByText('Carregando workspaces...')).toBeInTheDocument();
+      expect(screen.getByText('Loading workspaces...')).toBeInTheDocument();
       expect(screen.queryByTestId('sidebar-empty-workspace')).toBeNull();
-      expect(screen.queryByRole('button', { name: /^novo$/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /^new$/i })).toBeNull();
     });
 
     it('closes Novo dropdown when WorkspaceSwitcher dropdown is opened', () => {
@@ -673,21 +673,21 @@ describe('CollectionTree', () => {
       );
 
       // Open Novo dropdown
-      fireEvent.click(screen.getByRole('button', { name: /^novo$/i }));
-      expect(screen.getByText(/nova coleção/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /^new$/i }));
+      expect(screen.getByText(/new collection/i)).toBeInTheDocument();
 
       // Open Workspace dropdown
       fireEvent.click(screen.getByRole('button', { name: /workspace: workspace pessoal/i }));
       expect(screen.getByRole('listbox', { name: /workspaces/i })).toBeInTheDocument();
 
       // Novo dropdown should be closed
-      expect(screen.queryByText(/nova coleção/i)).toBeNull();
+      expect(screen.queryByText(/new collection/i)).toBeNull();
     });
 
     it('opens empty context menu when right-clicking on root container or empty message', () => {
       render(
         <CollectionTree
-          tree={{ collections: [] }}
+          tree={{ workspaceId: 'ws-1', workspaceName: 'Workspace Pessoal', collections: [] }}
           workspaces={mockWorkspaces}
           activeWorkspaceId="ws-1"
         />
@@ -696,18 +696,18 @@ describe('CollectionTree', () => {
       const container = screen.getByTestId('collection-tree-container');
       fireEvent.contextMenu(container);
 
-      expect(screen.getByText(/nova coleção/i)).toBeInTheDocument();
-      expect(screen.getByText(/importar openapi/i)).toBeInTheDocument();
-      expect(screen.getByText(/recarregar árvore/i)).toBeInTheDocument();
+      expect(screen.getByText(/new collection/i)).toBeInTheDocument();
+      expect(screen.getByText(/import openapi/i)).toBeInTheDocument();
+      expect(screen.getByText(/reload tree/i)).toBeInTheDocument();
 
       // Close menu
       fireEvent.keyDown(window, { key: 'Escape' });
-      expect(screen.queryByText(/nova coleção/i)).toBeNull();
+      expect(screen.queryByText(/new collection/i)).toBeNull();
 
       // Right-click on empty message text
-      const emptyMessage = screen.getByText('Nenhuma coleção disponível.');
+      const emptyMessage = screen.getByText('No collections available.');
       fireEvent.contextMenu(emptyMessage);
-      expect(screen.getByText(/nova coleção/i)).toBeInTheDocument();
+      expect(screen.getByText(/new collection/i)).toBeInTheDocument();
     });
 
     it('allows native context menu when right-clicking inside search input', () => {
@@ -719,12 +719,12 @@ describe('CollectionTree', () => {
         />
       );
 
-      const searchInput = screen.getByPlaceholderText('Filtrar por nome ou rota...');
+      const searchInput = screen.getByPlaceholderText('Filter by name or route...');
       const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
       searchInput.dispatchEvent(event);
 
       expect(event.defaultPrevented).toBe(false);
-      expect(screen.queryByText(/nova coleção/i)).toBeNull();
+      expect(screen.queryByText(/new collection/i)).toBeNull();
     });
   });
 });

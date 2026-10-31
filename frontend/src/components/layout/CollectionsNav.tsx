@@ -1,5 +1,6 @@
 import React from 'react';
 import { Folder, Layers, RefreshCw, Settings } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export * from './CollectionTree';
 
@@ -22,23 +23,24 @@ export interface CollectionsNavProps {
   onOpenSettings?: (item: NavItem) => void;
 }
 
-const DEFAULT_ITEMS: NavItem[] = [
-  { id: '00000000-0000-0000-0000-000000000001', name: 'Coleção Padrão', icon: 'collection' },
-  { id: 'auth-folder', name: 'Autenticação', icon: 'folder', isNested: true },
-];
-
 export function CollectionsNav({
   className = '',
-  items = DEFAULT_ITEMS,
+  items,
   selectedId,
   syncingId,
   onSelect,
   onSync,
   onOpenSettings,
 }: CollectionsNavProps) {
+  const { t } = useTranslation();
+  const effectiveItems = items ?? [
+    { id: '00000000-0000-0000-0000-000000000001', name: t('sidebar.defaultCollection'), icon: 'collection' },
+    { id: 'auth-folder', name: t('sidebar.defaultAuthentication'), icon: 'folder', isNested: true },
+  ];
+
   return (
-    <nav aria-label="Coleções & Pastas" className={`space-y-1 text-sm ${className}`}>
-      {items.map((item) => {
+    <nav aria-label={t('sidebar.collections')} className={`space-y-1 text-sm ${className}`}>
+      {effectiveItems.map((item) => {
         const Icon = item.icon === 'folder' ? Folder : Layers;
         const isSelected = selectedId === item.id;
         const isCollection = item.icon !== 'folder' && !item.isNested;
@@ -70,8 +72,8 @@ export function CollectionsNav({
               <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity ml-1 shrink-0">
                 <button
                   type="button"
-                  title={`Sincronizar coleção ${item.name}`}
-                  aria-label={`Sincronizar coleção ${item.name}`}
+                  title={t('sidebar.syncCollectionAria', { name: item.name })}
+                  aria-label={t('sidebar.syncCollectionAria', { name: item.name })}
                   disabled={isSyncing}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -87,8 +89,8 @@ export function CollectionsNav({
 
                 <button
                   type="button"
-                  title={`Configurações da coleção ${item.name}`}
-                  aria-label={`Configurações da coleção ${item.name}`}
+                  title={t('sidebar.collectionSettingsAria', { name: item.name })}
+                  aria-label={t('sidebar.collectionSettingsAria', { name: item.name })}
                   onClick={(e) => {
                     e.stopPropagation();
                     onOpenSettings?.(item);

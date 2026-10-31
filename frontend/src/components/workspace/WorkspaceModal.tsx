@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Briefcase, Plus, Loader2, AlertCircle } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface WorkspaceModalProps {
   isOpen: boolean;
@@ -12,6 +13,7 @@ export function WorkspaceModal({
   onClose,
   onSave,
 }: WorkspaceModalProps) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,12 +116,12 @@ export function WorkspaceModal({
     if (isSubmitting) return;
 
     if (!trimmedName) {
-      setError('O nome do workspace é obrigatório.');
+      setError(t('workspaceModal.nameRequired'));
       return;
     }
 
     if (trimmedName.length > 200) {
-      setError('O nome do workspace não pode exceder 200 caracteres.');
+      setError(t('workspaceModal.nameTooLong'));
       return;
     }
 
@@ -130,7 +132,7 @@ export function WorkspaceModal({
       await onSave(trimmedName);
       onClose();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erro ao criar workspace.';
+      const message = err instanceof Error ? err.message : t('workspaceModal.createError');
       setError(message);
     } finally {
       setIsSubmitting(false);
@@ -173,10 +175,10 @@ export function WorkspaceModal({
                 id="workspace-modal-title"
                 className="text-sm font-semibold text-neutral-100"
               >
-                Novo Workspace
+                {t('workspaceModal.title')}
               </h2>
               <p className="text-xs text-neutral-400">
-                Crie um espaço de trabalho para organizar suas coleções e requisições
+                {t('workspaceModal.subtitle')}
               </p>
             </div>
           </div>
@@ -184,7 +186,7 @@ export function WorkspaceModal({
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            aria-label="Fechar"
+            aria-label={t('common.close')}
             className="text-neutral-400 hover:text-neutral-200 p-1 rounded-md hover:bg-neutral-800 transition-colors disabled:opacity-50"
           >
             <X className="w-4 h-4" aria-hidden="true" />
@@ -208,7 +210,7 @@ export function WorkspaceModal({
               htmlFor="workspace-name-input"
               className="text-xs font-medium text-neutral-300"
             >
-              Nome do Workspace
+              {t('workspaceModal.nameLabel')}
             </label>
             <input
               ref={inputRef}
@@ -219,12 +221,12 @@ export function WorkspaceModal({
               onChange={handleInputChange}
               disabled={isSubmitting}
               maxLength={200}
-              placeholder="Ex: Minha API, Pagamentos, etc."
-              aria-label="Nome do Workspace"
+              placeholder={t('workspaceModal.namePlaceholder')}
+              aria-label={t('workspaceModal.nameLabel')}
               className="w-full px-3 py-2 text-xs bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-neutral-600 focus:ring-1 focus:ring-neutral-600 transition-colors disabled:opacity-50"
             />
             <div className="flex justify-between items-center text-[11px] text-neutral-400">
-              <span>Máximo de 200 caracteres</span>
+              <span>{t('workspaceModal.maxChars')}</span>
               <span className={trimmedName.length > 200 ? 'text-rose-400' : ''}>
                 {name.length}/200
               </span>
@@ -239,7 +241,7 @@ export function WorkspaceModal({
               disabled={isSubmitting}
               className="px-3 py-2 text-xs font-medium text-neutral-300 hover:text-neutral-100 hover:bg-neutral-800 rounded-lg transition-colors disabled:opacity-50"
             >
-              Cancelar
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
@@ -249,12 +251,12 @@ export function WorkspaceModal({
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-                  <span>Criando...</span>
+                  <span>{t('workspaceModal.creating')}</span>
                 </>
               ) : (
                 <>
                   <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span>Criar Workspace</span>
+                  <span>{t('workspaceModal.create')}</span>
                 </>
               )}
             </button>
