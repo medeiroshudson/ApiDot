@@ -294,6 +294,7 @@ public class AuthEntityPersistenceTests
 
         context.Users.Add(user);
         await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
 
         var saved = await context.Users.FirstOrDefaultAsync(u => u.Id == user.Id);
         saved.Should().NotBeNull();
@@ -313,6 +314,7 @@ public class AuthEntityPersistenceTests
 
         context.Users.Add(user);
         await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
 
         var saved = await context.Users.FirstOrDefaultAsync(u => u.Id == user.Id);
         saved.Should().NotBeNull();
