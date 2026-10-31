@@ -8,12 +8,66 @@ if (!fs.existsSync(SCREENSHOTS_DIR)) {
 }
 
 const CHROMIUM_PATH = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined;
+const PORT = process.env.PORT || 3005;
+const BASE_URL = `http://localhost:${PORT}`;
 
 const MOCK_WORKSPACES = [
   { id: 'ws-ecommerce', name: 'E-Commerce Core', createdAtUtc: '2026-10-27T10:00:00Z' },
   { id: 'ws-payments', name: 'Payments & Billing', createdAtUtc: '2026-10-27T10:00:00Z' },
   { id: 'ws-analytics', name: 'Analytics & Events', createdAtUtc: '2026-10-27T10:00:00Z' },
 ];
+
+const MOCK_ORDER_SCHEMA = {
+  summary: 'Create Customer Order',
+  description: 'Validates line items, reserves inventory across regional fulfillment centers, and queues carrier shipment.',
+  parameters: [
+    {
+      name: 'Idempotency-Key',
+      in: 'header',
+      required: true,
+      description: 'Unique UUID to prevent duplicate order placement',
+      defaultOrExample: '7f8b1a2c-3d4e-5f6a-7b8c-9d0e1f2a3b4c',
+    },
+  ],
+  body: {
+    type: 'object',
+    required: ['customerId', 'items'],
+    properties: {
+      customerId: {
+        type: 'string',
+        description: 'Unique customer identifier',
+        example: 'usr_44921',
+      },
+      items: {
+        type: 'array',
+        description: 'List of product SKUs and quantities',
+        example: '[{"sku":"PROD-9921","quantity":1}]',
+      },
+      priority: {
+        type: 'string',
+        description: 'Shipping tier priority',
+        example: 'express',
+      },
+    },
+  },
+  responses: [
+    {
+      statusCode: '201',
+      description: 'Order created and queued for processing',
+      example: '{"id":"ord_882910","status":"confirmed","total":224.64}',
+    },
+    {
+      statusCode: '400',
+      description: 'Invalid item SKU or insufficient inventory',
+      example: '{"error":"INVALID_SKU"}',
+    },
+    {
+      statusCode: '401',
+      description: 'Missing or expired authentication token',
+      example: '{"error":"UNAUTHORIZED"}',
+    },
+  ],
+};
 
 const MOCK_TREE = {
   workspaceId: 'ws-ecommerce',
@@ -55,6 +109,7 @@ const MOCK_TREE = {
                 null,
                 2
               ),
+              schemaDefinition: JSON.stringify(MOCK_ORDER_SCHEMA, null, 2),
               collectionId: 'col-orders',
               folderId: 'fld-v1',
             },
@@ -95,7 +150,7 @@ const MOCK_EXECUTE_RESPONSE = {
     'x-request-id': 'req-ord-882910-live',
     'server': 'Kestrel / .NET 9.0',
     'cache-control': 'no-cache',
-    'date': 'Tue, 27 Oct 2026 14:32:00 GMT',
+    'date': 'Sat, 31 Oct 2026 14:32:00 GMT',
   },
   body: JSON.stringify(
     {
@@ -126,7 +181,7 @@ const MOCK_EXECUTE_RESPONSE = {
         tax: 16.64,
         total: 224.64,
         status: 'confirmed',
-        createdAt: '2026-10-27T14:32:00Z',
+        createdAt: '2026-10-31T14:32:00Z',
       },
     },
     null,
@@ -150,13 +205,52 @@ const MOCK_SYNC_RESPONSE = {
 };
 
 async function run() {
-  console.log('Launching browser for public sanitized screenshots...');
+  console.log(`Launching browser for public sanitized screenshots against ${BASE_URL}...`);
   const browser = await chromium.launch({
     executablePath: CHROMIUM_PATH,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
   });
 
   const setupMocks = async (page) => {
+    await page.route('**/api/auth/me', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'usr_44921',
+          email: 'alex@example.com',
+          displayName: 'Alex Morgan',
+          isRoot: true,
+          locale: 'en-US',
+          workspaces: [
+            { id: 'ws-ecommerce', name: 'E-Commerce Core', role: 'Owner' },
+            { id: 'ws-payments', name: 'Payments & Billing', role: 'Admin' },
+            { id: 'ws-analytics', name: 'Analytics & Events', role: 'Member' },
+          ],
+        }),
+      });
+    });
+
+    await page.route('**/api/auth/config', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          oidcEnabled: true,
+          localAuthEnabled: true,
+          providerName: 'Authentik',
+        }),
+      });
+    });
+
+    await page.route('**/api/devices', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      });
+    });
+
     await page.route('**/api/workspaces', async (route) => {
       await route.fulfill({
         status: 200,
@@ -212,6 +306,7 @@ async function run() {
   });
 
   await context.addInitScript(() => {
+    localStorage.setItem('apidot_locale', 'en-US');
     localStorage.setItem('apidot_active_workspace_id', 'ws-ecommerce');
     localStorage.setItem(
       'apidot_workspace_storage',
@@ -261,13 +356,13 @@ async function run() {
   await setupMocks(page);
 
   console.log('Navigating to workspace...');
-  await page.goto('http://localhost:3000/workspace/ws-ecommerce/request/req-get-order');
+  await page.goto(`${BASE_URL}/workspace/ws-ecommerce/request/req-get-order`);
   await page.locator('[data-hydrated="true"]').waitFor({ state: 'attached' });
   await page.waitForTimeout(600);
 
   // 1. Desktop Hero Request/Response View
   console.log('Capturing 01-desktop-hero-request-response.png...');
-  const sendBtn = page.getByRole('button', { name: /enviar/i });
+  const sendBtn = page.getByRole('button', { name: /send request/i });
   await sendBtn.click();
   await page.getByTestId('status-badge').waitFor({ state: 'visible' });
   await page.waitForTimeout(600);
@@ -278,10 +373,10 @@ async function run() {
 
   // 2. Desktop Variable Autocomplete
   console.log('Capturing 02-desktop-variable-autocomplete.png...');
-  const urlInput = page.getByRole('textbox', { name: 'URL da requisição', exact: true });
+  const urlInput = page.getByRole('textbox', { name: /request url/i, exact: true });
   await urlInput.focus();
   await urlInput.fill('https://api.example.com/v1/orders/{{');
-  const popover = page.getByRole('listbox', { name: 'Sugestões de autocompletar' });
+  const popover = page.getByRole('listbox', { name: /autocomplete suggestions/i });
   await popover.waitFor({ state: 'visible' });
   await page.waitForTimeout(400);
 
@@ -296,13 +391,13 @@ async function run() {
 
   // 3. Desktop OpenAPI Sync Audit Modal
   console.log('Capturing 03-desktop-openapi-sync-audit.png...');
-  const settingsBtn = page.locator('aside').getByRole('button', { name: 'Configurações da coleção Orders API' });
+  const settingsBtn = page.locator('aside').getByRole('button', { name: /collection settings.*orders api/i });
   await settingsBtn.click();
   const modal = page.getByRole('dialog');
   await modal.waitFor({ state: 'visible' });
 
   // Switch to OpenAPI tab
-  const openapiTab = modal.getByRole('tab', { name: /OpenAPI/i });
+  const openapiTab = modal.getByRole('tab', { name: /openapi/i });
   await openapiTab.click();
   await page.waitForTimeout(300);
 
@@ -312,7 +407,7 @@ async function run() {
   await page.waitForTimeout(200);
 
   // Click Sync Collection
-  const syncBtn = modal.getByRole('button', { name: 'Sincronizar Coleção' });
+  const syncBtn = modal.getByRole('button', { name: /sync collection/i });
   await syncBtn.click();
   await modal.getByTestId('sync-report-section').waitFor({ state: 'visible' });
   await page.waitForTimeout(500);
@@ -322,7 +417,7 @@ async function run() {
   console.log(`Saved: ${syncAuditPath}`);
 
   // Close modal
-  await modal.getByRole('button', { name: 'Fechar configurações da coleção' }).click();
+  await modal.getByRole('button', { name: /close collection settings/i }).click();
   await modal.waitFor({ state: 'hidden' });
   await page.waitForTimeout(300);
 
@@ -336,6 +431,26 @@ async function run() {
   const workspaceTreePath = path.join(SCREENSHOTS_DIR, '04-desktop-workspace-and-tree.png');
   await page.screenshot({ path: workspaceTreePath, fullPage: false });
   console.log(`Saved: ${workspaceTreePath}`);
+
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+
+  // 5. Desktop Request Specification Tab (Key differentiator)
+  console.log('Capturing 05-desktop-request-specification.png...');
+  // Click on 'Create Order' in collection tree
+  const createOrderNode = page.locator('aside').getByText('Create Order', { exact: true });
+  await createOrderNode.click();
+  await page.waitForTimeout(400);
+
+  // Switch to Specification tab
+  const specTab = page.getByRole('tab', { name: /specification/i });
+  await specTab.click();
+  await page.getByText('Create Customer Order').waitFor({ state: 'visible' });
+  await page.waitForTimeout(500);
+
+  const specPath = path.join(SCREENSHOTS_DIR, '05-desktop-request-specification.png');
+  await page.screenshot({ path: specPath, fullPage: false });
+  console.log(`Saved: ${specPath}`);
 
   await context.close();
   await browser.close();

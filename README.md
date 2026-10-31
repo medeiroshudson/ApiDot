@@ -32,6 +32,7 @@ Whether you are testing an internal microservice, debugging third-party webhooks
 | ⚡ **Precise Latency Metrics** | Real-time diagnostic timing breakdown isolating DNS resolution, TCP connect, TLS handshake, TTFB (time to first byte), and content download phases. |
 | 🧩 **Cascading Variables (`{{...}}`)** | Hierarchical variable resolution across Global, Environment, and Collection scopes with rich inline autocomplete and response chaining. |
 | 🔄 **OpenAPI v3 Sync & Audit** | Import OpenAPI v3 / Swagger specifications from URLs or raw JSON/YAML with detailed change auditing to prevent accidental regressions. |
+| 📋 **Interactive Request Specification** | Built-in OpenAPI schema inspector with property tree navigation, type contracts, required field indicators, expected status response codes, and 1-click body example generation. |
 | 💻 **Hybrid Execution Engine** | Dispatch requests either directly from your centralized server or through the Native AOT **ApiDot Agent** daemon running locally on your workstation to effortlessly reach `localhost` and internal subnets. |
 | 🔗 **Deep Linking & Workspace State** | Declarative URLs per workspace, collection, and request (`/workspace/:id/request/:id`) enabling seamless bookmarking, sharing, and state persistence across page reloads. |
 
@@ -85,6 +86,13 @@ Import schemas directly from live endpoints or specification files. Audit every 
 Organize complex API surfaces with nested collections and folders. Manage environments, inspect execution history, and search endpoints with sub-millisecond response times.
 
 ![Workspace and Tree Navigation](docs/assets/screenshots/04-desktop-workspace-and-tree.png)
+
+---
+
+### 4. Interactive OpenAPI Schema & Specification
+Inspect and define structured request contracts, required parameters, property trees, and expected response codes directly inside the request editor — complete with instant sample payload generation.
+
+![Interactive Request Specification](docs/assets/screenshots/05-desktop-request-specification.png)
 
 </details>
 
