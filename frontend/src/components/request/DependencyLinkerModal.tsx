@@ -12,7 +12,7 @@ import {
   Activity,
   ArrowRight,
 } from 'lucide-react';
-import { HTTP_METHOD_BADGES } from './RequestAutocomplete';
+import { MethodBadge } from '@/components/common/MethodBadge';
 
 export interface DependencyResponse {
   status?: number;
@@ -484,9 +484,6 @@ export function DependencyLinkerModal({
                 filteredRequests.map((req) => {
                   const isSelected = req.id === selectedRequestId;
                   const reqStatus = req.response?.statusCode ?? req.response?.status;
-                  const methodBadge =
-                    HTTP_METHOD_BADGES[req.method] ||
-                    'text-blue-400 bg-blue-950/60 border-blue-800/80';
 
                   return (
                     <button
@@ -500,11 +497,7 @@ export function DependencyLinkerModal({
                       }`}
                     >
                       <div className="flex items-center justify-between gap-1.5">
-                        <span
-                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase shrink-0 ${methodBadge}`}
-                        >
-                          {req.method}
-                        </span>
+                        <MethodBadge method={req.method} />
                         <span className="text-xs font-semibold text-neutral-200 truncate flex-1">
                           {req.name}
                         </span>

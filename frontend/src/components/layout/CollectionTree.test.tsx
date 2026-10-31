@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { CollectionTree } from './CollectionTree';
+import { CollectionTree, HTTP_METHOD_BADGES } from './CollectionTree';
 import { WorkspaceTreeDto, WorkspaceDto } from '@/lib/treeApi';
 
 const mockWorkspaces: WorkspaceDto[] = [
@@ -153,9 +153,12 @@ describe('CollectionTree', () => {
     expect(screen.getByText('Health Check')).toBeInTheDocument();
 
     // Verify method badges
-    expect(screen.getByText('POST')).toBeInTheDocument();
+    const postBadge = screen.getByText('POST');
+    expect(postBadge).toBeInTheDocument();
+    expect(postBadge.className).toContain(HTTP_METHOD_BADGES.POST);
     const getBadges = screen.getAllByText('GET');
     expect(getBadges.length).toBeGreaterThanOrEqual(1);
+    expect(getBadges[0].className).toContain(HTTP_METHOD_BADGES.GET);
     expect(screen.getByText('DELETE')).toBeInTheDocument();
   });
 

@@ -472,12 +472,44 @@ describe('RequestEditor', () => {
     render(<RequestEditor />);
 
     const methodSelect = screen.getByRole('combobox', { name: /método http/i });
-    const controlsContainer = methodSelect.parentElement;
+    const controlsContainer = methodSelect.closest('.flex-1');
     expect(controlsContainer).toHaveClass('items-start');
 
     const sendBtn = screen.getByRole('button', { name: /enviar requisição/i });
     const sendContainer = sendBtn.parentElement;
     expect(sendContainer).toHaveClass('items-start');
+  });
+
+  it('renders HTTP method selector using canonical Select with badge styling and Lucide chevron', () => {
+    const { container } = render(<RequestEditor initialRequest={{ method: 'GET' }} />);
+
+    const methodSelect = screen.getByRole('combobox', { name: /método http/i });
+    expect(methodSelect).toBeInTheDocument();
+    expect(methodSelect).toHaveValue('GET');
+
+    // Standardized sizeVariant="md" (h-9, text-xs, pl-2.5, pr-8)
+    expect(methodSelect).toHaveClass('h-9');
+    expect(methodSelect).toHaveClass('text-xs');
+    expect(methodSelect).toHaveClass('pl-2.5');
+    expect(methodSelect).toHaveClass('pr-8');
+
+    // Method badge styling for GET
+    expect(methodSelect).toHaveClass('text-emerald-400');
+    expect(methodSelect).toHaveClass('bg-emerald-950/60');
+    expect(methodSelect).toHaveClass('border-emerald-800/80');
+
+    // ChevronDown icon inherits method color with opacity-70
+    const chevron = container.querySelector('[data-testid="select-chevron"]');
+    expect(chevron).toBeInTheDocument();
+    expect(chevron).toHaveClass('text-current');
+    expect(chevron).toHaveClass('opacity-70');
+
+    // When method changes to POST, badge colors update dynamically
+    fireEvent.change(methodSelect, { target: { value: 'POST' } });
+    expect(methodSelect).toHaveValue('POST');
+    expect(methodSelect).toHaveClass('text-blue-400');
+    expect(methodSelect).toHaveClass('bg-blue-950/60');
+    expect(methodSelect).toHaveClass('border-blue-800/80');
   });
 
   it('triggers request dispatch without appending newlines when pressing Enter in URL field', () => {
