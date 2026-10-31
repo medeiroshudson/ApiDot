@@ -110,7 +110,7 @@ describe('DependencyLinkerModal', () => {
         />
       );
 
-      const closeButton = screen.getByRole('button', { name: /close|fechar/i });
+      const closeButton = screen.getByRole('button', { name: /^close$/i });
       fireEvent.click(closeButton);
       expect(onClose).toHaveBeenCalledTimes(1);
     });
@@ -126,7 +126,7 @@ describe('DependencyLinkerModal', () => {
         />
       );
 
-      const cancelButton = screen.getByRole('button', { name: /cancel|cancelar/i });
+      const cancelButton = screen.getByRole('button', { name: /^cancel$/i });
       fireEvent.click(cancelButton);
       expect(onClose).toHaveBeenCalledTimes(1);
     });
@@ -183,7 +183,7 @@ describe('DependencyLinkerModal', () => {
         />
       );
 
-      const searchInput = screen.getByPlaceholderText(/search|buscar/i);
+      const searchInput = screen.getByPlaceholderText(/search requests\.\.\./i);
       fireEvent.change(searchInput, { target: { value: 'Users' } });
 
       expect(screen.getByText('Get Users List')).toBeInTheDocument();
@@ -192,7 +192,7 @@ describe('DependencyLinkerModal', () => {
   });
 
   describe('Tabs and Response Inspector', () => {
-    it('when a request with response data is selected, displays tabs: "Corpo (Body)", "Cabeçalhos (Headers)", "Status"', () => {
+    it('when a request with response data is selected, displays tabs: "Body", "Headers", "Status"', () => {
       render(
         <DependencyLinkerModal
           isOpen={true}
@@ -207,9 +207,9 @@ describe('DependencyLinkerModal', () => {
       const reqAuthButton = screen.getByText('Login Auth');
       fireEvent.click(reqAuthButton);
 
-      expect(screen.getByRole('tab', { name: /body|corpo/i })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /headers|cabeçalhos/i })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /status/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^body$/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^headers$/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^status$/i })).toBeInTheDocument();
     });
 
     it('in Body tab, parses JSON response and renders tree nodes with property keys and values', () => {
@@ -316,7 +316,7 @@ describe('DependencyLinkerModal', () => {
       fireEvent.click(screen.getByText('Login Auth'));
 
       // Switch to headers tab
-      const headersTab = screen.getByRole('tab', { name: /headers|cabeçalhos/i });
+      const headersTab = screen.getByRole('tab', { name: /^headers$/i });
       fireEvent.click(headersTab);
 
       // Verify header is shown
@@ -346,7 +346,7 @@ describe('DependencyLinkerModal', () => {
       fireEvent.click(screen.getByText('Login Auth'));
 
       // Switch to status tab
-      const statusTab = screen.getByRole('tab', { name: /status/i });
+      const statusTab = screen.getByRole('tab', { name: /^status$/i });
       fireEvent.click(statusTab);
 
       const panel = screen.getByRole('tabpanel');
@@ -375,7 +375,7 @@ describe('DependencyLinkerModal', () => {
       fireEvent.click(screen.getByText('Login Auth'));
 
       // Look for copy button next to token
-      const copyButtons = screen.getAllByRole('button', { name: /copy|copiar/i });
+      const copyButtons = screen.getAllByRole('button', { name: /^copy token$/i });
       expect(copyButtons.length).toBeGreaterThan(0);
 
       await act(async () => {
@@ -400,7 +400,7 @@ describe('DependencyLinkerModal', () => {
       expect(screen.getByText('profile')).toBeInTheDocument();
 
       // Toggle user node collapse
-      const toggleButtons = screen.getAllByRole('button', { name: /collapse|expand|recolher|expandir|toggle/i });
+      const toggleButtons = screen.getAllByRole('button', { name: /^(collapse|expand)/i });
       fireEvent.click(toggleButtons[0]);
 
       // Should be collapsible
@@ -428,7 +428,7 @@ describe('DependencyLinkerModal', () => {
       );
 
       expect(
-        screen.getByText(/this request has no executed response data|esta requisição não possui dados de resposta executados/i)
+        screen.getByText('This request has no executed response data.')
       ).toBeInTheDocument();
     });
 
@@ -629,7 +629,7 @@ describe('DependencyLinkerModal', () => {
       expect(screen.queryByText('level_4')).toBeNull();
 
       // Expand level_3 (depth 2) -> level_4 appears
-      const expandBtn = screen.getByRole('button', { name: /expand level_3|expandir level_3/i });
+      const expandBtn = screen.getByRole('button', { name: /^expand level_3$/i });
       fireEvent.click(expandBtn);
       expect(screen.getByText('level_4')).toBeInTheDocument();
     });
@@ -666,13 +666,13 @@ describe('DependencyLinkerModal', () => {
       // Expand down to level 13
       // Expand level 2 through 12
       for (let i = 0; i < 11; i++) {
-        const expandBtns = screen.queryAllByRole('button', { name: /expand child|expandir child/i });
+        const expandBtns = screen.queryAllByRole('button', { name: /^expand child$/i });
         if (expandBtns.length > 0) {
           fireEvent.click(expandBtns[0]);
         }
       }
 
-      expect(screen.getByText(/\[maximum depth reached\]|\[profundidade máxima atingida\]/i)).toBeInTheDocument();
+      expect(screen.getByText('[Maximum depth reached]')).toBeInTheDocument();
     });
   });
 
@@ -687,7 +687,7 @@ describe('DependencyLinkerModal', () => {
         />
       );
 
-      const searchInput = screen.getByPlaceholderText(/search requests\.\.\.|buscar requisições\.\.\./i);
+      const searchInput = screen.getByPlaceholderText('Search requests...');
       await waitFor(() => {
         expect(document.activeElement).toBe(searchInput);
       });
@@ -766,7 +766,7 @@ describe('DependencyLinkerModal', () => {
       );
 
       fireEvent.click(screen.getByText('Login Auth'));
-      fireEvent.click(screen.getByRole('tab', { name: /headers|cabeçalhos/i }));
+      fireEvent.click(screen.getByRole('tab', { name: /^headers$/i }));
 
       const headerKey = screen.getByText('x-access-token');
       const row = headerKey.closest('[role="button"]')!;
@@ -867,7 +867,7 @@ describe('DependencyLinkerModal', () => {
 
       fireEvent.click(screen.getByText('Login Auth'));
 
-      const copyButtons = screen.getAllByRole('button', { name: /copy|copiar/i });
+      const copyButtons = screen.getAllByRole('button', { name: /^copy token$/i });
       await act(async () => {
         fireEvent.click(copyButtons[0]);
       });

@@ -170,7 +170,7 @@ export default function LoginPage() {
               type="email"
               required
               autoComplete="email"
-              placeholder="seu@email.com"
+              placeholder={t('auth.emailPlaceholder')}
               aria-invalid={!!error}
               value={email}
               disabled={isSubmitting}

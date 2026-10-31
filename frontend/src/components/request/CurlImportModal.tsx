@@ -169,7 +169,15 @@ export function CurlImportModal({
       }
     } else {
       setParsedRequest(null);
-      setError(result.error || t('curlImport.invalidCommand'));
+      let errorMsg = result.error || t('curlImport.invalidCommand');
+      if (result.error) {
+        if (/começar com "curl"|start with.*curl/i.test(result.error)) {
+          errorMsg = t('curlImport.mustStartWithCurl');
+        } else if (/url/i.test(result.error)) {
+          errorMsg = t('curlImport.noUrlFound');
+        }
+      }
+      setError(errorMsg);
     }
   };
 

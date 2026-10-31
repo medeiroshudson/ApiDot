@@ -350,7 +350,7 @@ export function OpenApiImportModal({
                   value={rawContent}
                   onChange={handleRawContentChange}
                   disabled={isLoading}
-                  placeholder={`{\n  "openapi": "3.0.0",\n  "info": { "title": "Minha API", "version": "1.0" },\n  "paths": {}\n}`}
+                  placeholder={t('openApiImport.rawContentPlaceholder')}
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-xs font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50 resize-y"
                 />
                 <p className="text-[11px] text-zinc-500 mt-1">

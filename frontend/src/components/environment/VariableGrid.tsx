@@ -209,7 +209,7 @@ export function VariableGrid({
               setRawJson(e.target.value);
               if (jsonError) setJsonError(null);
             }}
-            placeholder={'[\n  { "key": "API_URL", "value": "https://api.com", "isActive": true, "isSecret": false }\n]'}
+            placeholder={t('environments.bulkJsonPlaceholder')}
             className="flex-1 w-full bg-neutral-950 border border-neutral-800 rounded-md p-3 font-mono text-xs text-neutral-200 resize-none focus:outline-none focus:ring-2 focus:ring-neutral-400 leading-relaxed min-h-[200px]"
           />
 
