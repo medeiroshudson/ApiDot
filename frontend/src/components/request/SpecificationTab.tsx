@@ -776,7 +776,10 @@ export function SpecificationTab({
                 </tr>
               </thead>
               <tbody>
-                {flatProperties.map((row) => (
+                {flatProperties.map((row) => {
+                  const rowFallbackName = row.name || t('request.newPropertyFallback');
+                  const rowFallbackObject = row.name || t('request.objectFallback');
+                  return (
                   <tr
                     key={row.id}
                     className="border-b border-neutral-800/60 hover:bg-neutral-900/30 transition-colors"
@@ -800,7 +803,7 @@ export function SpecificationTab({
                         </span>
                         <input
                           type="text"
-                          aria-label={t('request.propertyNameAria', { name: row.name || 'nova' })}
+                          aria-label={t('request.propertyNameAria', { name: rowFallbackName })}
                           placeholder={t('request.propertyPlaceholder')}
                           value={row.name}
                           disabled={disabled}
@@ -815,7 +818,7 @@ export function SpecificationTab({
                     {/* Tipo */}
                     <td className="py-1.5 px-2">
                       <select
-                        aria-label={t('request.propertyTypeAria', { name: row.name || 'nova' })}
+                        aria-label={t('request.propertyTypeAria', { name: rowFallbackName })}
                         value={row.type}
                         disabled={disabled}
                         onChange={(e) =>
@@ -839,7 +842,7 @@ export function SpecificationTab({
                     <td className="py-1.5 px-2 text-center">
                       <input
                         type="checkbox"
-                        aria-label={t('request.propertyRequiredAria', { name: row.name || 'nova' })}
+                        aria-label={t('request.propertyRequiredAria', { name: rowFallbackName })}
                         checked={row.required}
                         disabled={disabled}
                         onChange={(e) =>
@@ -855,7 +858,7 @@ export function SpecificationTab({
                     <td className="py-1.5 px-2">
                       <input
                         type="text"
-                        aria-label={t('request.propertyDescAria', { name: row.name || 'nova' })}
+                        aria-label={t('request.propertyDescAria', { name: rowFallbackName })}
                         placeholder={t('request.propertyDescPlaceholder')}
                         value={row.description}
                         disabled={disabled}
@@ -872,7 +875,7 @@ export function SpecificationTab({
                     <td className="py-1.5 px-2">
                       <input
                         type="text"
-                        aria-label={t('request.propertyExampleAria', { name: row.name || 'nova' })}
+                        aria-label={t('request.propertyExampleAria', { name: rowFallbackName })}
                         placeholder={t('request.propertyExamplePlaceholder')}
                         value={row.example}
                         disabled={disabled}
@@ -892,7 +895,7 @@ export function SpecificationTab({
                           <button
                             type="button"
                             aria-label={t('request.addChildPropertyAria', {
-                              name: row.name || 'objeto',
+                              name: rowFallbackObject,
                             })}
                             title={t('request.addChildProperty')}
                             disabled={disabled}
@@ -904,7 +907,7 @@ export function SpecificationTab({
                         )}
                         <button
                           type="button"
-                          aria-label={t('request.removePropertyAria', { name: row.name || 'nova' })}
+                          aria-label={t('request.removePropertyAria', { name: rowFallbackName })}
                           title={t('request.removeProperty')}
                           disabled={disabled}
                           onClick={() => handleRemoveProperty(row.id)}
@@ -915,7 +918,8 @@ export function SpecificationTab({
                       </div>
                     </td>
                   </tr>
-                ))}
+                );
+              })}
               </tbody>
             </table>
           </div>

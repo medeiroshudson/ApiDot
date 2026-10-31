@@ -512,7 +512,7 @@ export function RequestEditor({
                 ref={urlInputRef}
                 autoGrow
                 aria-label={t('request.urlAria')}
-                placeholder="https://api.exemplo.com/v1/recurso"
+                placeholder={t('request.urlDefaultPlaceholder')}
                 value={url}
                 disabled={isLoading}
                 error={!!urlError}

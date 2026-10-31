@@ -65,6 +65,13 @@ export function ResponseViewer({
 }: ResponseViewerProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<ResponseTabType>('pretty');
+
+  const tabLabels: Record<ResponseTabType, string> = {
+    pretty: t('response.tabPretty'),
+    raw: t('response.tabRaw'),
+    headers: t('response.tabHeaders'),
+    timings: t('response.tabTimings'),
+  };
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
   const [copiedCurl, setCopiedCurl] = useState(false);
@@ -378,7 +385,7 @@ export function ResponseViewer({
               }`}
             >
               <Icon className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>{tab.label}</span>
+              <span>{tabLabels[tab.id]}</span>
             </button>
           );
         })}

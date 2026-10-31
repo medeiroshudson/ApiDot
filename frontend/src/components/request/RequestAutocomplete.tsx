@@ -348,14 +348,14 @@ export function RequestAutocomplete({
       },
     ];
 
-    tokens.forEach((t) => {
-      if (!context.filter || t.name.toLowerCase().includes(context.filter)) {
-        items.push(t);
+    tokens.forEach((tok) => {
+      if (!context.filter || tok.name.toLowerCase().includes(context.filter)) {
+        items.push(tok);
       }
     });
 
     return items;
-  }, [context, availableVariables, availableRequests, schemaProperties]);
+  }, [context, availableVariables, availableRequests, schemaProperties, t]);
 
   // Reset selectedIndex whenever context changes
   useEffect(() => {
