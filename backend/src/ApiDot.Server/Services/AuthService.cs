@@ -244,6 +244,7 @@ public class AuthService(
             user.Email,
             user.DisplayName,
             user.IsRoot,
+            user.Locale,
             workspaces);
     }
 

@@ -98,7 +98,7 @@ public static class AuthEndpoints
             var isAuthDisabled = string.Equals(configuration["APIDOT_AUTH_ENABLED"], "false", StringComparison.OrdinalIgnoreCase);
             if (isAuthDisabled || currentUserContext.UserId == Guid.Empty)
             {
-                return Results.Ok(new AuthUserDto(Guid.Empty, "root@local", "Root (Dev/Test)", true, []));
+                return Results.Ok(new AuthUserDto(Guid.Empty, "root@local", "Root (Dev/Test)", true, null, []));
             }
 
             if (httpContext.User.Identity?.IsAuthenticated != true || !currentUserContext.UserId.HasValue)

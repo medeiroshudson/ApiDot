@@ -337,6 +337,10 @@ namespace ApiDot.Server.Migrations
                     b.Property<DateTime?>("LastLoginAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Locale")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("OidcIssuer")
                         .HasMaxLength(256)
                         .HasColumnType("TEXT");

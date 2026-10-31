@@ -4,6 +4,8 @@ public record AuthConfigResponse(bool OidcEnabled, bool LocalAuthEnabled, string
 
 public record LocalLoginRequest(string? Email, string? Password);
 
+public record UpdateLocaleRequest(string Locale);
+
 public record AuthWorkspaceDto(Guid Id, string Name, string Role);
 
 public record AuthUserDto(
@@ -11,4 +13,5 @@ public record AuthUserDto(
     string Email,
     string DisplayName,
     bool IsRoot,
+    string? Locale,
     IReadOnlyList<AuthWorkspaceDto> Workspaces);
