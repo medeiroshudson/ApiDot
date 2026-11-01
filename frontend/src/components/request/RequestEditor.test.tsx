@@ -1,10 +1,14 @@
 import { render, screen, fireEvent, within, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { RequestEditor, insertTokenAtCursor, resolvePathParams } from './RequestEditor';
 import { useI18nStore } from '@/stores/useI18nStore';
 
 describe('RequestEditor', () => {
   beforeEach(() => {
+    useI18nStore.setState({ locale: 'en-US' });
+  });
+
+  afterEach(() => {
     useI18nStore.setState({ locale: 'en-US' });
   });
   it('renders all key elements: method selector, URL input, and split send button', () => {
@@ -594,5 +598,19 @@ describe('RequestEditor', () => {
 
     expect(onSend).toHaveBeenCalledWith(expect.objectContaining({ target: 'Server' }));
     expect(screen.queryByTestId('dirty-indicator')).not.toBeInTheDocument();
+  });
+
+  it('does not dispatch request when pressing Enter in URL field if Agent target is offline', () => {
+    const onSend = vi.fn();
+    render(
+      <RequestEditor
+        initialRequest={{ target: 'Agent', url: 'https://api.test' }}
+        isAgentOnline={false}
+        onSend={onSend}
+      />
+    );
+    const urlInput = screen.getByRole('textbox', { name: /request url/i });
+    fireEvent.keyDown(urlInput, { key: 'Enter', code: 'Enter' });
+    expect(onSend).not.toHaveBeenCalled();
   });
 });

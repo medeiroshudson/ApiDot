@@ -392,6 +392,10 @@ export function RequestEditor({
 
   const handleSend = (sendTarget?: ExecutionTarget) => {
     if (isLoading) return;
+    const targetToUse = sendTarget ?? effectiveTarget;
+    if (targetToUse === 'Agent' && !isAgentOnline) {
+      return;
+    }
     const trimmedUrl = url.trim();
     if (!trimmedUrl) {
       setUrlError(t('request.urlRequired'));
@@ -403,7 +407,6 @@ export function RequestEditor({
     if (sendTarget) {
       setRuntimeTargetOverride(sendTarget);
     }
-    const targetToUse = sendTarget ?? effectiveTarget;
     const resolvedUrl = resolvePathParams(trimmedUrl, pathParams);
     const requestData: RequestData = {
       method,
@@ -617,7 +620,7 @@ export function RequestEditor({
                     onClick={() => handleSend('Server')}
                     className="w-full text-left px-3 py-2 flex items-center gap-2 text-neutral-200 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
                   >
-                    <Server className="w-3.5 h-3.5 text-neutral-400" />
+                    <Server className="w-3.5 h-3.5 text-neutral-400" aria-hidden="true" />
                     <div className="flex flex-col">
                       <span className="font-medium">{t('request.targetServer')}</span>
                       <span className="text-[10px] text-neutral-500">
@@ -638,7 +641,7 @@ export function RequestEditor({
                         : 'text-neutral-500 opacity-60 cursor-not-allowed'
                     }`}
                   >
-                    <Cpu className={`w-3.5 h-3.5 ${isAgentOnline ? 'text-emerald-400' : 'text-neutral-500'}`} />
+                    <Cpu className={`w-3.5 h-3.5 ${isAgentOnline ? 'text-emerald-400' : 'text-neutral-500'}`} aria-hidden="true" />
                     <div className="flex flex-col">
                       <span className="font-medium">{t('request.targetAgent')}</span>
                       <span className="text-[10px] text-neutral-500">
