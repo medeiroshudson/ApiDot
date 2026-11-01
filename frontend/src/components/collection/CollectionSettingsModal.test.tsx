@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   CollectionSettingsModal,
   SyncReport,
@@ -12,6 +12,11 @@ import { VariableItem } from '../environment/VariableGrid';
 
 describe('CollectionSettingsModal', () => {
   beforeEach(() => {
+    useI18nStore.setState({ locale: 'en-US' });
+    useEnvironmentStore.getState().reset();
+  });
+
+  afterEach(() => {
     useI18nStore.setState({ locale: 'en-US' });
     useEnvironmentStore.getState().reset();
   });

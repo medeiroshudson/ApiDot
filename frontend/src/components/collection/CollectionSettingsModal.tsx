@@ -193,16 +193,12 @@ export function CollectionSettingsModal({
       setReport(null);
       setActiveTab('general');
       const loadedVars = useEnvironmentStore.getState().getCollectionVariablesForId(collection.id);
-      if (
-        loadedVars.length === 0 &&
-        Array.isArray((collection as { variables?: VariableItem[] }).variables) &&
-        ((collection as { variables?: VariableItem[] }).variables?.length ?? 0) > 0
-      ) {
-        const colVars = (collection as { variables: VariableItem[] }).variables;
+      const colVars = (collection as { variables?: VariableItem[] })?.variables;
+      if (loadedVars.length === 0 && Array.isArray(colVars) && colVars.length > 0) {
         setCollectionVariablesForId(collection.id, colVars);
-        setVariables(colVars);
+        setVariables([...colVars]);
       } else {
-        setVariables(loadedVars);
+        setVariables([...loadedVars]);
       }
     }
   }, [isOpen, collection, setCollectionVariablesForId]);
@@ -402,35 +398,37 @@ export function CollectionSettingsModal({
         <div
           role="tablist"
           aria-label={t('collectionSettings.tabsAria')}
-          className="flex border-b border-neutral-800 bg-neutral-950/30 px-5 shrink-0"
+          className="flex border-b border-neutral-800 bg-neutral-950/30 px-5 shrink-0 overflow-x-auto scrollbar-none"
         >
           <button
             type="button"
             role="tab"
             aria-selected={activeTab === 'general'}
             onClick={() => setActiveTab('general')}
-            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-medium border-b-2 transition-colors shrink-0 whitespace-nowrap ${
               activeTab === 'general'
                 ? 'border-blue-500 text-white font-semibold'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
             }`}
           >
-            <Sliders className="w-3.5 h-3.5" />
+            <Sliders className="w-3.5 h-3.5" aria-hidden="true" />
             <span>{t('collectionSettings.generalTab')}</span>
           </button>
 
           <button
             type="button"
             role="tab"
+            id="tab-collection-variables"
+            aria-controls="panel-collection-variables"
             aria-selected={activeTab === 'variables'}
             onClick={() => setActiveTab('variables')}
-            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-medium border-b-2 transition-colors shrink-0 whitespace-nowrap ${
               activeTab === 'variables'
                 ? 'border-blue-500 text-white font-semibold'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
             }`}
           >
-            <FolderGit2 className="w-3.5 h-3.5" />
+            <FolderGit2 className="w-3.5 h-3.5" aria-hidden="true" />
             <span>{t('collection.variablesTab')}</span>
           </button>
 
@@ -439,13 +437,13 @@ export function CollectionSettingsModal({
             role="tab"
             aria-selected={activeTab === 'auth'}
             onClick={() => setActiveTab('auth')}
-            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-medium border-b-2 transition-colors shrink-0 whitespace-nowrap ${
               activeTab === 'auth'
                 ? 'border-blue-500 text-white font-semibold'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
             }`}
           >
-            <Shield className="w-3.5 h-3.5" />
+            <Shield className="w-3.5 h-3.5" aria-hidden="true" />
             <span>{t('collectionSettings.authTab')}</span>
           </button>
 
@@ -454,13 +452,13 @@ export function CollectionSettingsModal({
             role="tab"
             aria-selected={activeTab === 'openapi'}
             onClick={() => setActiveTab('openapi')}
-            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-medium border-b-2 transition-colors shrink-0 whitespace-nowrap ${
               activeTab === 'openapi'
                 ? 'border-blue-500 text-white font-semibold'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
             }`}
           >
-            <FileCode className="w-3.5 h-3.5" />
+            <FileCode className="w-3.5 h-3.5" aria-hidden="true" />
             <span>{t('collectionSettings.openapiTab')}</span>
           </button>
 
@@ -469,13 +467,13 @@ export function CollectionSettingsModal({
             role="tab"
             aria-selected={activeTab === 'dependencies'}
             onClick={() => setActiveTab('dependencies')}
-            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-medium border-b-2 transition-colors shrink-0 whitespace-nowrap ${
               activeTab === 'dependencies'
                 ? 'border-blue-500 text-white font-semibold'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
             }`}
           >
-            <Link2 className="w-3.5 h-3.5" />
+            <Link2 className="w-3.5 h-3.5" aria-hidden="true" />
             <span>{t('collectionSettings.dependenciesTab')}</span>
             {dependencies.length > 0 && (
               <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-500/20 text-blue-300 font-mono">
@@ -535,7 +533,12 @@ export function CollectionSettingsModal({
 
           {/* TAB 2: VARIÁVEIS */}
           {activeTab === 'variables' && (
-            <div className="space-y-4 animate-in fade-in duration-100 min-h-[300px] flex flex-col">
+            <div
+              role="tabpanel"
+              id="panel-collection-variables"
+              aria-labelledby="tab-collection-variables"
+              className="space-y-4 animate-in fade-in duration-100 min-h-[300px] flex flex-col"
+            >
               <VariableGrid
                 variables={variables}
                 onChange={handleVariablesChange}
