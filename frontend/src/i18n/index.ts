@@ -3,6 +3,7 @@ import ptBR from './locales/pt-BR';
 import type { Locale, TranslationKey, TranslationSchema, InterpolationParams } from './types';
 
 export type { Locale, TranslationKey, TranslationSchema, InterpolationParams };
+export { enUS, ptBR };
 
 export const DEFAULT_LOCALE: Locale = 'en-US';
 export const SUPPORTED_LOCALES: readonly Locale[] = ['en-US', 'pt-BR'] as const;

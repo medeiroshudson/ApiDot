@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { translate, getSupportedLocales, isValidLocale, DEFAULT_LOCALE, SUPPORTED_LOCALES } from './index';
+import {
+  translate,
+  getSupportedLocales,
+  isValidLocale,
+  DEFAULT_LOCALE,
+  SUPPORTED_LOCALES,
+  enUS as enUSModule,
+  ptBR as ptBRModule,
+} from './index';
 
 describe('i18n core', () => {
   it('translates existing key in en-US', () => {
@@ -55,5 +63,27 @@ describe('i18n core', () => {
   it('returns key string if path points to a non-string object', () => {
     expect(translate('en-US', 'common' as any)).toBe('common');
     expect(translate('pt-BR', 'common' as any)).toBe('common');
+  });
+
+  it('should have all new topbar, request bar, and collection variables keys in pt-BR and en-US', () => {
+    const ptBR = ptBRModule;
+    const enUS = enUSModule;
+    const requiredKeys = [
+      'header.environmentSelectorAria',
+      'header.environmentManage',
+      'request.agentOfflineTooltip',
+      'request.targetServer',
+      'request.targetAgent',
+      'environments.selectCollection',
+      'environments.noCollections',
+      'collection.variablesTab',
+      'collection.variablesTitle',
+      'collection.variablesDescription',
+    ];
+    requiredKeys.forEach((key) => {
+      const [section, subkey] = key.split('.');
+      expect((ptBR as any)[section]?.[subkey]).toBeDefined();
+      expect((enUS as any)[section]?.[subkey]).toBeDefined();
+    });
   });
 });
