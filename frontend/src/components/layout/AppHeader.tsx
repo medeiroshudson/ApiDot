@@ -1,14 +1,13 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Menu, Settings, Sliders, ChevronDown, LogOut, Globe } from 'lucide-react';
+import { Menu, Settings, Sliders, ChevronDown, LogOut, Globe, Check } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useRequestStore } from '@/stores/useRequestStore';
 import { useTranslation } from '@/hooks/useTranslation';
-import { Select } from '@/components/common/Select';
 
 export interface AppHeaderProps {
   title?: string;
@@ -69,6 +68,8 @@ export function AppHeader({
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const [isEnvMenuOpen, setIsEnvMenuOpen] = useState(false);
+  const envMenuRef = useRef<HTMLDivElement>(null);
 
   const activeMembership = user?.workspaces?.find((w) => w.id === currentWorkspaceId);
   const role =
@@ -77,19 +78,23 @@ export function AppHeader({
 
   const initials = getUserInitials(user?.displayName, user?.email);
 
-  // Close user menu on click outside and on Escape key
+  // Close user menu and environment menu on click outside and on Escape key
   useEffect(() => {
-    if (!isUserMenuOpen) return;
+    if (!isUserMenuOpen && !isEnvMenuOpen) return;
 
     const handlePointerDown = (e: MouseEvent | TouchEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setIsUserMenuOpen(false);
+      }
+      if (envMenuRef.current && !envMenuRef.current.contains(e.target as Node)) {
+        setIsEnvMenuOpen(false);
       }
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsUserMenuOpen(false);
+        setIsEnvMenuOpen(false);
       }
     };
 
@@ -102,7 +107,7 @@ export function AppHeader({
       document.removeEventListener('touchstart', handlePointerDown);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isUserMenuOpen]);
+  }, [isUserMenuOpen, isEnvMenuOpen]);
 
   const handleLogout = async () => {
     setIsUserMenuOpen(false);
@@ -139,31 +144,98 @@ export function AppHeader({
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3">
-        <div className="flex items-center gap-1.5">
-          <Select
-            sizeVariant="sm"
-            value={activeEnvironment ?? ''}
-            onChange={(e) => onSelectEnvironment?.(e.target.value === '' ? null : e.target.value)}
-            aria-label="Selecionar ambiente ativo"
-            className="max-w-[120px] sm:max-w-[200px] truncate hover:border-neutral-700"
-          >
-            <option value="">{t('header.noEnvironment')}</option>
-            {(environments ?? []).map((env, idx) => (
-              <option key={`${env}-${idx}`} value={env}>
-                {env}
-              </option>
-            ))}
-          </Select>
+        {/* Environment Pill */}
+        <div className="relative" ref={envMenuRef}>
           <button
             type="button"
-            onClick={onOpenEnvironmentSettings}
-            aria-label="Configurar ambientes e variáveis"
-            aria-haspopup="dialog"
-            title="Configurar ambientes e variáveis"
-            className="p-2 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-400 cursor-pointer"
+            onClick={() => {
+              setIsEnvMenuOpen((prev) => !prev);
+              setIsUserMenuOpen(false);
+            }}
+            aria-haspopup="menu"
+            aria-expanded={isEnvMenuOpen}
+            aria-label={t('header.environmentSelectorAria')}
+            className="flex items-center gap-1.5 h-8 px-2.5 rounded-md bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-neutral-200 text-xs transition-colors focus:outline-none focus:ring-1 focus:ring-neutral-400 max-w-[120px] sm:max-w-[180px] cursor-pointer"
           >
-            <Sliders className="w-4 h-4" aria-hidden="true" />
+            <span
+              className={`w-2 h-2 rounded-full shrink-0 ${
+                activeEnvironment
+                  ? 'bg-emerald-400 shadow-sm shadow-emerald-500/50'
+                  : 'bg-neutral-600'
+              }`}
+            />
+            <span className="truncate font-medium">
+              {activeEnvironment || t('header.noEnvironment')}
+            </span>
+            <ChevronDown
+              className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform duration-150 ${
+                isEnvMenuOpen ? 'rotate-180' : ''
+              }`}
+              aria-hidden="true"
+            />
           </button>
+
+          {isEnvMenuOpen && (
+            <div
+              role="menu"
+              aria-label="Ambientes disponíveis"
+              data-testid="environment-dropdown-menu"
+              className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1.5 w-60 bg-neutral-900 border border-neutral-800 rounded-xl shadow-2xl py-1.5 z-50 flex flex-col"
+            >
+              <div className="max-h-60 overflow-y-auto py-0.5">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsEnvMenuOpen(false);
+                    onSelectEnvironment?.(null);
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors text-left cursor-pointer"
+                >
+                  <span className="truncate">{t('header.noEnvironment')}</span>
+                  {!activeEnvironment && (
+                    <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" aria-hidden="true" />
+                  )}
+                </button>
+
+                {(environments ?? []).map((env, idx) => {
+                  const isSelected = activeEnvironment === env;
+                  return (
+                    <button
+                      key={`${env}-${idx}`}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setIsEnvMenuOpen(false);
+                        onSelectEnvironment?.(env);
+                      }}
+                      className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors text-left cursor-pointer"
+                    >
+                      <span className="truncate">{env}</span>
+                      {isSelected && (
+                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" aria-hidden="true" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="my-1 border-t border-neutral-800" />
+
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setIsEnvMenuOpen(false);
+                  onOpenEnvironmentSettings?.();
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors text-left cursor-pointer"
+              >
+                <Sliders className="w-3.5 h-3.5 text-neutral-400 shrink-0" aria-hidden="true" />
+                <span className="truncate">{t('header.environmentManage')}</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <button
@@ -172,7 +244,7 @@ export function AppHeader({
           aria-label={t('header.globalSettings')}
           aria-haspopup="dialog"
           title={t('header.globalSettings')}
-          className="p-2 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-400 cursor-pointer"
+          className="hidden sm:flex p-2 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-400 cursor-pointer"
         >
           <Settings className="w-4 h-4" aria-hidden="true" />
         </button>
@@ -182,7 +254,10 @@ export function AppHeader({
           <div className="relative" ref={userMenuRef}>
             <button
               type="button"
-              onClick={() => setIsUserMenuOpen((prev) => !prev)}
+              onClick={() => {
+                setIsUserMenuOpen((prev) => !prev);
+                setIsEnvMenuOpen(false);
+              }}
               aria-label={`Menu do usuário: ${user.displayName || user.email}`}
               aria-expanded={isUserMenuOpen}
               aria-haspopup="menu"
@@ -250,6 +325,23 @@ export function AppHeader({
                     className="flex items-center gap-1.5 px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white transition-colors text-[11px] font-medium cursor-pointer"
                   >
                     <span>{locale === 'en-US' ? t('settings.english') : t('settings.portuguese')}</span>
+                  </button>
+                </div>
+
+                {/* Global Settings */}
+                <div className="px-1 py-1 border-b border-neutral-800">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      onOpenSettings?.();
+                    }}
+                    aria-label={t('header.globalSettings')}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 rounded-md transition-colors text-left cursor-pointer"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-neutral-400 shrink-0" aria-hidden="true" />
+                    <span>{t('header.globalSettings')}</span>
                   </button>
                 </div>
 

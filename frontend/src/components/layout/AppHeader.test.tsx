@@ -87,39 +87,50 @@ describe('AppHeader', () => {
     expect(toggleButton.getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('renders environment dropdown selector with available environments and "No Environment"', () => {
-    const { rerender } = render(<AppHeader environments={['Development', 'Staging', 'Production']} />);
-    const select = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' }) as HTMLSelectElement;
-    expect(select).toBeDefined();
+  it('renders environment pill with active environment indicator and opens dropdown on click', () => {
+    useI18nStore.setState({ locale: 'pt-BR' });
+    render(
+      <AppHeader
+        environments={['Development', 'Production']}
+        activeEnvironment="Production"
+      />
+    );
+    const pill = screen.getByRole('button', { name: /selecionar ambiente ativo/i });
+    expect(pill).toBeInTheDocument();
+    expect(pill).toHaveTextContent('Production');
 
-    const options = Array.from(select.options).map((opt) => ({ text: opt.text, value: opt.value }));
-    expect(options).toEqual([
-      { text: 'No Environment', value: '' },
-      { text: 'Development', value: 'Development' },
-      { text: 'Staging', value: 'Staging' },
-      { text: 'Production', value: 'Production' },
-    ]);
-    expect(select.value).toBe('');
-
-    rerender(<AppHeader environments={['Local', 'Testing']} activeEnvironment="Testing" />);
-    const updatedSelect = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' }) as HTMLSelectElement;
-    const updatedOptions = Array.from(updatedSelect.options).map((opt) => ({ text: opt.text, value: opt.value }));
-    expect(updatedOptions).toEqual([
-      { text: 'No Environment', value: '' },
-      { text: 'Local', value: 'Local' },
-      { text: 'Testing', value: 'Testing' },
-    ]);
-    expect(updatedSelect.value).toBe('Testing');
+    fireEvent.click(pill);
+    expect(screen.getByRole('menu', { name: /ambientes disponíveis/i })).toBeInTheDocument();
+    expect(screen.getByText('Development')).toBeInTheDocument();
+    expect(screen.getByText('Gerenciar ambientes e variáveis...')).toBeInTheDocument();
   });
 
-  it('defaults environments to an empty array when none are provided', () => {
-    render(<AppHeader />);
-    const select = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' }) as HTMLSelectElement;
-    const options = Array.from(select.options).map((opt) => ({ text: opt.text, value: opt.value }));
-    expect(options).toEqual([{ text: 'No Environment', value: '' }]);
+  it('calls onOpenEnvironmentSettings when clicking manage link inside environment pill dropdown', () => {
+    useI18nStore.setState({ locale: 'pt-BR' });
+    const onOpenEnvSettings = vi.fn();
+    render(
+      <AppHeader
+        environments={['Production']}
+        activeEnvironment="Production"
+        onOpenEnvironmentSettings={onOpenEnvSettings}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /selecionar ambiente ativo/i }));
+    fireEvent.click(screen.getByText('Gerenciar ambientes e variáveis...'));
+    expect(onOpenEnvSettings).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onSelectEnvironment with environment name or null when "No Environment" is selected', () => {
+  it('renders environment pill with fallback text when activeEnvironment is null', () => {
+    const { rerender } = render(<AppHeader environments={['Development']} activeEnvironment={null} />);
+    const pill = screen.getByRole('button', { name: /select active environment/i });
+    expect(pill).toBeInTheDocument();
+    expect(pill).toHaveTextContent('No Environment');
+
+    rerender(<AppHeader environments={['Development']} activeEnvironment="Development" />);
+    expect(pill).toHaveTextContent('Development');
+  });
+
+  it('calls onSelectEnvironment with environment name or null when environment item or "No Environment" is clicked', () => {
     const handleSelect = vi.fn();
     render(
       <AppHeader
@@ -128,39 +139,63 @@ describe('AppHeader', () => {
         onSelectEnvironment={handleSelect}
       />
     );
-    const select = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' });
+    const pill = screen.getByRole('button', { name: /select active environment/i });
+    fireEvent.click(pill);
 
-    fireEvent.change(select, { target: { value: 'Staging' } });
+    const stagingItem = screen.getByRole('menuitem', { name: 'Staging' });
+    fireEvent.click(stagingItem);
     expect(handleSelect).toHaveBeenCalledWith('Staging');
 
-    fireEvent.change(select, { target: { value: '' } });
+    // Reopen menu to select "No Environment"
+    fireEvent.click(pill);
+    const noEnvItem = screen.getByRole('menuitem', { name: 'No Environment' });
+    fireEvent.click(noEnvItem);
     expect(handleSelect).toHaveBeenCalledWith(null);
   });
 
-  it('calls onOpenEnvironmentSettings when clicking the environment settings button', () => {
-    const handleOpenSettings = vi.fn();
-    render(<AppHeader onOpenEnvironmentSettings={handleOpenSettings} />);
-    const settingsButton = screen.getByRole('button', { name: 'Configurar ambientes e variáveis' });
-    fireEvent.click(settingsButton);
-    expect(handleOpenSettings).toHaveBeenCalledTimes(1);
-  });
-
-  it('exposes accessible ARIA attributes for environment selector and settings trigger', () => {
-    render(<AppHeader />);
-    const select = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' });
-    expect(select.getAttribute('aria-label')).toBe('Selecionar ambiente ativo');
-
-    const settingsButton = screen.getByRole('button', { name: 'Configurar ambientes e variáveis' });
-    expect(settingsButton.getAttribute('aria-label')).toBe('Configurar ambientes e variáveis');
-    expect(settingsButton.getAttribute('aria-haspopup')).toBe('dialog');
-    expect(settingsButton.getAttribute('type')).toBe('button');
-  });
-
-  it('handles duplicate environments safely', () => {
+  it('handles duplicate environments safely in environment pill dropdown', () => {
     render(<AppHeader environments={['Dev', 'Dev']} />);
-    const select = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' }) as HTMLSelectElement;
-    const options = Array.from(select.options).map((opt) => opt.text);
-    expect(options).toEqual(['No Environment', 'Dev', 'Dev']);
+    const pill = screen.getByRole('button', { name: /select active environment/i });
+    fireEvent.click(pill);
+
+    const items = screen.getAllByRole('menuitem', { name: 'Dev' });
+    expect(items).toHaveLength(2);
+  });
+
+  it('closes environment dropdown menu when pressing Escape or clicking outside', () => {
+    render(<AppHeader environments={['Development', 'Production']} />);
+    const pill = screen.getByRole('button', { name: /select active environment/i });
+
+    fireEvent.click(pill);
+    expect(screen.getByRole('menu', { name: /environments|ambientes disponíveis/i })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('menu', { name: /environments|ambientes disponíveis/i })).toBeNull();
+
+    // Click outside
+    fireEvent.click(pill);
+    expect(screen.getByRole('menu', { name: /environments|ambientes disponíveis/i })).toBeInTheDocument();
+
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole('menu', { name: /environments|ambientes disponíveis/i })).toBeNull();
+  });
+
+  it('exposes accessible ARIA attributes for environment pill trigger', () => {
+    render(<AppHeader />);
+    const pill = screen.getByRole('button', { name: /select active environment/i });
+    expect(pill.getAttribute('aria-label')).toBe('Select active environment');
+    expect(pill.getAttribute('aria-haspopup')).toBe('menu');
+    expect(pill.getAttribute('aria-expanded')).toBe('false');
+
+    fireEvent.click(pill);
+    expect(pill.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('hides topbar global settings button on mobile with responsive classes', () => {
+    render(<AppHeader />);
+    const settingsButton = screen.getByRole('button', { name: 'Global Settings' });
+    expect(settingsButton.className).toContain('hidden');
+    expect(settingsButton.className).toContain('sm:flex');
   });
 
   describe('User Profile Menu and Authentication', () => {
@@ -253,11 +288,37 @@ describe('AppHeader', () => {
       expect(screen.queryByTestId('user-dropdown-menu')).toBeNull();
     });
 
+    it('provides global settings access inside user profile dropdown with settings icon and calls onOpenSettings', () => {
+      const handleOpenSettings = vi.fn();
+      useAuthStore.setState({
+        isAuthenticated: true,
+        isLoading: false,
+        user: {
+          id: 'u-1',
+          email: 'hudson@example.com',
+          displayName: 'Hudson Medeiros',
+          isRoot: false,
+          workspaces: [{ id: 'ws-main', name: 'Main Workspace', role: 'Owner' }],
+        },
+      });
+
+      render(<AppHeader onOpenSettings={handleOpenSettings} />);
+      const userTrigger = screen.getByRole('button', { name: /menu do usuário/i });
+      fireEvent.click(userTrigger);
+
+      const globalSettingsItem = screen.getByRole('menuitem', { name: 'Global Settings' });
+      expect(globalSettingsItem).toBeInTheDocument();
+
+      fireEvent.click(globalSettingsItem);
+      expect(handleOpenSettings).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId('user-dropdown-menu')).toBeNull();
+    });
+
     it('renders in English by default ("Global Settings", "No Environment")', () => {
       render(<AppHeader />);
       expect(screen.getByRole('button', { name: 'Global Settings' })).toBeInTheDocument();
-      const select = screen.getByRole('combobox', { name: 'Selecionar ambiente ativo' }) as HTMLSelectElement;
-      expect(select.options[0].text).toBe('No Environment');
+      const pill = screen.getByRole('button', { name: /select active environment/i });
+      expect(pill).toHaveTextContent('No Environment');
     });
 
     it('shows active language in user menu and allows quick toggle between en-US and pt-BR', async () => {
