@@ -20,6 +20,8 @@ describe('useEnvironmentStore', () => {
       activeEnvironment: null,
       globals: [],
       collectionVariables: [],
+      activeCollectionId: null,
+      collectionVariablesByCollectionId: {},
     });
     localStorage.clear();
   });
@@ -47,6 +49,8 @@ describe('useEnvironmentStore', () => {
       const state = useEnvironmentStore.getState();
       expect(state.globals).toEqual([]);
       expect(state.collectionVariables).toEqual([]);
+      expect(state.activeCollectionId).toBeNull();
+      expect(state.collectionVariablesByCollectionId).toEqual({});
     });
 
     it('should export defined constants and initial state', () => {
@@ -61,6 +65,8 @@ describe('useEnvironmentStore', () => {
         activeEnvironment: null,
         globals: [],
         collectionVariables: [],
+        activeCollectionId: null,
+        collectionVariablesByCollectionId: {},
       });
     });
   });
@@ -179,6 +185,186 @@ describe('useEnvironmentStore', () => {
 
       useEnvironmentStore.getState().setCollectionVariables([]);
       expect(useEnvironmentStore.getState().collectionVariables).toEqual([]);
+    });
+  });
+
+  describe('Multi-Collection Variables Management', () => {
+    it('should store and retrieve variables isolated by collectionId', () => {
+      const store = useEnvironmentStore.getState();
+      const colAVars = [{ key: 'API_URL', value: 'https://api-a.com', isActive: true }];
+      const colBVars = [{ key: 'API_URL', value: 'https://api-b.com', isActive: true }];
+
+      store.setCollectionVariablesForId('col-a', colAVars);
+      store.setCollectionVariablesForId('col-b', colBVars);
+
+      expect(store.getCollectionVariablesForId('col-a')).toEqual(colAVars);
+      expect(store.getCollectionVariablesForId('col-b')).toEqual(colBVars);
+      expect(store.getCollectionVariablesForId('col-nonexistent')).toEqual([]);
+    });
+
+    it('should overwrite variables when updating existing collectionId', () => {
+      const store = useEnvironmentStore.getState();
+      const initialVars = [{ key: 'KEY_1', value: 'v1', isActive: true }];
+      const updatedVars = [{ key: 'KEY_2', value: 'v2', isActive: true }];
+
+      store.setCollectionVariablesForId('col-1', initialVars);
+      expect(store.getCollectionVariablesForId('col-1')).toEqual(initialVars);
+
+      store.setCollectionVariablesForId('col-1', updatedVars);
+      expect(store.getCollectionVariablesForId('col-1')).toEqual(updatedVars);
+    });
+
+    it('should update activeCollectionId', () => {
+      const store = useEnvironmentStore.getState();
+      expect(store.activeCollectionId).toBeNull();
+
+      store.setActiveCollectionId('col-123');
+      expect(useEnvironmentStore.getState().activeCollectionId).toBe('col-123');
+
+      store.setActiveCollectionId(null);
+      expect(useEnvironmentStore.getState().activeCollectionId).toBeNull();
+    });
+
+    it('should resolve variables using activeCollectionId', () => {
+      const store = useEnvironmentStore.getState();
+      store.setGlobals([{ key: 'GLOBAL_VAR', value: 'global', isActive: true }]);
+      store.setCollectionVariablesForId('col-active', [{ key: 'COL_VAR', value: 'from-col-a', isActive: true }]);
+      store.setActiveCollectionId('col-active');
+
+      const resolved = store.getResolvedVariables();
+      expect(resolved['GLOBAL_VAR']).toBe('global');
+      expect(resolved['COL_VAR']).toBe('from-col-a');
+    });
+
+    it('should let active collection variables override globals with same key', () => {
+      const store = useEnvironmentStore.getState();
+      store.setGlobals([
+        { key: 'API_URL', value: 'https://global.api.com', isActive: true },
+        { key: 'GLOBAL_ONLY', value: 'true', isActive: true },
+      ]);
+      store.setCollectionVariablesForId('col-x', [
+        { key: 'API_URL', value: 'https://col-x.api.com', isActive: true },
+        { key: 'COL_ONLY', value: 'col-val', isActive: true },
+      ]);
+      store.setActiveCollectionId('col-x');
+
+      const resolved = store.getResolvedVariables();
+      expect(resolved['API_URL']).toBe('https://col-x.api.com');
+      expect(resolved['GLOBAL_ONLY']).toBe('true');
+      expect(resolved['COL_ONLY']).toBe('col-val');
+    });
+
+    it('should let active environment variables override active collection variables', () => {
+      const store = useEnvironmentStore.getState();
+      store.setGlobals([
+        { key: 'API_URL', value: 'https://global.api.com', isActive: true },
+      ]);
+      store.setCollectionVariablesForId('col-x', [
+        { key: 'API_URL', value: 'https://collection.api.com', isActive: true },
+        { key: 'COL_VAR', value: 'c-val', isActive: true },
+      ]);
+      store.setActiveCollectionId('col-x');
+      store.setEnvironments([
+        {
+          name: 'Staging',
+          variables: [{ key: 'API_URL', value: 'https://staging.api.com', isActive: true }],
+        },
+      ]);
+      store.setActiveEnvironment('Staging');
+
+      const resolved = store.getResolvedVariables();
+      expect(resolved['API_URL']).toBe('https://staging.api.com');
+      expect(resolved['COL_VAR']).toBe('c-val');
+    });
+
+    it('should ignore inactive variables from active collection', () => {
+      const store = useEnvironmentStore.getState();
+      store.setGlobals([
+        { key: 'ACTIVE_GLOBAL', value: 'global-val', isActive: true },
+      ]);
+      store.setCollectionVariablesForId('col-active', [
+        { key: 'INACTIVE_COL', value: 'off', isActive: false },
+        { key: 'ACTIVE_GLOBAL', value: 'override-attempt', isActive: false },
+      ]);
+      store.setActiveCollectionId('col-active');
+
+      const resolved = store.getResolvedVariables();
+      expect(resolved['ACTIVE_GLOBAL']).toBe('global-val');
+      expect(resolved['INACTIVE_COL']).toBeUndefined();
+    });
+
+    it('should return available variables using activeCollectionId with scope "collection"', () => {
+      const store = useEnvironmentStore.getState();
+      store.setGlobals([
+        { key: 'G_VAR', value: 'g-val', isActive: true },
+      ]);
+      store.setCollectionVariablesForId('col-1', [
+        { key: 'COL1_VAR', value: 'val-1', isActive: true },
+      ]);
+      store.setCollectionVariablesForId('col-2', [
+        { key: 'COL2_VAR', value: 'val-2', isActive: true },
+      ]);
+      store.setActiveCollectionId('col-1');
+
+      const available = store.getAvailableVariables();
+      expect(available).toEqual([
+        { key: 'G_VAR', value: 'g-val', scope: 'global' },
+        { key: 'COL1_VAR', value: 'val-1', scope: 'collection' },
+      ]);
+      expect(available.some((v) => v.key === 'COL2_VAR')).toBe(false);
+    });
+
+    it('should switch resolved and available variables dynamically when changing activeCollectionId', () => {
+      const store = useEnvironmentStore.getState();
+      store.setCollectionVariablesForId('col-alpha', [
+        { key: 'SERVICE_NAME', value: 'alpha-service', isActive: true },
+      ]);
+      store.setCollectionVariablesForId('col-beta', [
+        { key: 'SERVICE_NAME', value: 'beta-service', isActive: true },
+      ]);
+
+      store.setActiveCollectionId('col-alpha');
+      expect(store.getResolvedVariables()['SERVICE_NAME']).toBe('alpha-service');
+      expect(store.getAvailableVariables()).toEqual([
+        { key: 'SERVICE_NAME', value: 'alpha-service', scope: 'collection' },
+      ]);
+
+      store.setActiveCollectionId('col-beta');
+      expect(store.getResolvedVariables()['SERVICE_NAME']).toBe('beta-service');
+      expect(store.getAvailableVariables()).toEqual([
+        { key: 'SERVICE_NAME', value: 'beta-service', scope: 'collection' },
+      ]);
+    });
+
+    it('should fallback to legacy collectionVariables when activeCollectionId is null', () => {
+      const store = useEnvironmentStore.getState();
+      store.setCollectionVariables([
+        { key: 'LEGACY_VAR', value: 'legacy-val', isActive: true },
+      ]);
+      store.setActiveCollectionId(null);
+
+      expect(store.getResolvedVariables()['LEGACY_VAR']).toBe('legacy-val');
+      expect(store.getAvailableVariables()).toEqual([
+        { key: 'LEGACY_VAR', value: 'legacy-val', scope: 'collection' },
+      ]);
+    });
+
+    it('should return empty collection variables when activeCollectionId is unknown or has no variables', () => {
+      const store = useEnvironmentStore.getState();
+      store.setGlobals([
+        { key: 'GLOBAL_ONLY', value: 'g', isActive: true },
+      ]);
+      store.setCollectionVariables([
+        { key: 'LEGACY_VAR', value: 'legacy', isActive: true },
+      ]);
+      store.setActiveCollectionId('unknown-collection-id');
+
+      expect(store.getResolvedVariables()).toEqual({
+        GLOBAL_ONLY: 'g',
+      });
+      expect(store.getAvailableVariables()).toEqual([
+        { key: 'GLOBAL_ONLY', value: 'g', scope: 'global' },
+      ]);
     });
   });
 
@@ -469,6 +655,10 @@ describe('useEnvironmentStore', () => {
       useEnvironmentStore.getState().setCollectionVariables([
         { key: 'C1', value: 'val', isActive: true },
       ]);
+      useEnvironmentStore.getState().setCollectionVariablesForId('col-1', [
+        { key: 'C_COL', value: 'val_col', isActive: true },
+      ]);
+      useEnvironmentStore.getState().setActiveCollectionId('col-1');
       useEnvironmentStore.getState().setEnvironments([
         { name: 'Custom', variables: [] },
       ]);
@@ -481,6 +671,8 @@ describe('useEnvironmentStore', () => {
       expect(state.activeEnvironment).toBeNull();
       expect(state.globals).toEqual([]);
       expect(state.collectionVariables).toEqual([]);
+      expect(state.activeCollectionId).toBeNull();
+      expect(state.collectionVariablesByCollectionId).toEqual({});
     });
   });
 
@@ -491,7 +683,7 @@ describe('useEnvironmentStore', () => {
       expect(persistOptions?.name).toBe(ENVIRONMENT_STORAGE_KEY);
     });
 
-    it('should partialize environments, activeEnvironment, and globals, omitting collectionVariables and actions', () => {
+    it('should partialize environments, activeEnvironment, globals, and collectionVariablesByCollectionId, omitting collectionVariables, activeCollectionId, and actions', () => {
       const persistOptions = (useEnvironmentStore as any).persist?.getOptions?.();
       expect(typeof persistOptions?.partialize).toBe('function');
 
@@ -500,6 +692,13 @@ describe('useEnvironmentStore', () => {
         activeEnvironment: 'TestEnv',
         globals: [{ key: 'G_KEY', value: 'g_val', isActive: true }],
         collectionVariables: [{ key: 'C_KEY', value: 'c_val', isActive: true }],
+        activeCollectionId: 'col-1',
+        collectionVariablesByCollectionId: {
+          'col-1': [{ key: 'COL_KEY', value: 'col_val', isActive: true }],
+        },
+        setActiveCollectionId: () => {},
+        setCollectionVariablesForId: () => {},
+        getCollectionVariablesForId: () => [],
         setEnvironments: () => {},
         setActiveEnvironment: () => {},
         setGlobals: () => {},
@@ -515,10 +714,17 @@ describe('useEnvironmentStore', () => {
         environments: [{ name: 'TestEnv', variables: [] }],
         activeEnvironment: 'TestEnv',
         globals: [{ key: 'G_KEY', value: 'g_val', isActive: true }],
+        collectionVariablesByCollectionId: {
+          'col-1': [{ key: 'COL_KEY', value: 'col_val', isActive: true }],
+        },
       });
 
-      // Verify collectionVariables and actions are excluded from persistence
+      // Verify collectionVariables, activeCollectionId, and actions are excluded from persistence
       expect((partialized as any).collectionVariables).toBeUndefined();
+      expect((partialized as any).activeCollectionId).toBeUndefined();
+      expect((partialized as any).setActiveCollectionId).toBeUndefined();
+      expect((partialized as any).setCollectionVariablesForId).toBeUndefined();
+      expect((partialized as any).getCollectionVariablesForId).toBeUndefined();
       expect((partialized as any).setEnvironments).toBeUndefined();
       expect((partialized as any).setActiveEnvironment).toBeUndefined();
       expect((partialized as any).setGlobals).toBeUndefined();

@@ -10,10 +10,15 @@ export interface EnvironmentState {
   activeEnvironment: string | null;
   globals: VariableItem[];
   collectionVariables: VariableItem[];
+  collectionVariablesByCollectionId: Record<string, VariableItem[]>;
+  activeCollectionId: string | null;
   setEnvironments: (envs: EnvironmentGroup[]) => void;
   setActiveEnvironment: (name: string | null) => void;
   setGlobals: (vars: VariableItem[]) => void;
   setCollectionVariables: (vars: VariableItem[]) => void;
+  setActiveCollectionId: (id: string | null) => void;
+  setCollectionVariablesForId: (collectionId: string, vars: VariableItem[]) => void;
+  getCollectionVariablesForId: (collectionId: string) => VariableItem[];
   getResolvedVariables: () => Record<string, string>;
   getAvailableVariables: () => AutocompleteVariable[];
   reset: () => void;
@@ -32,6 +37,8 @@ export const INITIAL_ENVIRONMENT_STATE = {
   activeEnvironment: null,
   globals: [] as VariableItem[],
   collectionVariables: [] as VariableItem[],
+  activeCollectionId: null as string | null,
+  collectionVariablesByCollectionId: {} as Record<string, VariableItem[]>,
 };
 
 const dummyStorage: StateStorage = {
@@ -54,6 +61,8 @@ export const useEnvironmentStore = create<EnvironmentState>()(
       activeEnvironment: null,
       globals: [],
       collectionVariables: [],
+      activeCollectionId: null,
+      collectionVariablesByCollectionId: {},
 
       setEnvironments: (envs: EnvironmentGroup[]) => {
         set((state) => {
@@ -89,13 +98,51 @@ export const useEnvironmentStore = create<EnvironmentState>()(
         set({ collectionVariables: vars });
       },
 
+      setActiveCollectionId: (id: string | null) => {
+        set({ activeCollectionId: id });
+      },
+
+      setCollectionVariablesForId: (collectionId: string, vars: VariableItem[]) => {
+        set((state) => ({
+          collectionVariablesByCollectionId: {
+            ...(state.collectionVariablesByCollectionId || {}),
+            [collectionId]: Array.isArray(vars) ? vars : [],
+          },
+        }));
+      },
+
+      getCollectionVariablesForId: (collectionId: string) => {
+        const vars = (get().collectionVariablesByCollectionId || {})[collectionId];
+        return Array.isArray(vars) ? vars : [];
+      },
+
       getResolvedVariables: () => {
-        const { globals, collectionVariables, environments, activeEnvironment } = get();
-        return resolveVariables(globals, collectionVariables, environments, activeEnvironment);
+        const {
+          globals,
+          collectionVariables,
+          collectionVariablesByCollectionId,
+          activeCollectionId,
+          environments,
+          activeEnvironment,
+        } = get();
+        const currentCollectionVars = activeCollectionId
+          ? ((collectionVariablesByCollectionId || {})[activeCollectionId] || [])
+          : (collectionVariables || []);
+        return resolveVariables(globals, currentCollectionVars, environments, activeEnvironment);
       },
 
       getAvailableVariables: () => {
-        const { globals, collectionVariables, environments, activeEnvironment } = get();
+        const {
+          globals,
+          collectionVariables,
+          collectionVariablesByCollectionId,
+          activeCollectionId,
+          environments,
+          activeEnvironment,
+        } = get();
+        const currentCollectionVars = activeCollectionId
+          ? ((collectionVariablesByCollectionId || {})[activeCollectionId] || [])
+          : (collectionVariables || []);
         const list: AutocompleteVariable[] = [];
 
         (globals || [])
@@ -104,7 +151,7 @@ export const useEnvironmentStore = create<EnvironmentState>()(
             list.push({ key: g.key.trim(), value: g.value, scope: 'global' });
           });
 
-        (collectionVariables || [])
+        (currentCollectionVars || [])
           .filter((c) => c.isActive !== false && Boolean(c.key?.trim()))
           .forEach((c) => {
             list.push({ key: c.key.trim(), value: c.value, scope: 'collection' });
@@ -132,6 +179,8 @@ export const useEnvironmentStore = create<EnvironmentState>()(
           activeEnvironment: null,
           globals: [],
           collectionVariables: [],
+          activeCollectionId: null,
+          collectionVariablesByCollectionId: {},
         });
       },
     }),
@@ -144,6 +193,7 @@ export const useEnvironmentStore = create<EnvironmentState>()(
         environments: state.environments,
         activeEnvironment: state.activeEnvironment,
         globals: state.globals,
+        collectionVariablesByCollectionId: state.collectionVariablesByCollectionId,
       }),
     }
   )
