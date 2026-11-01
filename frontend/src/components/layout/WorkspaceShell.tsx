@@ -13,6 +13,7 @@ import {
   FolderOption,
 } from '@/components/request/RequestEditor';
 import { EnvironmentModal, EnvironmentGroup } from '@/components/environment/EnvironmentModal';
+import { VariableItem } from '@/components/environment/VariableGrid';
 import {
   CollectionSettingsModal,
   SyncReport,
@@ -31,7 +32,9 @@ import {
   ExecutionTarget,
   HttpBodyType,
   importOpenApiCollection,
+  WorkspaceTreeDto,
 } from '@/lib/treeApi';
+import { ActiveTreeItem } from '@/hooks/useCollectionTree';
 import { useLayoutStore } from '@/stores/useLayoutStore';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
@@ -65,6 +68,41 @@ function countCollectionRequests(col: CollectionNodeDto): number {
   };
   if (Array.isArray(col.folders)) col.folders.forEach(countFolder);
   return count;
+}
+
+function findCollectionIdForTreeItem(
+  tree: WorkspaceTreeDto | null,
+  activeItem: ActiveTreeItem | null
+): string | null {
+  if (!tree || !Array.isArray(tree.collections) || !activeItem) return null;
+
+  if (activeItem.type === 'collection') {
+    return activeItem.id;
+  }
+
+  const data = activeItem.data as { collectionId?: string | null } | undefined;
+  if (data?.collectionId) {
+    return data.collectionId;
+  }
+
+  for (const col of tree.collections) {
+    if (col.id === activeItem.id) return col.id;
+    if (Array.isArray(col.requests) && col.requests.some((r) => r.id === activeItem.id)) {
+      return col.id;
+    }
+    const checkFolder = (folder: FolderNodeDto): boolean => {
+      if (folder.id === activeItem.id) return true;
+      if (Array.isArray(folder.requests) && folder.requests.some((r) => r.id === activeItem.id)) {
+        return true;
+      }
+      return Array.isArray(folder.subFolders) && folder.subFolders.some(checkFolder);
+    };
+    if (Array.isArray(col.folders) && col.folders.some(checkFolder)) {
+      return col.id;
+    }
+  }
+
+  return null;
 }
 
 export interface WorkspaceShellProps {
@@ -108,10 +146,15 @@ function WorkspaceShellContent({
   const activeEnvironment = useEnvironmentStore((s) => s.activeEnvironment);
   const globals = useEnvironmentStore((s) => s.globals);
   const collectionVariables = useEnvironmentStore((s) => s.collectionVariables);
+  const collectionVariablesByCollectionId = useEnvironmentStore(
+    (s) => s.collectionVariablesByCollectionId
+  );
   const setEnvironments = useEnvironmentStore((s) => s.setEnvironments);
   const setActiveEnvironment = useEnvironmentStore((s) => s.setActiveEnvironment);
   const setGlobals = useEnvironmentStore((s) => s.setGlobals);
   const setCollectionVariables = useEnvironmentStore((s) => s.setCollectionVariables);
+  const setActiveCollectionId = useEnvironmentStore((s) => s.setActiveCollectionId);
+  const setCollectionVariablesForId = useEnvironmentStore((s) => s.setCollectionVariablesForId);
   const getResolvedVariables = useEnvironmentStore((s) => s.getResolvedVariables);
 
   // Request Store
@@ -152,6 +195,40 @@ function WorkspaceShellContent({
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [syncingCollectionId, setSyncingCollectionId] = useState<string | null>(null);
   const [editingCollection, setEditingCollection] = useState<CollectionNodeDto | null>(null);
+
+  // Derived collections & activeCollectionId
+  const collections = useMemo(
+    () => (tree?.collections || []).map((c) => ({ id: c.id, name: c.name })),
+    [tree?.collections]
+  );
+
+  const activeCollectionId = useMemo(() => {
+    if (activeRequestDetails?.collectionId) {
+      return activeRequestDetails.collectionId;
+    }
+    const treeCollectionId = findCollectionIdForTreeItem(tree, activeItem);
+    if (treeCollectionId) {
+      return treeCollectionId;
+    }
+    if (selectedCollectionId) {
+      return selectedCollectionId;
+    }
+    return tree?.collections?.[0]?.id ?? null;
+  }, [activeRequestDetails?.collectionId, tree, activeItem, selectedCollectionId]);
+
+  useEffect(() => {
+    setActiveCollectionId(activeCollectionId);
+  }, [activeCollectionId, setActiveCollectionId]);
+
+  const handleCollectionVariablesChange = useCallback(
+    (colId: string, vars: VariableItem[]) => {
+      setCollectionVariablesForId(colId, vars);
+      if (colId === activeCollectionId) {
+        setCollectionVariables(vars);
+      }
+    },
+    [setCollectionVariablesForId, activeCollectionId, setCollectionVariables]
+  );
 
   // Global Settings Modal State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -664,6 +741,10 @@ function WorkspaceShellContent({
         onClose={() => setModalOpen('env', false)}
         globals={globals}
         collectionVariables={collectionVariables}
+        collections={collections}
+        activeCollectionId={activeCollectionId}
+        collectionVariablesByCollectionId={collectionVariablesByCollectionId}
+        onCollectionVariablesChange={handleCollectionVariablesChange}
         environments={environments}
         activeEnvironment={activeEnvironment}
         onGlobalsChange={setGlobals}

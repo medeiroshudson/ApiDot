@@ -1,10 +1,22 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EnvironmentModal } from './EnvironmentModal';
 import { parseJsonToVariableItems } from './VariableGrid';
+import { useI18nStore } from '@/stores/useI18nStore';
+import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
 
 describe('EnvironmentModal', () => {
+  beforeEach(() => {
+    useI18nStore.setState({ locale: 'en-US' });
+    useEnvironmentStore.getState().reset();
+  });
+
+  afterEach(() => {
+    useI18nStore.setState({ locale: 'en-US' });
+    useEnvironmentStore.getState().reset();
+  });
+
   const defaultGlobals = [
     { key: 'API_URL', value: 'https://api.global.com', isActive: true, isSecret: false },
     { key: 'GLOBAL_TOKEN', value: 'secret-global-token', isActive: true, isSecret: true },
@@ -220,6 +232,213 @@ describe('EnvironmentModal', () => {
 
       fireEvent.keyDown(collectionTab, { key: 'ArrowLeft' });
       expect(globalsTab).toHaveAttribute('aria-selected', 'true');
+    });
+  });
+
+  describe('Collection Selector & Multi-Collection Support', () => {
+    it('renders collection selector in Collection tab and updates grid when switching collections', () => {
+      useI18nStore.setState({ locale: 'pt-BR' });
+      const collections = [
+        { id: 'col-1', name: 'Users API' },
+        { id: 'col-2', name: 'Orders API' },
+      ];
+      const collectionVars = {
+        'col-1': [{ key: 'BASE_USERS', value: 'https://users.api', isActive: true }],
+        'col-2': [{ key: 'BASE_ORDERS', value: 'https://orders.api', isActive: true }],
+      };
+
+      render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={vi.fn()}
+          initialTab="collection"
+          collections={collections}
+          activeCollectionId="col-1"
+          collectionVariablesByCollectionId={collectionVars}
+        />
+      );
+
+      expect(screen.getByDisplayValue('Users API')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('BASE_USERS')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByRole('combobox', { name: /coleção/i }), {
+        target: { value: 'col-2' },
+      });
+      expect(screen.getByDisplayValue('BASE_ORDERS')).toBeInTheDocument();
+    });
+
+    it('renders empty state when workspace has no collections', () => {
+      useI18nStore.setState({ locale: 'pt-BR' });
+      render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={vi.fn()}
+          initialTab="collection"
+          collections={[]}
+        />
+      );
+      expect(screen.getByText(/nenhuma coleção encontrada neste workspace/i)).toBeInTheDocument();
+    });
+
+    it('renders collection selector and empty state in en-US', () => {
+      useI18nStore.setState({ locale: 'en-US' });
+      const { rerender } = render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={vi.fn()}
+          initialTab="collection"
+          collections={[{ id: 'col-1', name: 'Payments API' }]}
+          collectionVariablesByCollectionId={{
+            'col-1': [{ key: 'PAY_URL', value: 'https://pay.api', isActive: true }],
+          }}
+        />
+      );
+
+      expect(screen.getByRole('combobox', { name: /collection/i })).toBeInTheDocument();
+      expect(screen.getByDisplayValue('PAY_URL')).toBeInTheDocument();
+
+      rerender(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={vi.fn()}
+          initialTab="collection"
+          collections={[]}
+        />
+      );
+
+      expect(screen.getByText(/no collections found in this workspace/i)).toBeInTheDocument();
+    });
+
+    it('defaults to first collection when activeCollectionId is not provided', () => {
+      const collections = [
+        { id: 'col-a', name: 'Alpha API' },
+        { id: 'col-b', name: 'Beta API' },
+      ];
+      const collectionVars = {
+        'col-a': [{ key: 'ALPHA_VAR', value: 'alpha_value', isActive: true }],
+        'col-b': [{ key: 'BETA_VAR', value: 'beta_value', isActive: true }],
+      };
+
+      render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={vi.fn()}
+          initialTab="collection"
+          collections={collections}
+          collectionVariablesByCollectionId={collectionVars}
+        />
+      );
+
+      expect(screen.getByDisplayValue('Alpha API')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('ALPHA_VAR')).toBeInTheDocument();
+    });
+
+    it('calls onCollectionVariablesChange when modifying variables in selected collection', () => {
+      const handleColVarsChange = vi.fn();
+      const collections = [
+        { id: 'col-1', name: 'Users API' },
+      ];
+      const collectionVars = {
+        'col-1': [{ key: 'API_URL', value: 'https://initial.com', isActive: true }],
+      };
+
+      render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={vi.fn()}
+          initialTab="collection"
+          collections={collections}
+          activeCollectionId="col-1"
+          collectionVariablesByCollectionId={collectionVars}
+          onCollectionVariablesChange={handleColVarsChange}
+        />
+      );
+
+      const keyInput = screen.getByDisplayValue('API_URL');
+      fireEvent.change(keyInput, { target: { value: 'NEW_API_URL' } });
+
+      expect(handleColVarsChange).toHaveBeenCalledWith(
+        'col-1',
+        expect.arrayContaining([
+          expect.objectContaining({ key: 'NEW_API_URL' }),
+        ])
+      );
+    });
+
+    it('dynamically computes cascade resolution using selected collection in Calculadas tab', () => {
+      const collections = [
+        { id: 'col-1', name: 'Users API' },
+        { id: 'col-2', name: 'Orders API' },
+      ];
+      const collectionVars = {
+        'col-1': [
+          { key: 'API_ENDPOINT', value: 'https://users.api', isActive: true },
+          { key: 'USERS_TOKEN', value: 'token-u', isActive: true },
+        ],
+        'col-2': [
+          { key: 'API_ENDPOINT', value: 'https://orders.api', isActive: true },
+          { key: 'ORDERS_TOKEN', value: 'token-o', isActive: true },
+        ],
+      };
+
+      render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={vi.fn()}
+          initialTab="computed"
+          globals={[{ key: 'API_ENDPOINT', value: 'https://global.api', isActive: true }]}
+          collections={collections}
+          activeCollectionId="col-2"
+          collectionVariablesByCollectionId={collectionVars}
+        />
+      );
+
+      // col-2 should override global API_ENDPOINT
+      expect(screen.getByText('API_ENDPOINT')).toBeInTheDocument();
+      expect(screen.getByText('https://orders.api')).toBeInTheDocument();
+      expect(screen.getByText('ORDERS_TOKEN')).toBeInTheDocument();
+      expect(screen.getByText('token-o')).toBeInTheDocument();
+      expect(screen.queryByText('USERS_TOKEN')).toBeNull();
+    });
+
+    it('resolves cascade where active environment overrides selected collection', () => {
+      const collections = [
+        { id: 'col-1', name: 'Users API' },
+      ];
+      const collectionVars = {
+        'col-1': [
+          { key: 'API_URL', value: 'https://users.api.com', isActive: true },
+          { key: 'COL_VAR', value: 'col_val', isActive: true },
+        ],
+      };
+      const envs = [
+        {
+          name: 'Staging',
+          variables: [
+            { key: 'API_URL', value: 'https://staging.api.com', isActive: true },
+          ],
+        },
+      ];
+
+      render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={vi.fn()}
+          initialTab="computed"
+          globals={[{ key: 'API_URL', value: 'https://global.api.com', isActive: true }]}
+          collections={collections}
+          activeCollectionId="col-1"
+          collectionVariablesByCollectionId={collectionVars}
+          environments={envs}
+          activeEnvironment="Staging"
+        />
+      );
+
+      // Staging overrides col-1 which overrides global
+      expect(screen.getByText('API_URL')).toBeInTheDocument();
+      expect(screen.getByText('https://staging.api.com')).toBeInTheDocument();
+      expect(screen.getByText('COL_VAR')).toBeInTheDocument();
+      expect(screen.getByText('col_val')).toBeInTheDocument();
     });
   });
 

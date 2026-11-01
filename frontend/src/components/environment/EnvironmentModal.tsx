@@ -45,6 +45,10 @@ export interface EnvironmentModalProps {
   initialTab?: ModalTab;
   globals?: VariableItem[];
   collectionVariables?: VariableItem[];
+  collections?: Array<{ id: string; name: string }>;
+  activeCollectionId?: string | null;
+  collectionVariablesByCollectionId?: Record<string, VariableItem[]>;
+  onCollectionVariablesChange?: (collectionId: string, variables: VariableItem[]) => void;
   environments?: EnvironmentGroup[] | Record<string, VariableItem[]>;
   activeEnvironment?: string | null;
   computedVariables?: ResolvedVariableItem[];
@@ -72,6 +76,10 @@ export function EnvironmentModal({
   initialTab = 'globals',
   globals = EMPTY_GLOBALS,
   collectionVariables = EMPTY_COLLECTIONS,
+  collections,
+  activeCollectionId = null,
+  collectionVariablesByCollectionId,
+  onCollectionVariablesChange,
   environments = EMPTY_ENVIRONMENTS,
   activeEnvironment = null,
   computedVariables,
@@ -85,6 +93,16 @@ export function EnvironmentModal({
   const [activeTab, setActiveTab] = useState<CanonicalTab>(() => toCanonicalTab(initialTab));
   const [globalsList, setGlobalsList] = useState<VariableItem[]>(globals);
   const [collectionList, setCollectionList] = useState<VariableItem[]>(collectionVariables);
+
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(() => {
+    if (activeCollectionId) return activeCollectionId;
+    if (collections && collections.length > 0) return collections[0].id;
+    return null;
+  });
+
+  const [localCollectionVarsByColId, setLocalCollectionVarsByColId] = useState<
+    Record<string, VariableItem[]>
+  >(() => collectionVariablesByCollectionId || {});
 
   const normalizeEnvironments = (
     input: EnvironmentGroup[] | Record<string, VariableItem[]>
@@ -121,6 +139,25 @@ export function EnvironmentModal({
   useEffect(() => {
     setCollectionList(collectionVariables);
   }, [collectionVariables]);
+
+  useEffect(() => {
+    if (activeCollectionId) {
+      setSelectedCollectionId(activeCollectionId);
+    } else if (collections && collections.length > 0) {
+      setSelectedCollectionId((prev) => {
+        if (prev && collections.some((c) => c.id === prev)) return prev;
+        return collections[0].id;
+      });
+    } else if (collections && collections.length === 0) {
+      setSelectedCollectionId(null);
+    }
+  }, [activeCollectionId, collections]);
+
+  useEffect(() => {
+    if (collectionVariablesByCollectionId) {
+      setLocalCollectionVarsByColId(collectionVariablesByCollectionId);
+    }
+  }, [collectionVariablesByCollectionId]);
 
   useEffect(() => {
     const normalized = normalizeEnvironments(environments);
@@ -214,8 +251,38 @@ export function EnvironmentModal({
     onGlobalsChange?.(updated);
   };
 
+  // Current collection variables resolution
+  const currentCollectionVars = useMemo(() => {
+    if (collections && collections.length > 0 && selectedCollectionId) {
+      const vars = localCollectionVarsByColId[selectedCollectionId];
+      if (Array.isArray(vars)) return vars;
+      if (selectedCollectionId === activeCollectionId && collectionVariables.length > 0) {
+        return collectionVariables;
+      }
+      return [];
+    }
+    if (collections && collections.length === 0) {
+      return [];
+    }
+    return collectionList;
+  }, [
+    collections,
+    selectedCollectionId,
+    localCollectionVarsByColId,
+    activeCollectionId,
+    collectionVariables,
+    collectionList,
+  ]);
+
   // Handlers for Collection
   const handleCollectionChange = (updated: VariableItem[]) => {
+    if (selectedCollectionId) {
+      setLocalCollectionVarsByColId((prev) => ({
+        ...prev,
+        [selectedCollectionId]: updated,
+      }));
+      onCollectionVariablesChange?.(selectedCollectionId, updated);
+    }
     setCollectionList(updated);
     onCollectionChange?.(updated);
   };
@@ -316,7 +383,7 @@ export function EnvironmentModal({
     });
 
     // 2. Collection (active only, overrides globals)
-    collectionList.forEach((v) => {
+    currentCollectionVars.forEach((v) => {
       if (v.isActive !== false && v.key.trim()) {
         const existed = map.has(v.key);
         map.set(v.key, {
@@ -348,7 +415,7 @@ export function EnvironmentModal({
     }
 
     return Array.from(map.values());
-  }, [computedVariables, globalsList, collectionList, envList, selectedEnvName]);
+  }, [computedVariables, globalsList, currentCollectionVars, envList, selectedEnvName]);
 
   const currentEnvironment =
     envList.find((e) => e.name === selectedEnvName) || envList[0] || null;
@@ -463,13 +530,49 @@ export function EnvironmentModal({
               aria-labelledby="tab-collection"
               className="h-full flex flex-col"
             >
-              <VariableGrid
-                title={t('environments.collectionTitle')}
-                description={t('environments.collectionDescription')}
-                variables={collectionList}
-                onChange={handleCollectionChange}
-                emptyMessage={t('environments.collectionEmpty')}
-              />
+              {collections && collections.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                  <FolderGit2 className="w-10 h-10 text-neutral-600 mb-3" aria-hidden="true" />
+                  <p className="text-sm text-neutral-400 font-medium">
+                    {t('environments.noCollections')}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {collections && collections.length > 0 && (
+                    <div className="flex items-center justify-between pb-3 mb-3 border-b border-neutral-800">
+                      <div className="flex items-center gap-2">
+                        <label
+                          htmlFor="collection-select"
+                          className="text-xs font-medium text-neutral-400"
+                        >
+                          {t('environments.selectCollection')}:
+                        </label>
+                        <select
+                          id="collection-select"
+                          aria-label={t('environments.selectCollection')}
+                          value={selectedCollectionId || ''}
+                          onChange={(e) => setSelectedCollectionId(e.target.value)}
+                          className="bg-neutral-900 border border-neutral-800 text-xs text-neutral-200 rounded px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-neutral-400 cursor-pointer"
+                        >
+                          {collections.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                  <VariableGrid
+                    title={t('environments.collectionTitle')}
+                    description={t('environments.collectionDescription')}
+                    variables={currentCollectionVars}
+                    onChange={handleCollectionChange}
+                    emptyMessage={t('environments.collectionEmpty')}
+                  />
+                </>
+              )}
             </div>
           )}
 
