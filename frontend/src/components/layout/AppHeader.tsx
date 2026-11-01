@@ -178,9 +178,9 @@ export function AppHeader({
           {isEnvMenuOpen && (
             <div
               role="menu"
-              aria-label="Ambientes disponíveis"
+              aria-label={t('header.environments')}
               data-testid="environment-dropdown-menu"
-              className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1.5 w-60 bg-neutral-900 border border-neutral-800 rounded-xl shadow-2xl py-1.5 z-50 flex flex-col"
+              className="absolute right-0 top-full mt-1.5 w-60 bg-neutral-900 border border-neutral-800 rounded-xl shadow-2xl py-1.5 z-50 flex flex-col"
             >
               <div className="max-h-60 overflow-y-auto py-0.5">
                 <button
@@ -190,7 +190,7 @@ export function AppHeader({
                     setIsEnvMenuOpen(false);
                     onSelectEnvironment?.(null);
                   }}
-                  className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors text-left cursor-pointer"
+                  className="w-full flex items-center justify-between px-3 py-2 sm:py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors text-left cursor-pointer"
                 >
                   <span className="truncate">{t('header.noEnvironment')}</span>
                   {!activeEnvironment && (
@@ -209,7 +209,7 @@ export function AppHeader({
                         setIsEnvMenuOpen(false);
                         onSelectEnvironment?.(env);
                       }}
-                      className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors text-left cursor-pointer"
+                      className="w-full flex items-center justify-between px-3 py-2 sm:py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors text-left cursor-pointer"
                     >
                       <span className="truncate">{env}</span>
                       {isSelected && (
@@ -229,7 +229,7 @@ export function AppHeader({
                   setIsEnvMenuOpen(false);
                   onOpenEnvironmentSettings?.();
                 }}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors text-left cursor-pointer"
+                className="w-full flex items-center gap-2 px-3 py-2 sm:py-1.5 text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors text-left cursor-pointer"
               >
                 <Sliders className="w-3.5 h-3.5 text-neutral-400 shrink-0" aria-hidden="true" />
                 <span className="truncate">{t('header.environmentManage')}</span>

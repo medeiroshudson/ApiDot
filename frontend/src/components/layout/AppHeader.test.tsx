@@ -100,7 +100,7 @@ describe('AppHeader', () => {
     expect(pill).toHaveTextContent('Production');
 
     fireEvent.click(pill);
-    expect(screen.getByRole('menu', { name: /ambientes disponíveis/i })).toBeInTheDocument();
+    expect(screen.getByRole('menu', { name: /environments|ambientes/i })).toBeInTheDocument();
     expect(screen.getByText('Development')).toBeInTheDocument();
     expect(screen.getByText('Gerenciar ambientes e variáveis...')).toBeInTheDocument();
   });
@@ -167,17 +167,17 @@ describe('AppHeader', () => {
     const pill = screen.getByRole('button', { name: /select active environment/i });
 
     fireEvent.click(pill);
-    expect(screen.getByRole('menu', { name: /environments|ambientes disponíveis/i })).toBeInTheDocument();
+    expect(screen.getByRole('menu', { name: /environments|ambientes/i })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: 'Escape' });
-    expect(screen.queryByRole('menu', { name: /environments|ambientes disponíveis/i })).toBeNull();
+    expect(screen.queryByRole('menu', { name: /environments|ambientes/i })).toBeNull();
 
     // Click outside
     fireEvent.click(pill);
-    expect(screen.getByRole('menu', { name: /environments|ambientes disponíveis/i })).toBeInTheDocument();
+    expect(screen.getByRole('menu', { name: /environments|ambientes/i })).toBeInTheDocument();
 
     fireEvent.mouseDown(document.body);
-    expect(screen.queryByRole('menu', { name: /environments|ambientes disponíveis/i })).toBeNull();
+    expect(screen.queryByRole('menu', { name: /environments|ambientes/i })).toBeNull();
   });
 
   it('exposes accessible ARIA attributes for environment pill trigger', () => {
