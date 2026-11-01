@@ -1,13 +1,20 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   CollectionSettingsModal,
   SyncReport,
 } from './CollectionSettingsModal';
 import { CollectionNodeDto } from '@/lib/treeApi';
+import { useI18nStore } from '@/stores/useI18nStore';
+import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
+import { VariableItem } from '../environment/VariableGrid';
 
 describe('CollectionSettingsModal', () => {
+  beforeEach(() => {
+    useI18nStore.setState({ locale: 'en-US' });
+    useEnvironmentStore.getState().reset();
+  });
   const mockCollection: CollectionNodeDto = {
     id: 'coll-123',
     name: 'Minha Coleção API',
@@ -70,7 +77,7 @@ describe('CollectionSettingsModal', () => {
   });
 
   describe('Tabs Navigation', () => {
-    it('renders 3 dedicated tabs and allows switching between them', () => {
+    it('renders 5 dedicated tabs and allows switching between them', () => {
       render(
         <CollectionSettingsModal
           isOpen={true}
@@ -80,11 +87,13 @@ describe('CollectionSettingsModal', () => {
       );
 
       const tabGeneral = screen.getByRole('tab', { name: /General & Target/i });
+      const tabVars = screen.getByRole('tab', { name: /Variables/i });
       const tabAuth = screen.getByRole('tab', { name: /Authentication/i });
       const tabOpenApi = screen.getByRole('tab', { name: /OpenAPI \/ Sync/i });
       const tabDeps = screen.getByRole('tab', { name: /Links & Dependencies/i });
 
       expect(tabGeneral).toBeInTheDocument();
+      expect(tabVars).toBeInTheDocument();
       expect(tabAuth).toBeInTheDocument();
       expect(tabOpenApi).toBeInTheDocument();
       expect(tabDeps).toBeInTheDocument();
@@ -92,6 +101,10 @@ describe('CollectionSettingsModal', () => {
       // Tab 1 (General) is active by default
       expect(screen.getByLabelText(/Collection Name/i)).toBeInTheDocument();
       expect(screen.getByRole('combobox', { name: /Execution Target/i })).toBeInTheDocument();
+
+      // Switch to Variables tab
+      fireEvent.click(tabVars);
+      expect(screen.getByText(/Collection Variables/i)).toBeInTheDocument();
 
       // Switch to Auth tab
       fireEvent.click(tabAuth);
@@ -106,6 +119,103 @@ describe('CollectionSettingsModal', () => {
       fireEvent.click(tabDeps);
       expect(screen.getAllByText(/get user profile/i).length).toBeGreaterThan(0);
       expect(screen.getAllByRole('button', { name: /Copy/i }).length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Tab: Variáveis da Coleção', () => {
+    it('renders Variables tab and allows adding collection-scoped variables', () => {
+      useI18nStore.setState({ locale: 'pt-BR' });
+      const collection = {
+        id: 'col-123',
+        name: 'Billing API',
+        defaultTarget: 'Inherit' as const,
+        folders: [],
+        requests: [],
+      };
+      render(
+        <CollectionSettingsModal
+          isOpen={true}
+          onClose={vi.fn()}
+          collection={collection}
+        />
+      );
+      const varsTab = screen.getByRole('tab', { name: /variáveis/i });
+      expect(varsTab).toBeInTheDocument();
+
+      fireEvent.click(varsTab);
+      expect(screen.getByText(/variáveis da coleção/i)).toBeInTheDocument();
+    });
+
+    it('loads and displays collection variables from useEnvironmentStore', () => {
+      const collectionId = 'coll-123';
+      const initialVars: VariableItem[] = [
+        { key: 'API_BASE_URL', value: 'https://api.billing.com', isActive: true, isSecret: false },
+        { key: 'API_KEY', value: 'secret-token-123', isActive: true, isSecret: true },
+      ];
+      useEnvironmentStore.getState().setCollectionVariablesForId(collectionId, initialVars);
+
+      render(
+        <CollectionSettingsModal
+          isOpen={true}
+          onClose={vi.fn()}
+          collection={mockCollection}
+        />
+      );
+
+      const varsTab = screen.getByRole('tab', { name: /Variables/i });
+      fireEvent.click(varsTab);
+
+      expect(screen.getByDisplayValue('API_BASE_URL')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('https://api.billing.com')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('API_KEY')).toBeInTheDocument();
+    });
+
+    it('updates useEnvironmentStore and passes variables to onSave upon saving', async () => {
+      const onSave = vi.fn();
+      render(
+        <CollectionSettingsModal
+          isOpen={true}
+          onClose={vi.fn()}
+          collection={mockCollection}
+          onSave={onSave}
+        />
+      );
+
+      // Switch to variables tab
+      const varsTab = screen.getByRole('tab', { name: /Variables/i });
+      fireEvent.click(varsTab);
+
+      // Add a variable
+      const addBtn = screen.getByRole('button', { name: /Add Variable/i });
+      fireEvent.click(addBtn);
+
+      const keyInput = screen.getByPlaceholderText('Key');
+      const valueInput = screen.getByPlaceholderText('Value');
+
+      fireEvent.change(keyInput, { target: { value: 'NEW_VAR' } });
+      fireEvent.change(valueInput, { target: { value: 'NEW_VALUE' } });
+
+      // Verify useEnvironmentStore received the updated variables
+      const storeVars = useEnvironmentStore.getState().getCollectionVariablesForId(mockCollection.id);
+      expect(storeVars).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ key: 'NEW_VAR', value: 'NEW_VALUE' }),
+        ])
+      );
+
+      // Click save button
+      const saveBtn = screen.getByRole('button', { name: /Save Changes/i });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(onSave).toHaveBeenCalledWith(
+          expect.objectContaining({
+            variables: expect.arrayContaining([
+              expect.objectContaining({ key: 'NEW_VAR', value: 'NEW_VALUE' }),
+            ]),
+          })
+        );
+      });
     });
   });
 

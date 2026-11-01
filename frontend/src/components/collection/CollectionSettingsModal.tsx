@@ -17,12 +17,15 @@ import {
   Edit3,
   Trash2,
   ShieldCheck,
+  FolderGit2,
 } from 'lucide-react';
 import { ExecutionTarget, TargetSelector } from '../request/TargetSelector';
 import { CollectionNodeDto, FolderNodeDto, RequestItemNodeDto } from '@/lib/treeApi';
 import { CodeEditor } from '../common/CodeEditor';
 import { AuthConfig } from '../request/RequestEditor';
 import { useTranslation } from '@/hooks/useTranslation';
+import { VariableGrid, VariableItem } from '../environment/VariableGrid';
+import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
 
 export interface SyncReport {
   addedRequests: number;
@@ -32,7 +35,7 @@ export interface SyncReport {
   fieldsPreserved: number;
 }
 
-export type CollectionModalTab = 'general' | 'auth' | 'openapi' | 'dependencies';
+export type CollectionModalTab = 'general' | 'variables' | 'auth' | 'openapi' | 'dependencies';
 
 export interface CollectionSettingsModalProps {
   isOpen: boolean;
@@ -46,6 +49,7 @@ export interface CollectionSettingsModalProps {
     auth?: AuthConfig;
     specUrl?: string;
     specContent?: string;
+    variables?: VariableItem[];
   }) => Promise<void> | void;
   onSyncSuccess?: (report: SyncReport) => void;
 }
@@ -113,12 +117,14 @@ export function CollectionSettingsModal({
   onSyncSuccess,
 }: CollectionSettingsModalProps) {
   const { t } = useTranslation();
+  const setCollectionVariablesForId = useEnvironmentStore((s) => s.setCollectionVariablesForId);
   const [activeTab, setActiveTab] = useState<CollectionModalTab>('general');
   const [name, setName] = useState('');
   const [defaultTarget, setDefaultTarget] = useState<ExecutionTarget>('Inherit');
   const [auth, setAuth] = useState<AuthConfig>({ type: 'none' });
   const [specUrl, setSpecUrl] = useState('');
   const [specContent, setSpecContent] = useState('');
+  const [variables, setVariables] = useState<VariableItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -186,8 +192,27 @@ export function CollectionSettingsModal({
       setError(null);
       setReport(null);
       setActiveTab('general');
+      const loadedVars = useEnvironmentStore.getState().getCollectionVariablesForId(collection.id);
+      if (
+        loadedVars.length === 0 &&
+        Array.isArray((collection as { variables?: VariableItem[] }).variables) &&
+        ((collection as { variables?: VariableItem[] }).variables?.length ?? 0) > 0
+      ) {
+        const colVars = (collection as { variables: VariableItem[] }).variables;
+        setCollectionVariablesForId(collection.id, colVars);
+        setVariables(colVars);
+      } else {
+        setVariables(loadedVars);
+      }
     }
-  }, [isOpen, collection]);
+  }, [isOpen, collection, setCollectionVariablesForId]);
+
+  const handleVariablesChange = (updatedVars: VariableItem[]) => {
+    setVariables(updatedVars);
+    if (collection?.id) {
+      setCollectionVariablesForId(collection.id, updatedVars);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -322,6 +347,7 @@ export function CollectionSettingsModal({
         auth,
         specUrl: specUrl.trim() || undefined,
         specContent: specContent.trim() || undefined,
+        variables,
       });
       onClose();
     } catch (err: unknown) {
@@ -391,6 +417,21 @@ export function CollectionSettingsModal({
           >
             <Sliders className="w-3.5 h-3.5" />
             <span>{t('collectionSettings.generalTab')}</span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'variables'}
+            onClick={() => setActiveTab('variables')}
+            className={`flex items-center gap-2 py-2.5 px-3 text-xs font-medium border-b-2 transition-colors ${
+              activeTab === 'variables'
+                ? 'border-blue-500 text-white font-semibold'
+                : 'border-transparent text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <FolderGit2 className="w-3.5 h-3.5" />
+            <span>{t('collection.variablesTab')}</span>
           </button>
 
           <button
@@ -492,7 +533,20 @@ export function CollectionSettingsModal({
             </div>
           )}
 
-          {/* TAB 2: AUTENTICAÇÃO */}
+          {/* TAB 2: VARIÁVEIS */}
+          {activeTab === 'variables' && (
+            <div className="space-y-4 animate-in fade-in duration-100 min-h-[300px] flex flex-col">
+              <VariableGrid
+                variables={variables}
+                onChange={handleVariablesChange}
+                title={t('collection.variablesTitle')}
+                description={t('collection.variablesDescription')}
+                isReadOnly={isBusy}
+              />
+            </div>
+          )}
+
+          {/* TAB 3: AUTENTICAÇÃO */}
           {activeTab === 'auth' && (
             <div className="space-y-4 animate-in fade-in duration-100">
               <p className="text-xs text-neutral-400">
@@ -608,7 +662,7 @@ export function CollectionSettingsModal({
             </div>
           )}
 
-          {/* TAB 3: OPENAPI / SYNC */}
+          {/* TAB 4: OPENAPI / SYNC */}
           {activeTab === 'openapi' && (
             <div className="space-y-4 animate-in fade-in duration-100">
               <div className="space-y-1.5">
@@ -686,7 +740,7 @@ export function CollectionSettingsModal({
             </div>
           )}
 
-          {/* TAB 3: VÍNCULOS & DEPENDÊNCIAS */}
+          {/* TAB 5: VÍNCULOS & DEPENDÊNCIAS */}
           {activeTab === 'dependencies' && (
             <div className="space-y-4 animate-in fade-in duration-100">
               <p className="text-xs text-neutral-400">
