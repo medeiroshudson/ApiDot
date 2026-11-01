@@ -1,8 +1,12 @@
 import { render, screen, fireEvent, within, act } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RequestEditor, insertTokenAtCursor, resolvePathParams } from './RequestEditor';
+import { useI18nStore } from '@/stores/useI18nStore';
 
 describe('RequestEditor', () => {
+  beforeEach(() => {
+    useI18nStore.setState({ locale: 'en-US' });
+  });
   it('renders all key elements: method selector, URL input, and split send button', () => {
     render(<RequestEditor />);
 
@@ -472,7 +476,7 @@ describe('RequestEditor', () => {
     render(<RequestEditor />);
 
     const methodSelect = screen.getByRole('combobox', { name: /http method/i });
-    const controlsContainer = methodSelect.closest('.flex-1');
+    const controlsContainer = methodSelect.closest('.items-start');
     expect(controlsContainer).toHaveClass('items-start');
 
     const sendBtn = screen.getByRole('button', { name: /send request/i });
@@ -546,5 +550,49 @@ describe('RequestEditor', () => {
 
     expect(urlInput).toHaveValue('');
     expect(screen.queryByRole('button', { name: /clear url/i })).toBeNull();
+  });
+
+  it('renders single-row request bar layout and concise send button', () => {
+    useI18nStore.setState({ locale: 'pt-BR' });
+    render(<RequestEditor />);
+    const sendButton = screen.getByRole('button', { name: /enviar requisição/i });
+    expect(sendButton).toBeInTheDocument();
+    expect(sendButton).toHaveTextContent('Enviar');
+    expect(sendButton).not.toHaveTextContent(/\bvia\b/i);
+    expect(sendButton).not.toHaveTextContent('ONLINE');
+  });
+
+  it('disables primary send button when target is explicitly Agent and agent is offline, while chevron remains clickable', () => {
+    useI18nStore.setState({ locale: 'pt-BR' });
+    render(
+      <RequestEditor
+        initialRequest={{ target: 'Agent', url: 'https://api.test' }}
+        isAgentOnline={false}
+      />
+    );
+    const sendButton = screen.getByRole('button', { name: /enviar requisição/i });
+    expect(sendButton).toBeDisabled();
+
+    const chevron = screen.getByRole('button', { name: /opções de envio/i });
+    expect(chevron).not.toBeDisabled();
+    fireEvent.click(chevron);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+
+  it('dispatches immediately and updates target when selecting alternative target in dropdown without marking dirty', () => {
+    useI18nStore.setState({ locale: 'pt-BR' });
+    const onSend = vi.fn();
+    render(
+      <RequestEditor
+        initialRequest={{ target: 'Agent', url: 'https://api.test' }}
+        isAgentOnline={false}
+        onSend={onSend}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /opções de envio/i }));
+    fireEvent.click(screen.getByText(/servidor \(nuvem\)/i));
+
+    expect(onSend).toHaveBeenCalledWith(expect.objectContaining({ target: 'Server' }));
+    expect(screen.queryByTestId('dirty-indicator')).not.toBeInTheDocument();
   });
 });

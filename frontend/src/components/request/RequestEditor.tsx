@@ -191,14 +191,19 @@ export function RequestEditor({
     );
   }, [method, url, headers, body, target, auth, pathParams, schemaDefinition, initialRequest]);
 
-  // Primary execution target based on priority rule:
-  const defaultExecutionTarget: ExecutionTarget = useMemo(() => {
+  // Primary execution target based on priority rule and runtime session override:
+  const [runtimeTargetOverride, setRuntimeTargetOverride] = useState<ExecutionTarget | null>(null);
+
+  const effectiveTarget: ExecutionTarget = useMemo(() => {
+    if (runtimeTargetOverride) return runtimeTargetOverride;
     if (target && target !== 'Inherit') return target;
     return isAgentOnline ? 'Agent' : 'Server';
-  }, [target, isAgentOnline]);
+  }, [runtimeTargetOverride, target, isAgentOnline]);
 
   const alternateTarget: ExecutionTarget =
-    defaultExecutionTarget === 'Agent' ? 'Server' : 'Agent';
+    effectiveTarget === 'Agent' ? 'Server' : 'Agent';
+
+  const isSendDisabled = isLoading || (effectiveTarget === 'Agent' && !isAgentOnline);
 
   const handleSave = useCallback(() => {
     if (isLoading || isSaving) return;
@@ -258,6 +263,7 @@ export function RequestEditor({
       if (initialRequest.method !== undefined) setMethod(initialRequest.method);
       if (initialRequest.url !== undefined) setUrl(initialRequest.url);
       if (initialRequest.target !== undefined) setTarget(initialRequest.target);
+      setRuntimeTargetOverride(null);
       if (initialRequest.headers !== undefined) setHeaders(initialRequest.headers);
       if (initialRequest.body !== undefined) {
         setBody(initialRequest.body);
@@ -394,12 +400,15 @@ export function RequestEditor({
     setUrlError(null);
     setIsSendMenuOpen(false);
 
-    const effectiveTarget = sendTarget ?? defaultExecutionTarget;
+    if (sendTarget) {
+      setRuntimeTargetOverride(sendTarget);
+    }
+    const targetToUse = sendTarget ?? effectiveTarget;
     const resolvedUrl = resolvePathParams(trimmedUrl, pathParams);
     const requestData: RequestData = {
       method,
       url: resolvedUrl,
-      target: effectiveTarget,
+      target: targetToUse,
       headers,
       body: bodyFormat === 'none' ? '' : body,
       auth,
@@ -489,69 +498,67 @@ export function RequestEditor({
       </div>
 
       {/* Top Bar Compact (h-9): Method, URL Input, Split Send Button */}
-      <div className="p-2.5 sm:p-3 border-b border-neutral-800 bg-neutral-900/40 flex flex-col gap-1.5 shrink-0">
-        <div className="flex flex-col sm:flex-row gap-2 items-start w-full">
-          <div className="flex items-start gap-2 flex-1 min-w-0">
-            <Select
-              sizeVariant="md"
-              aria-label={t('request.httpMethodAria')}
-              value={method}
-              disabled={isLoading}
-              onChange={(e) => handleMethodChange(e.target.value)}
-              className={`font-bold text-xs shrink-0 cursor-pointer ${
-                HTTP_METHOD_BADGES[method] || 'text-blue-400 bg-neutral-800 border-neutral-700'
-              }`}
-              iconClassName="text-current opacity-70"
-            >
-              {HTTP_METHODS.map((m) => (
-                <option key={m} value={m} className="bg-neutral-900 text-neutral-200 font-semibold">
-                  {m}
-                </option>
-              ))}
-            </Select>
+      <div className="p-2 sm:p-2.5 border-b border-neutral-800 bg-neutral-900/40 flex flex-col gap-1.5 shrink-0">
+        <div className="flex items-start gap-1.5 sm:gap-2 w-full shrink-0">
+          <Select
+            sizeVariant="md"
+            aria-label={t('request.httpMethodAria')}
+            value={method}
+            disabled={isLoading}
+            onChange={(e) => handleMethodChange(e.target.value)}
+            className={`font-bold text-xs shrink-0 cursor-pointer min-w-[68px] sm:min-w-[76px] h-9 ${
+              HTTP_METHOD_BADGES[method] || 'text-blue-400 bg-neutral-800 border-neutral-700'
+            }`}
+            iconClassName="text-current opacity-70"
+          >
+            {HTTP_METHODS.map((m) => (
+              <option key={m} value={m} className="bg-neutral-900 text-neutral-200 font-semibold">
+                {m}
+              </option>
+            ))}
+          </Select>
 
-            <div className="flex-1 min-w-0 relative">
-              <Input
-                ref={urlInputRef}
-                autoGrow
-                aria-label={t('request.urlAria')}
-                placeholder={t('request.urlDefaultPlaceholder')}
-                value={url}
-                disabled={isLoading}
-                error={!!urlError}
-                onFocus={() => {
-                  setActiveArea('url');
-                  setCursorCoords(null);
-                }}
-                onChange={(e) => handleUrlChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                aria-invalid={!!urlError}
-                aria-describedby={urlError ? 'url-error' : undefined}
-                className="w-full"
-              />
-              <RequestAutocomplete
-                inputRef={urlInputRef}
-                value={url}
-                onChange={handleUrlChange}
-                availableRequests={availableRequests}
-                availableVariables={availableVariables}
-              />
-              {url && !isLoading && (
-                <button
-                  type="button"
-                  aria-label={t('request.clearUrl')}
-                  onClick={() => handleUrlChange('')}
-                  className="absolute right-2 top-2.5 text-neutral-400 hover:text-neutral-200 p-1 rounded hover:bg-neutral-800 transition-colors focus:outline-none"
-                >
-                  <X className="w-3.5 h-3.5" aria-hidden="true" />
-                </button>
-              )}
-            </div>
+          <div className="flex-1 min-w-0 relative">
+            <Input
+              ref={urlInputRef}
+              autoGrow
+              aria-label={t('request.urlAria')}
+              placeholder={t('request.urlDefaultPlaceholder')}
+              value={url}
+              disabled={isLoading}
+              error={!!urlError}
+              onFocus={() => {
+                setActiveArea('url');
+                setCursorCoords(null);
+              }}
+              onChange={(e) => handleUrlChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              aria-invalid={!!urlError}
+              aria-describedby={urlError ? 'url-error' : undefined}
+              className="w-full"
+            />
+            <RequestAutocomplete
+              inputRef={urlInputRef}
+              value={url}
+              onChange={handleUrlChange}
+              availableRequests={availableRequests}
+              availableVariables={availableVariables}
+            />
+            {url && !isLoading && (
+              <button
+                type="button"
+                aria-label={t('request.clearUrl')}
+                onClick={() => handleUrlChange('')}
+                className="absolute right-2 top-2.5 text-neutral-400 hover:text-neutral-200 p-1 rounded hover:bg-neutral-800 transition-colors focus:outline-none"
+              >
+                <X className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            )}
           </div>
 
           {/* Split Send Button: [ Enviar | ▾ ] */}
@@ -559,18 +566,20 @@ export function RequestEditor({
             <button
               type="button"
               aria-label={t('request.sendRequest')}
-              onClick={() => handleSend(defaultExecutionTarget)}
-              disabled={isLoading}
+              onClick={() => handleSend()}
+              disabled={isSendDisabled}
               title={
-                defaultExecutionTarget === 'Agent'
+                effectiveTarget === 'Agent' && !isAgentOnline
+                  ? t('request.agentOfflineTooltip')
+                  : effectiveTarget === 'Agent'
                   ? t('request.sendViaAgent')
                   : t('request.sendViaServer')
               }
-              className="h-9 px-3.5 rounded-l-md bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-400"
+              className="h-9 px-3.5 rounded-l-md bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
             >
               {isLoading ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-              ) : defaultExecutionTarget === 'Agent' ? (
+              ) : effectiveTarget === 'Agent' ? (
                 <Cpu className="w-3.5 h-3.5 text-blue-200" aria-hidden="true" />
               ) : (
                 <Send className="w-3.5 h-3.5" aria-hidden="true" />
@@ -585,7 +594,7 @@ export function RequestEditor({
               aria-expanded={isSendMenuOpen}
               onClick={() => setIsSendMenuOpen((prev) => !prev)}
               disabled={isLoading}
-              className="h-9 px-2 rounded-r-md bg-blue-700 hover:bg-blue-600 border-l border-blue-500/40 text-white flex items-center justify-center transition-colors focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50"
+              className="h-9 px-2 rounded-r-md bg-blue-700 hover:bg-blue-600 border-l border-blue-500/40 text-white flex items-center justify-center transition-colors focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 cursor-pointer"
             >
               <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
@@ -604,12 +613,13 @@ export function RequestEditor({
                   <button
                     type="button"
                     role="menuitem"
+                    aria-label={t('request.executeOnServer')}
                     onClick={() => handleSend('Server')}
                     className="w-full text-left px-3 py-2 flex items-center gap-2 text-neutral-200 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
                   >
                     <Server className="w-3.5 h-3.5 text-neutral-400" />
                     <div className="flex flex-col">
-                      <span className="font-medium">{t('request.executeOnServer')}</span>
+                      <span className="font-medium">{t('request.targetServer')}</span>
                       <span className="text-[10px] text-neutral-500">
                         {t('request.executeOnServerDesc')}
                       </span>
@@ -619,6 +629,7 @@ export function RequestEditor({
                   <button
                     type="button"
                     role="menuitem"
+                    aria-label={t('request.executeOnAgent')}
                     disabled={!isAgentOnline}
                     onClick={() => handleSend('Agent')}
                     className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
@@ -629,7 +640,7 @@ export function RequestEditor({
                   >
                     <Cpu className={`w-3.5 h-3.5 ${isAgentOnline ? 'text-emerald-400' : 'text-neutral-500'}`} />
                     <div className="flex flex-col">
-                      <span className="font-medium">{t('request.executeOnAgent')}</span>
+                      <span className="font-medium">{t('request.targetAgent')}</span>
                       <span className="text-[10px] text-neutral-500">
                         {isAgentOnline ? t('request.executeOnAgentDescOnline') : t('request.executeOnAgentDescOffline')}
                       </span>
