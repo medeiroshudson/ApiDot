@@ -140,13 +140,21 @@ export function EnvironmentModal({
     setCollectionList(collectionVariables);
   }, [collectionVariables]);
 
+  const prevActiveColIdRef = useRef(activeCollectionId);
+
   useEffect(() => {
-    if (activeCollectionId) {
-      setSelectedCollectionId(activeCollectionId);
-    } else if (collections && collections.length > 0) {
+    if (activeCollectionId !== prevActiveColIdRef.current) {
+      prevActiveColIdRef.current = activeCollectionId;
+      if (activeCollectionId) {
+        setSelectedCollectionId(activeCollectionId);
+        return;
+      }
+    }
+
+    if (collections && collections.length > 0) {
       setSelectedCollectionId((prev) => {
         if (prev && collections.some((c) => c.id === prev)) return prev;
-        return collections[0].id;
+        return activeCollectionId || collections[0].id;
       });
     } else if (collections && collections.length === 0) {
       setSelectedCollectionId(null);
@@ -282,9 +290,14 @@ export function EnvironmentModal({
         [selectedCollectionId]: updated,
       }));
       onCollectionVariablesChange?.(selectedCollectionId, updated);
+      if (!activeCollectionId || selectedCollectionId === activeCollectionId) {
+        setCollectionList(updated);
+        onCollectionChange?.(updated);
+      }
+    } else {
+      setCollectionList(updated);
+      onCollectionChange?.(updated);
     }
-    setCollectionList(updated);
-    onCollectionChange?.(updated);
   };
 
   // Handlers for Environments

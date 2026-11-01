@@ -365,6 +365,49 @@ describe('EnvironmentModal', () => {
       );
     });
 
+    it('does not invoke legacy onCollectionChange when editing a non-active collection', () => {
+      const handleColVarsChange = vi.fn();
+      const handleLegacyColChange = vi.fn();
+      const collections = [
+        { id: 'col-1', name: 'Users API' },
+        { id: 'col-2', name: 'Orders API' },
+      ];
+      const collectionVars = {
+        'col-1': [{ key: 'ACTIVE_VAR', value: 'active_val', isActive: true }],
+        'col-2': [{ key: 'INACTIVE_COL_VAR', value: 'inactive_val', isActive: true }],
+      };
+
+      render(
+        <EnvironmentModal
+          isOpen={true}
+          onClose={vi.fn()}
+          initialTab="collection"
+          collections={collections}
+          activeCollectionId="col-1"
+          collectionVariablesByCollectionId={collectionVars}
+          onCollectionVariablesChange={handleColVarsChange}
+          onCollectionChange={handleLegacyColChange}
+        />
+      );
+
+      // Switch to col-2
+      fireEvent.change(screen.getByRole('combobox', { name: /collection|coleção/i }), {
+        target: { value: 'col-2' },
+      });
+
+      const keyInput = screen.getByDisplayValue('INACTIVE_COL_VAR');
+      fireEvent.change(keyInput, { target: { value: 'MODIFIED_INACTIVE_VAR' } });
+
+      expect(handleColVarsChange).toHaveBeenCalledWith(
+        'col-2',
+        expect.arrayContaining([
+          expect.objectContaining({ key: 'MODIFIED_INACTIVE_VAR' }),
+        ])
+      );
+      // Legacy onCollectionChange should NOT have been called with col-2 variables
+      expect(handleLegacyColChange).not.toHaveBeenCalled();
+    });
+
     it('dynamically computes cascade resolution using selected collection in Calculadas tab', () => {
       const collections = [
         { id: 'col-1', name: 'Users API' },
