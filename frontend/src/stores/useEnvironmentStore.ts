@@ -106,7 +106,7 @@ export const useEnvironmentStore = create<EnvironmentState>()(
         set((state) => ({
           collectionVariablesByCollectionId: {
             ...(state.collectionVariablesByCollectionId || {}),
-            [collectionId]: Array.isArray(vars) ? vars : [],
+            [collectionId]: Array.isArray(vars) ? [...vars] : [],
           },
         }));
       },
@@ -120,14 +120,13 @@ export const useEnvironmentStore = create<EnvironmentState>()(
         const {
           globals,
           collectionVariables,
-          collectionVariablesByCollectionId,
           activeCollectionId,
           environments,
           activeEnvironment,
         } = get();
         const currentCollectionVars = activeCollectionId
-          ? ((collectionVariablesByCollectionId || {})[activeCollectionId] || [])
-          : (collectionVariables || []);
+          ? get().getCollectionVariablesForId(activeCollectionId)
+          : (Array.isArray(collectionVariables) ? collectionVariables : []);
         return resolveVariables(globals, currentCollectionVars, environments, activeEnvironment);
       },
 
@@ -135,14 +134,13 @@ export const useEnvironmentStore = create<EnvironmentState>()(
         const {
           globals,
           collectionVariables,
-          collectionVariablesByCollectionId,
           activeCollectionId,
           environments,
           activeEnvironment,
         } = get();
         const currentCollectionVars = activeCollectionId
-          ? ((collectionVariablesByCollectionId || {})[activeCollectionId] || [])
-          : (collectionVariables || []);
+          ? get().getCollectionVariablesForId(activeCollectionId)
+          : (Array.isArray(collectionVariables) ? collectionVariables : []);
         const list: AutocompleteVariable[] = [];
 
         (globals || [])

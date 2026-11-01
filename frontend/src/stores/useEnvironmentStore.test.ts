@@ -366,6 +366,16 @@ describe('useEnvironmentStore', () => {
         { key: 'GLOBAL_ONLY', value: 'g', scope: 'global' },
       ]);
     });
+
+    it('should safely handle activeCollectionId matching Object prototype properties without throwing', () => {
+      const store = useEnvironmentStore.getState();
+      store.setActiveCollectionId('toString');
+
+      expect(() => store.getResolvedVariables()).not.toThrow();
+      expect(store.getResolvedVariables()).toEqual({});
+      expect(() => store.getAvailableVariables()).not.toThrow();
+      expect(store.getAvailableVariables()).toEqual([]);
+    });
   });
 
   describe('Cascading Variable Resolution (`getResolvedVariables`)', () => {
