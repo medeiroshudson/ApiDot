@@ -34,10 +34,12 @@ jobs:
             image: ghcr.io/${{ github.repository }}-server
             dockerfile: ./backend/Dockerfile
             context: ./backend
+            platforms: linux/amd64,linux/arm64
           - component: web
             image: ghcr.io/${{ github.repository }}-web
             dockerfile: ./frontend/Dockerfile
             context: ./frontend
+            platforms: linux/amd64
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -87,7 +89,7 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platforms }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
