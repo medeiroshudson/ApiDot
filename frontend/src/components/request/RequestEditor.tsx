@@ -562,7 +562,7 @@ export function RequestEditor({
           id="panel-auth"
           aria-labelledby="tab-auth"
           hidden={activeTab !== 'auth'}
-          className={activeTab === 'auth' ? 'space-y-4' : 'hidden'}
+          className={activeTab === 'auth' ? 'space-y-4 overflow-y-auto' : 'hidden'}
         >
           <div className="space-y-1">
             <label htmlFor="auth-type-select" className="text-xs text-neutral-400 font-medium">
@@ -1132,10 +1132,7 @@ export function RequestEditor({
               {requestDetailsContent}
             </div>
             {splitterSlot}
-            <div
-              style={{ flex: '0 0 ' + (100 - requestDetailsRatio) + '%' }}
-              className="flex flex-col min-h-0 overflow-hidden"
-            >
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
               {responseSlot}
             </div>
           </div>
@@ -1145,6 +1142,7 @@ export function RequestEditor({
             <div className="flex border-b border-neutral-800 bg-neutral-900/90 px-3 py-1.5 gap-2 shrink-0">
               <button
                 type="button"
+                aria-pressed={currentMobilePane === 'request'}
                 onClick={() => handleMobilePaneChange('request')}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors ${
                   currentMobilePane === 'request'
@@ -1156,6 +1154,7 @@ export function RequestEditor({
               </button>
               <button
                 type="button"
+                aria-pressed={currentMobilePane === 'response'}
                 onClick={() => handleMobilePaneChange('response')}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 ${
                   currentMobilePane === 'response'
@@ -1179,10 +1178,16 @@ export function RequestEditor({
             </div>
 
             {/* Mobile Panes */}
-            <div className={currentMobilePane === 'request' ? 'flex-1 flex flex-col min-h-0' : 'hidden'}>
+            <div
+              hidden={currentMobilePane !== 'request'}
+              className={currentMobilePane === 'request' ? 'flex-1 flex flex-col min-h-0' : 'hidden'}
+            >
               {requestDetailsContent}
             </div>
-            <div className={currentMobilePane === 'response' ? 'flex-1 flex flex-col min-h-0' : 'hidden'}>
+            <div
+              hidden={currentMobilePane !== 'response'}
+              className={currentMobilePane === 'response' ? 'flex-1 flex flex-col min-h-0' : 'hidden'}
+            >
               {responseSlot}
             </div>
           </div>
