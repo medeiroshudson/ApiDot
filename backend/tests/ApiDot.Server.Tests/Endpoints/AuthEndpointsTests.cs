@@ -175,6 +175,28 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
         userDto.Workspaces.Should().NotBeNull();
     }
 
+    [Theory]
+    [InlineData("demo", "demo")]
+    [InlineData("demo@apidot.dev", "demo")]
+    public async Task PostLocalLogin_WithDemoCredentials_Returns200_AndEmitsSessionCookie(string loginUser, string password)
+    {
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
+
+        var loginPayload = new LocalLoginRequest(loginUser, password);
+        var response = await client.PostAsJsonAsync("/api/auth/local", loginPayload);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var userDto = await response.Content.ReadFromJsonAsync<AuthUserDto>();
+        userDto.Should().NotBeNull();
+        userDto!.Email.Should().Be("demo@apidot.dev");
+        userDto.IsRoot.Should().BeFalse();
+        userDto.Workspaces.Should().ContainSingle(w => w.Name == "Demo Workspace");
+    }
+
     [Fact]
     public async Task PostLocalLogin_WithInvalidCredentials_Returns401_WithErrorMessage()
     {

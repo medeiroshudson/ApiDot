@@ -1,3 +1,4 @@
+using ApiDot.Core.Enums;
 using ApiDot.Server.Data;
 using ApiDot.Server.Data.Entities;
 using ApiDot.Server.Enums;
@@ -15,6 +16,10 @@ public class UserSeeder(
 {
     private const string DefaultRootEmail = "contato@hmedeiros.dev";
     private const string DefaultDisplayName = "Administrator";
+
+    public const string DemoEmail = "demo@apidot.dev";
+    public const string DemoPassword = "demo";
+    public const string DemoDisplayName = "Demo User";
 
     public async Task SeedRootUserAndOrphanWorkspacesAsync(CancellationToken cancellationToken = default)
     {
@@ -116,6 +121,116 @@ public class UserSeeder(
 
             await dbContext.SaveChangesAsync(cancellationToken);
             logger?.LogInformation("Attached root user as owner to {Count} orphan workspace(s).", orphanWorkspaces.Count);
+        }
+
+        var demoEnabledStr = configuration["APIDOT_DEMO_ENABLED"] ?? configuration["Apidot:DemoEnabled"] ?? "true";
+        bool demoEnabled = !string.Equals(demoEnabledStr, "false", StringComparison.OrdinalIgnoreCase);
+        if (demoEnabled)
+        {
+            await SeedDemoUserAsync(cancellationToken);
+        }
+    }
+
+    public async Task SeedDemoUserAsync(CancellationToken cancellationToken = default)
+    {
+        var demoUser = await dbContext.Users
+            .FirstOrDefaultAsync(u => u.Email == DemoEmail, cancellationToken);
+
+        if (demoUser == null)
+        {
+            var (initialHash, initialSalt) = passwordHasher.HashPassword(DemoPassword);
+            demoUser = new User
+            {
+                Email = DemoEmail,
+                DisplayName = DemoDisplayName,
+                PasswordHash = initialHash,
+                PasswordSalt = initialSalt,
+                IsRoot = false,
+                Locale = "en-US"
+            };
+            dbContext.Users.Add(demoUser);
+            await dbContext.SaveChangesAsync(cancellationToken);
+            logger?.LogInformation("Created demo user {Email}.", DemoEmail);
+        }
+        else
+        {
+            bool passwordMatches = !string.IsNullOrEmpty(demoUser.PasswordHash)
+                && !string.IsNullOrEmpty(demoUser.PasswordSalt)
+                && passwordHasher.VerifyPassword(DemoPassword, demoUser.PasswordHash, demoUser.PasswordSalt);
+
+            if (!passwordMatches)
+            {
+                var (newHash, newSalt) = passwordHasher.HashPassword(DemoPassword);
+                demoUser.PasswordHash = newHash;
+                demoUser.PasswordSalt = newSalt;
+                await dbContext.SaveChangesAsync(cancellationToken);
+                logger?.LogInformation("Updated password hash for demo user {Email}.", DemoEmail);
+            }
+        }
+
+        var demoWorkspace = await dbContext.Workspaces
+            .TagWith("/* __ws_scope__ */")
+            .Include(w => w.Members)
+            .Include(w => w.Collections)
+                .ThenInclude(c => c.Requests)
+            .FirstOrDefaultAsync(w => w.Members.Any(m => m.UserId == demoUser.Id), cancellationToken);
+
+        if (demoWorkspace == null)
+        {
+            demoWorkspace = new Workspace
+            {
+                Name = "Demo Workspace",
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            dbContext.Workspaces.Add(demoWorkspace);
+
+            var membership = new WorkspaceMember
+            {
+                Workspace = demoWorkspace,
+                User = demoUser,
+                Role = WorkspaceRole.Owner,
+                JoinedAtUtc = DateTime.UtcNow
+            };
+            dbContext.WorkspaceMembers.Add(membership);
+
+            var demoCollection = new Collection
+            {
+                Name = "Beeceptor Echo API",
+                WorkspaceId = demoWorkspace.Id,
+                Workspace = demoWorkspace,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            dbContext.Collections.Add(demoCollection);
+
+            var sampleGet = new RequestItem
+            {
+                Name = "Sample GET Request",
+                WorkspaceId = demoWorkspace.Id,
+                CollectionId = demoCollection.Id,
+                Collection = demoCollection,
+                Method = "GET",
+                Url = "https://echo.free.beeceptor.com/sample-request?author=apidot",
+                BodyType = HttpBodyType.None,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+
+            var samplePost = new RequestItem
+            {
+                Name = "Echo POST Payload",
+                WorkspaceId = demoWorkspace.Id,
+                CollectionId = demoCollection.Id,
+                Collection = demoCollection,
+                Method = "POST",
+                Url = "https://echo.free.beeceptor.com/sample-request",
+                BodyType = HttpBodyType.Json,
+                HeadersJson = "{\"Content-Type\": \"application/json\"}",
+                BodyContent = "{\n  \"message\": \"Hello from ApiDot Demo!\",\n  \"source\": \"web-sandbox\"\n}",
+                CreatedAtUtc = DateTime.UtcNow
+            };
+
+            dbContext.RequestItems.AddRange(sampleGet, samplePost);
+            await dbContext.SaveChangesAsync(cancellationToken);
+            logger?.LogInformation("Provisioned Demo Workspace with sample requests for {Email}.", DemoEmail);
         }
     }
 }

@@ -635,8 +635,8 @@ const ptBR = {
   auth: {
     loginTitle: 'Entrar',
     loginSubtitle: 'Test and debug any API, anywhere',
-    email: 'E-mail',
-    emailPlaceholder: 'seu@email.com',
+    email: 'E-mail ou Usuário',
+    emailPlaceholder: 'demo ou seu@email.com',
     password: 'Senha',
     signIn: 'Entrar',
     ssoSignIn: 'Entrar com SSO',

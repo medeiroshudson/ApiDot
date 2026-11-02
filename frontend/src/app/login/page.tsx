@@ -167,9 +167,10 @@ export default function LoginPage() {
             <input
               id="email"
               name="email"
-              type="email"
+              type="text"
+              inputMode="email"
               required
-              autoComplete="email"
+              autoComplete="username"
               placeholder={t('auth.emailPlaceholder')}
               aria-invalid={!!error}
               value={email}

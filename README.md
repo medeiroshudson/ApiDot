@@ -3,6 +3,7 @@
 > Test and debug any API, anywhere — from localhost to production.
 
 [![GitHub Release](https://img.shields.io/github/v/release/medeiroshudson/ApiDot?color=blue&label=release&style=flat-square)](https://github.com/medeiroshudson/ApiDot/releases)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-apidot.hmedeiros.dev-00E599?style=flat-square&logo=googlechrome&logoColor=white)](https://apidot.hmedeiros.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Next.js 15](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=next.js)](https://nextjs.org/)
 [![.NET 9](https://img.shields.io/badge/.NET-9.0-512BD4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com/)
@@ -11,6 +12,15 @@
 ---
 
 ![ApiDot Desktop Workspace](docs/assets/screenshots/01-desktop-hero-request-response.png)
+
+> ### ⚡ Live Sandbox Demo
+> Experience ApiDot live in your browser without installing anything:
+> 
+> - **URL:** [https://apidot.hmedeiros.dev](https://apidot.hmedeiros.dev)
+> - **Username:** `demo` (or `demo@apidot.dev`)
+> - **Password:** `demo`
+> 
+> *Pre-configured with sample collections, OpenAPI specifications, environments, and real-time execution.*
 
 ---
 

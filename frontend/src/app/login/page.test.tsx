@@ -150,6 +150,26 @@ describe('LoginPage (/login)', () => {
       });
     });
 
+    it('allows entering a plain username like demo and calls loginLocal with it', async () => {
+      const loginLocalSpy = vi.fn().mockResolvedValue(mockUser);
+      useAuthStore.setState({ loginLocal: loginLocalSpy });
+
+      render(<LoginPage />);
+
+      const emailOrUsernameInput = screen.getByLabelText(/email|e-?mail/i);
+      const passwordInput = screen.getByLabelText(/password|senha/i);
+      const submitButton = screen.getByRole('button', { name: /sign in with local credentials|entrar com credenciais locais/i });
+
+      fireEvent.change(emailOrUsernameInput, { target: { value: 'demo' } });
+      fireEvent.change(passwordInput, { target: { value: 'demo' } });
+      fireEvent.click(submitButton);
+
+      await waitFor(() => {
+        expect(loginLocalSpy).toHaveBeenCalledWith('demo', 'demo');
+        expect(mockReplace).toHaveBeenCalledWith('/');
+      });
+    });
+
     it('displays error message banner when login fails and does not redirect', async () => {
       const loginLocalSpy = vi.fn().mockRejectedValue(new Error('Credenciais inválidas'));
       useAuthStore.setState({ loginLocal: loginLocalSpy });

@@ -633,8 +633,8 @@ const enUS = {
   auth: {
     loginTitle: 'Sign In',
     loginSubtitle: 'Test and debug any API, anywhere',
-    email: 'Email',
-    emailPlaceholder: 'your@email.com',
+    email: 'Email or Username',
+    emailPlaceholder: 'demo or your@email.com',
     password: 'Password',
     signIn: 'Sign In',
     ssoSignIn: 'Sign in with SSO',

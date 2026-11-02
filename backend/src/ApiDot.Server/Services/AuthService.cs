@@ -61,6 +61,10 @@ public class AuthService(
         }
 
         var normalizedEmail = email.Trim().ToLowerInvariant();
+        if (normalizedEmail == "demo")
+        {
+            normalizedEmail = "demo@apidot.dev";
+        }
 
         var user = await dbContext.Users
             .TagWith(ScopeMarker)

@@ -210,6 +210,36 @@ public class UserSeederTests : IDisposable
     }
 
     [Fact]
+    public async Task When_Seeding_Runs_Creates_Demo_User_And_Demo_Workspace_With_Sample_Requests()
+    {
+        var config = CreateConfiguration(new Dictionary<string, string?>
+        {
+            ["APIDOT_ROOT_PASSWORD"] = "RootPassOnly"
+        });
+
+        var seeder = new UserSeeder(_dbContext, config, _passwordHasher);
+        await seeder.SeedRootUserAndOrphanWorkspacesAsync();
+
+        var demoUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == UserSeeder.DemoEmail);
+        demoUser.Should().NotBeNull();
+        demoUser!.IsRoot.Should().BeFalse();
+        demoUser.DisplayName.Should().Be(UserSeeder.DemoDisplayName);
+        _passwordHasher.VerifyPassword(UserSeeder.DemoPassword, demoUser.PasswordHash!, demoUser.PasswordSalt!)
+            .Should().BeTrue();
+
+        var demoWorkspace = await _dbContext.Workspaces
+            .Include(w => w.Members)
+            .Include(w => w.Collections)
+                .ThenInclude(c => c.Requests)
+            .FirstOrDefaultAsync(w => w.Members.Any(m => m.UserId == demoUser.Id));
+
+        demoWorkspace.Should().NotBeNull();
+        demoWorkspace!.Name.Should().Be("Demo Workspace");
+        demoWorkspace.Collections.Should().ContainSingle(c => c.Name == "Beeceptor Echo API");
+        demoWorkspace.Collections.First().Requests.Should().HaveCount(2);
+    }
+
+    [Fact]
     public async Task When_Password_Not_Configured_Does_Not_Create_Root_User()
     {
         var config = CreateConfiguration(new Dictionary<string, string?>());

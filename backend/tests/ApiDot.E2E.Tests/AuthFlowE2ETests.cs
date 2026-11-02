@@ -63,7 +63,7 @@ public class AuthFlowE2ETests : IClassFixture<WebApplicationFactory<Program>>, I
         await db.Database.EnsureCreatedAsync();
 
         // Ensure an initial workspace exists prior to seeding so UserSeeder attaches it to the Root user
-        var workspace = await db.Workspaces.TagWith("/* __ws_scope__ */").FirstOrDefaultAsync();
+        var workspace = await db.Workspaces.TagWith("/* __ws_scope__ */").FirstOrDefaultAsync(w => w.Name == "Root Workspace");
         if (workspace == null)
         {
             workspace = new Workspace
