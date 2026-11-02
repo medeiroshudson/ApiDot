@@ -10,6 +10,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
+import { Select } from '@/components/common/Select';
 import type { SchemaPropertyItem } from './RequestAutocomplete';
 
 export type { SchemaPropertyItem };
@@ -764,11 +765,11 @@ export function SpecificationTab({
           </div>
         ) : (
           <div className="border border-neutral-800 rounded-lg overflow-x-auto bg-neutral-900/20">
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full min-w-[740px] text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-neutral-900/80 text-[11px] font-medium text-neutral-400 uppercase tracking-wider border-b border-neutral-800">
                   <th className="py-2 px-3 min-w-[200px] w-1/3">{t('request.property')}</th>
-                  <th className="py-2 px-2 w-28">{t('request.type')}</th>
+                  <th className="py-2 px-2 min-w-[120px] w-32">{t('request.type')}</th>
                   <th className="py-2 px-2 w-24 text-center">{t('request.required')}</th>
                   <th className="py-2 px-2 w-1/4">{t('request.description')}</th>
                   <th className="py-2 px-2 w-1/4">{t('request.example')}</th>
@@ -798,9 +799,6 @@ export function SpecificationTab({
                             ↳
                           </span>
                         )}
-                        <span className="text-xs font-mono font-medium text-neutral-200">
-                          {row.name}
-                        </span>
                         <input
                           type="text"
                           aria-label={t('request.propertyNameAria', { name: rowFallbackName })}
@@ -817,7 +815,8 @@ export function SpecificationTab({
 
                     {/* Tipo */}
                     <td className="py-1.5 px-2">
-                      <select
+                      <Select
+                        sizeVariant="sm"
                         aria-label={t('request.propertyTypeAria', { name: rowFallbackName })}
                         value={row.type}
                         disabled={disabled}
@@ -827,7 +826,7 @@ export function SpecificationTab({
                             e.target.value as SchemaPropertyType
                           )
                         }
-                        className="h-7 px-2 text-xs bg-neutral-900 border border-neutral-800 rounded text-neutral-200 focus:outline-none focus:ring-1 focus:ring-blue-500 w-full cursor-pointer"
+                        className="w-full"
                       >
                         <option value="string">string</option>
                         <option value="integer">integer</option>
@@ -835,7 +834,7 @@ export function SpecificationTab({
                         <option value="boolean">boolean</option>
                         <option value="object">object</option>
                         <option value="array">array</option>
-                      </select>
+                      </Select>
                     </td>
 
                     {/* Obrigatório */}

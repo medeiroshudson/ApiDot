@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Plus, Layers, Globe, FolderGit2, Calculator, Trash2 } from 'lucide-react';
 import { VariableGrid, VariableItem } from './VariableGrid';
+import { Select } from '@/components/common/Select';
 import { useTranslation } from '@/hooks/useTranslation';
 
 export interface EnvironmentGroup {
@@ -561,19 +562,20 @@ export function EnvironmentModal({
                         >
                           {t('environments.selectCollection')}:
                         </label>
-                        <select
+                        <Select
                           id="collection-select"
+                          sizeVariant="sm"
                           aria-label={t('environments.selectCollection')}
                           value={selectedCollectionId || ''}
                           onChange={(e) => setSelectedCollectionId(e.target.value)}
-                          className="bg-neutral-900 border border-neutral-800 text-xs text-neutral-200 rounded px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-neutral-400 cursor-pointer"
+                          className="min-w-[180px] hover:border-neutral-700"
                         >
                           {collections.map((c) => (
                             <option key={c.id} value={c.id}>
                               {c.name}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       </div>
                     </div>
                   )}

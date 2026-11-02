@@ -102,7 +102,7 @@ describe('AppHeader', () => {
     fireEvent.click(pill);
     expect(screen.getByRole('menu', { name: /environments|ambientes/i })).toBeInTheDocument();
     expect(screen.getByText('Development')).toBeInTheDocument();
-    expect(screen.getByText('Gerenciar ambientes e variáveis...')).toBeInTheDocument();
+    expect(screen.getByText('Gerenciar Ambientes')).toBeInTheDocument();
   });
 
   it('calls onOpenEnvironmentSettings when clicking manage link inside environment pill dropdown', () => {
@@ -116,7 +116,7 @@ describe('AppHeader', () => {
       />
     );
     fireEvent.click(screen.getByRole('button', { name: /selecionar ambiente ativo/i }));
-    fireEvent.click(screen.getByText('Gerenciar ambientes e variáveis...'));
+    fireEvent.click(screen.getByText('Gerenciar Ambientes'));
     expect(onOpenEnvSettings).toHaveBeenCalledTimes(1);
   });
 

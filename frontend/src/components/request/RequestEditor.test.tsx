@@ -383,10 +383,10 @@ describe('RequestEditor', () => {
     fireEvent.click(specTab);
 
     expect(screen.getByText('Buscar Pet')).toBeInTheDocument();
-    expect(screen.getByText('name')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('name')).toBeInTheDocument();
 
-    // Click "Generate Example in Body"
-    const generateBtn = screen.getByRole('button', { name: /Generate Example in Body/i });
+    // Click "Generate Example"
+    const generateBtn = screen.getByRole('button', { name: /Generate Example/i });
     fireEvent.click(generateBtn);
 
     // Should switch to Body tab and have JSON body

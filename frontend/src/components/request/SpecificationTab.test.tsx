@@ -32,10 +32,10 @@ describe('SpecificationTab', () => {
     );
 
     expect(screen.getByText('Get Item')).toBeInTheDocument();
-    expect(screen.getByText('name')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('name')).toBeInTheDocument();
     expect(screen.getByText('200')).toBeInTheDocument();
 
-    const generateBtn = screen.getByRole('button', { name: /Generate Example in Body/i });
+    const generateBtn = screen.getByRole('button', { name: /Generate Example/i });
     fireEvent.click(generateBtn);
     expect(onGenerate).toHaveBeenCalledWith(expect.stringContaining('Widget'));
   });
@@ -89,7 +89,7 @@ describe('SpecificationTab', () => {
 
     render(<SpecificationTab schemaDefinition={initialSchema} onChange={onChange} />);
 
-    expect(screen.getByText('user')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('user')).toBeInTheDocument();
 
     // Click "+ Sub-campo" on user object row
     const addChildBtn = screen.getByRole('button', { name: /Add sub-property to user/i });
@@ -121,7 +121,7 @@ describe('SpecificationTab', () => {
 
     render(<SpecificationTab schemaDefinition={initialSchema} onChange={onChange} />);
 
-    expect(screen.getByText('toDelete')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('toDelete')).toBeInTheDocument();
 
     const deleteBtn = screen.getByRole('button', { name: /Remove property toDelete/i });
     fireEvent.click(deleteBtn);
@@ -181,7 +181,7 @@ describe('SpecificationTab', () => {
 
     render(<SpecificationTab schemaDefinition={legacyRawSchema} />);
 
-    expect(screen.getByText('legacyField')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('legacyField')).toBeInTheDocument();
   });
 
   it('allows editing summary and description', () => {
