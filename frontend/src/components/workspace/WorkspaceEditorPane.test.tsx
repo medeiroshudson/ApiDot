@@ -80,6 +80,7 @@ async function renderEditorPane(
 describe('WorkspaceEditorPane', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.innerWidth = 1024;
     useLayoutStore.setState(INITIAL_LAYOUT_STATE);
     useRequestStore.getState().reset();
     useEnvironmentStore.getState().reset();
@@ -110,6 +111,7 @@ describe('WorkspaceEditorPane', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    window.innerWidth = 1024;
   });
 
   it('renders RequestEditor, central PanelSplitter, and ResponseViewer on desktop', async () => {
@@ -118,9 +120,51 @@ describe('WorkspaceEditorPane', () => {
     // Verify main components are present
     expect(screen.getByRole('main')).toBeInTheDocument();
     expect(screen.getByTestId('panel-splitter-request-response-splitter')).toBeInTheDocument();
-    expect(screen.getByText('Request')).toBeInTheDocument();
-    expect(screen.getByText('Response')).toBeInTheDocument();
+    expect(screen.getByTestId('response-viewer-container')).toBeInTheDocument();
     expect(screen.getByText(/Send a request to see the response|Dispare uma requisição/i)).toBeInTheDocument();
+  });
+
+  it('preserves active tab when navigating between different requests', async () => {
+    let result: any;
+    await act(async () => {
+      result = render(
+        <WorkspaceProvider workspaceId="ws-1">
+          <WorkspaceEditorPane workspaceId="ws-1" requestId="req-1" />
+        </WorkspaceProvider>
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /specification|especificação/i })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      );
+    });
+
+    // Click Body tab
+    const bodyTab = screen.getByRole('tab', { name: /body|corpo/i });
+    act(() => {
+      fireEvent.click(bodyTab);
+    });
+    expect(bodyTab).toHaveAttribute('aria-selected', 'true');
+    expect(useLayoutStore.getState().activeRequestTab).toBe('body');
+
+    // Switch to another request
+    await act(async () => {
+      result.rerender(
+        <WorkspaceProvider workspaceId="ws-1">
+          <WorkspaceEditorPane workspaceId="ws-1" requestId="req-2" />
+        </WorkspaceProvider>
+      );
+    });
+    expect(screen.getByRole('tab', { name: /body|corpo/i })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('renders request bar spanning full canvas width with bottom split for details and response', async () => {
+    await renderEditorPane('ws-1', 'req-1');
+    const urlInput = screen.getByRole('textbox', { name: /request url|url da requisição/i });
+    expect(urlInput).toBeInTheDocument();
+    expect(screen.getByTestId('response-viewer-container')).toBeInTheDocument();
   });
 
   it('applies requestResponseRatio from useLayoutStore to desktop layout', async () => {
@@ -132,10 +176,13 @@ describe('WorkspaceEditorPane', () => {
   });
 
   it('switches between request and response views on mobile', async () => {
+    window.innerWidth = 500;
+    window.dispatchEvent(new Event('resize'));
+
     await renderEditorPane('ws-1', null);
 
     // Click on mobile 'Response' button
-    const responseBtn = screen.getByRole('button', { name: /Response/i });
+    const responseBtn = screen.getByRole('button', { name: /^response$/i });
     fireEvent.click(responseBtn);
 
     expect(useLayoutStore.getState().activeMobilePane).toBe('response');
