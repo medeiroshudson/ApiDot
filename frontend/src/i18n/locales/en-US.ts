@@ -151,7 +151,7 @@ const enUS = {
     tabParams: 'Params',
     tabHeaders: 'Headers',
     tabBody: 'Body',
-    tabAuth: 'Auth',
+    tabAuth: 'Authorization',
     httpHeaders: 'HTTP Headers:',
     formatJson: 'Format JSON',
     formatSuccess: 'Formatted successfully!',
