@@ -5,7 +5,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/medeiroshudson/ApiDot?color=blue&label=release&style=flat-square)](https://github.com/medeiroshudson/ApiDot/releases)
 [![Live Demo](https://img.shields.io/badge/Live_Demo-apidot.hmedeiros.dev-00E599?style=flat-square&logo=googlechrome&logoColor=white)](https://apidot.hmedeiros.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](https://opensource.org/licenses/MIT)
-[![Next.js 15](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=next.js)](https://nextjs.org/)
+[![Next.js 16](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js)](https://nextjs.org/)
 [![.NET 9](https://img.shields.io/badge/.NET-9.0-512BD4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com/)
 [![Docker Ready](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker)](https://www.docker.com/)
 
@@ -38,7 +38,7 @@ Whether you are testing an internal microservice, debugging third-party webhooks
 
 | Feature | Description |
 |---|---|
-| 🎯 **Full-featured Request Editor** | Multi-method HTTP client (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`) with support for query parameters, custom headers, and raw, JSON, or form-data payloads powered by CodeMirror 6. |
+| 🎯 **Full-featured Request Editor** | Multi-method HTTP client (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`) with support for query parameters, custom headers, and raw, JSON, or form-data payloads with syntax highlighting and validation. |
 | ⚡ **Precise Latency Metrics** | Real-time diagnostic timing breakdown isolating DNS resolution, TCP connect, TLS handshake, TTFB (time to first byte), and content download phases. |
 | 🧩 **Cascading Variables (`{{...}}`)** | Hierarchical variable resolution across Global, Environment, and Collection scopes with rich inline autocomplete and response chaining. |
 | 🔄 **OpenAPI v3 Sync & Audit** | Import OpenAPI v3 / Swagger specifications from URLs or raw JSON/YAML with detailed change auditing to prevent accidental regressions. |
@@ -131,7 +131,7 @@ dotnet run --project src/ApiDot.Server
 ```
 *The server API and WebSocket hub will listen at `http://localhost:5001` (or `http://localhost:5000`).*
 
-#### 2. Frontend Web Client (`Next.js 15`)
+#### 2. Frontend Web Client (`Next.js`)
 ```bash
 cd frontend
 npm install
@@ -157,7 +157,7 @@ ApiDot is engineered as a clean, decoupled system consisting of three primary co
 ```
 ┌────────────────────────────────────────────────────────┐
 │                   ApiDot Web Client                    │
-│          Next.js 15 • React 19 • Zustand • CodeMirror  │
+│                    Next.js • React                     │
 └───────────────────────────┬────────────────────────────┘
                             │ REST / Server-Sent Events
                             ▼
@@ -174,7 +174,7 @@ ApiDot is engineered as a clean, decoupled system consisting of three primary co
 └────────────────────────────────────────────────────────┘
 ```
 
-1. **Frontend (`frontend`)**: Next.js 15 App Router application with React 19, Tailwind CSS, Zustand for reactive workspace state, and CodeMirror 6 for high-performance payload editing.
+1. **Frontend (`frontend`)**: Next.js and React web application for interactive workspace, request, and collection management.
 2. **Backend Server (`backend/src/ApiDot.Server`)**: High-throughput ASP.NET Core 9 Minimal API service backed by SQLite for fast, portable, zero-configuration local persistence.
 3. **Local Agent (`backend/src/ApiDot.Agent`)**: Zero-dependency Native AOT executable compiling to single-file binaries across macOS, Linux, and Windows. It registers as a system service (`launchd`, `systemd`, `schtasks`) and executes requests locally when configured as the execution target.
 

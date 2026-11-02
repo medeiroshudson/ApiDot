@@ -41,5 +41,5 @@ api-client, developer-tools, self-hosted, rest-api, openapi, postman-alternative
 | `rest-api` | Protocol | Primary communication protocol targeted by ApiDot. |
 | `openapi` | Interoperability | Highlights native OpenAPI v3 import, synchronization, and diffing. |
 | `postman-alternative` | Ecosystem | Positions ApiDot as a lightweight, modern, open-source alternative. |
-| `nextjs` | Stack / Frontend | Discovers developers in the React / Next.js 15 ecosystem. |
+| `nextjs` | Stack / Frontend | Discovers developers in the React / Next.js ecosystem. |
 | `dotnet` | Stack / Backend | Discovers developers in the .NET 9 and C# ecosystem. |
