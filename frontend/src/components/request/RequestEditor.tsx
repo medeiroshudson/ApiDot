@@ -49,6 +49,15 @@ export interface RequestData {
 export interface RequestEditorProps {
   initialRequest?: Partial<RequestData> & { id?: string };
   initialTab?: TabType;
+  activeTab?: TabType;
+  onTabChange?: (tab: TabType) => void;
+  responseSlot?: React.ReactNode;
+  splitterSlot?: React.ReactNode;
+  requestDetailsRatio?: number;
+  isDesktop?: boolean;
+  activeMobilePane?: 'request' | 'response';
+  onMobilePaneChange?: (pane: 'request' | 'response') => void;
+  responseStatusCode?: number;
   currentRequestId?: string;
   requestName?: string;
   onSaveExisting?: (request: RequestData) => Promise<void> | void;
@@ -62,14 +71,14 @@ export interface RequestEditorProps {
   availableVariables?: AutocompleteVariable[];
 }
 
-export type TabType = 'specification' | 'params' | 'headers' | 'body' | 'auth';
+export type TabType = 'specification' | 'auth' | 'params' | 'headers' | 'body';
 
 export const TABS: { id: TabType; label: string }[] = [
-  { id: 'specification', label: 'Especificação' },
-  { id: 'params', label: 'Parâmetros' },
-  { id: 'headers', label: 'Cabeçalhos' },
-  { id: 'body', label: 'Corpo' },
-  { id: 'auth', label: 'Autenticação' },
+  { id: 'specification', label: 'Specification' },
+  { id: 'auth', label: 'Authorization' },
+  { id: 'params', label: 'Params' },
+  { id: 'headers', label: 'Headers' },
+  { id: 'body', label: 'Body' },
 ];
 
 export function resolvePathParams(
@@ -114,6 +123,15 @@ export function insertTokenAtCursor(
 export function RequestEditor({
   initialRequest,
   initialTab,
+  activeTab: activeTabProp,
+  onTabChange,
+  responseSlot,
+  splitterSlot,
+  requestDetailsRatio = 50,
+  isDesktop = true,
+  activeMobilePane: activeMobilePaneProp,
+  onMobilePaneChange,
+  responseStatusCode,
   currentRequestId,
   requestName,
   onSaveExisting,
@@ -150,7 +168,29 @@ export function RequestEditor({
   const [auth, setAuth] = useState<AuthConfig>(
     initialRequest?.auth || { type: 'none' }
   );
-  const [activeTab, setActiveTab] = useState<TabType>(initialTab ?? 'params');
+  const [localActiveTab, setLocalActiveTab] = useState<TabType>(initialTab ?? 'specification');
+  const activeTab = activeTabProp ?? localActiveTab;
+
+  const handleTabChange = useCallback(
+    (tab: TabType) => {
+      setLocalActiveTab(tab);
+      onTabChange?.(tab);
+    },
+    [onTabChange]
+  );
+
+  const [localMobilePane, setLocalMobilePane] = useState<'request' | 'response'>(
+    activeMobilePaneProp ?? 'request'
+  );
+  const currentMobilePane = activeMobilePaneProp ?? localMobilePane;
+
+  const handleMobilePaneChange = useCallback(
+    (pane: 'request' | 'response') => {
+      setLocalMobilePane(pane);
+      onMobilePaneChange?.(pane);
+    },
+    [onMobilePaneChange]
+  );
   const [urlError, setUrlError] = useState<string | null>(null);
   const [isLinkerOpen, setIsLinkerOpen] = useState(false);
   const [activeArea, setActiveArea] = useState<'url' | 'headers' | 'body'>('headers');
@@ -315,14 +355,14 @@ export function RequestEditor({
     (exampleJson: string) => {
       setBody(exampleJson);
       setBodyFormat('json');
-      setActiveTab('body');
+      handleTabChange('body');
       setActiveArea('body');
       updateRequest((prev) => ({
         ...prev,
         body: exampleJson,
       }));
     },
-    [updateRequest]
+    [updateRequest, handleTabChange]
   );
 
   const handleMethodChange = (newMethod: string) => {
@@ -436,233 +476,25 @@ export function RequestEditor({
     if (targetIndex !== -1) {
       e.preventDefault();
       const nextTab = TABS[targetIndex];
-      setActiveTab(nextTab.id);
+      handleTabChange(nextTab.id);
+      if (nextTab.id === 'headers' || nextTab.id === 'body') {
+        setActiveArea(nextTab.id);
+      }
       tabRefs.current[targetIndex]?.focus();
     }
   };
 
   const tabLabels: Record<TabType, string> = {
     specification: t('request.tabSpec'),
+    auth: t('request.tabAuth'),
     params: t('request.tabParams'),
     headers: t('request.tabHeaders'),
     body: t('request.tabBody'),
-    auth: t('request.tabAuth'),
   };
 
-  return (
-    <div className="flex flex-col h-full bg-neutral-950 text-neutral-100 overflow-hidden">
-      {/* Title Bar: Request Name, Dirty State, Save Action */}
-      <div className="h-9 px-3 sm:px-4 border-b border-neutral-800 bg-neutral-900/60 flex items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider shrink-0">
-            {t('request.requestTitlePrefix')}
-          </span>
-          <span
-            data-testid="request-title"
-            className="text-xs font-medium text-neutral-200 truncate"
-            title={requestName || t('request.newRequest')}
-          >
-            {requestName || t('request.newRequest')}
-          </span>
-          {isDirty && (
-            <span
-              data-testid="dirty-indicator"
-              className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"
-              title={t('request.unsavedChanges')}
-              aria-label={t('request.unsavedChanges')}
-            />
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            aria-label={t('request.saveRequest')}
-            title={t('request.saveTooltip')}
-            onClick={handleSave}
-            disabled={isLoading || isSaving}
-            className="h-7 px-2.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-colors border border-neutral-700/60 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-          >
-            {isSaving ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400" aria-hidden="true" />
-            ) : (
-              <Save className="w-3.5 h-3.5 text-neutral-400" aria-hidden="true" />
-            )}
-            <span>{isSaving ? t('request.saving') : t('request.save')}</span>
-            {isDirty && (
-              <span
-                data-testid="save-button-dirty-dot"
-                className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"
-                aria-hidden="true"
-              />
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Top Bar Compact (h-9): Method, URL Input, Split Send Button */}
-      <div className="p-2 sm:p-2.5 border-b border-neutral-800 bg-neutral-900/40 flex flex-col gap-1.5 shrink-0">
-        <div className="flex items-start gap-1.5 sm:gap-2 w-full shrink-0">
-          <Select
-            sizeVariant="md"
-            aria-label={t('request.httpMethodAria')}
-            value={method}
-            disabled={isLoading}
-            onChange={(e) => handleMethodChange(e.target.value)}
-            className={`font-bold text-xs shrink-0 cursor-pointer min-w-[68px] sm:min-w-[76px] h-9 ${
-              HTTP_METHOD_BADGES[method] || 'text-blue-400 bg-neutral-800 border-neutral-700'
-            }`}
-            iconClassName="text-current opacity-70"
-          >
-            {HTTP_METHODS.map((m) => (
-              <option key={m} value={m} className="bg-neutral-900 text-neutral-200 font-semibold">
-                {m}
-              </option>
-            ))}
-          </Select>
-
-          <div className="flex-1 min-w-0 relative">
-            <Input
-              ref={urlInputRef}
-              autoGrow
-              aria-label={t('request.urlAria')}
-              placeholder={t('request.urlDefaultPlaceholder')}
-              value={url}
-              disabled={isLoading}
-              error={!!urlError}
-              onFocus={() => {
-                setActiveArea('url');
-                setCursorCoords(null);
-              }}
-              onChange={(e) => handleUrlChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              aria-invalid={!!urlError}
-              aria-describedby={urlError ? 'url-error' : undefined}
-              className="w-full"
-            />
-            <RequestAutocomplete
-              inputRef={urlInputRef}
-              value={url}
-              onChange={handleUrlChange}
-              availableRequests={availableRequests}
-              availableVariables={availableVariables}
-            />
-            {url && !isLoading && (
-              <button
-                type="button"
-                aria-label={t('request.clearUrl')}
-                onClick={() => handleUrlChange('')}
-                className="absolute right-2 top-2.5 text-neutral-400 hover:text-neutral-200 p-1 rounded hover:bg-neutral-800 transition-colors focus:outline-none"
-              >
-                <X className="w-3.5 h-3.5" aria-hidden="true" />
-              </button>
-            )}
-          </div>
-
-          {/* Split Send Button: [ Enviar | ▾ ] */}
-          <div ref={sendMenuRef} className="relative inline-flex rounded-md shadow-sm h-9 shrink-0 items-start">
-            <button
-              type="button"
-              aria-label={t('request.sendRequest')}
-              onClick={() => handleSend()}
-              disabled={isSendDisabled}
-              title={
-                effectiveTarget === 'Agent' && !isAgentOnline
-                  ? t('request.agentOfflineTooltip')
-                  : effectiveTarget === 'Agent'
-                  ? t('request.sendViaAgent')
-                  : t('request.sendViaServer')
-              }
-              className="h-9 px-3.5 rounded-l-md bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
-            >
-              {isLoading ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-              ) : effectiveTarget === 'Agent' ? (
-                <Cpu className="w-3.5 h-3.5 text-blue-200" aria-hidden="true" />
-              ) : (
-                <Send className="w-3.5 h-3.5" aria-hidden="true" />
-              )}
-              <span>{isLoading ? t('request.sending') : t('request.send')}</span>
-            </button>
-
-            <button
-              type="button"
-              aria-label={t('request.sendOptions')}
-              aria-haspopup="true"
-              aria-expanded={isSendMenuOpen}
-              onClick={() => setIsSendMenuOpen((prev) => !prev)}
-              disabled={isLoading}
-              className="h-9 px-2 rounded-r-md bg-blue-700 hover:bg-blue-600 border-l border-blue-500/40 text-white flex items-center justify-center transition-colors focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 cursor-pointer"
-            >
-              <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
-            </button>
-
-            {/* Dropdown for Alternative Target */}
-            {isSendMenuOpen && (
-              <div
-                role="menu"
-                className="absolute right-0 top-full mt-1 w-56 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl shadow-black/80 py-1 z-50 text-xs animate-in fade-in duration-75"
-              >
-                <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-neutral-400 border-b border-neutral-800/80">
-                  {t('request.alternativeTarget')}
-                </div>
-
-                {alternateTarget === 'Server' ? (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    aria-label={t('request.executeOnServer')}
-                    onClick={() => handleSend('Server')}
-                    className="w-full text-left px-3 py-2 flex items-center gap-2 text-neutral-200 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
-                  >
-                    <Server className="w-3.5 h-3.5 text-neutral-400" aria-hidden="true" />
-                    <div className="flex flex-col">
-                      <span className="font-medium">{t('request.targetServer')}</span>
-                      <span className="text-[10px] text-neutral-500">
-                        {t('request.executeOnServerDesc')}
-                      </span>
-                    </div>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    aria-label={t('request.executeOnAgent')}
-                    disabled={!isAgentOnline}
-                    onClick={() => handleSend('Agent')}
-                    className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
-                      isAgentOnline
-                        ? 'text-neutral-200 hover:text-white hover:bg-neutral-800 cursor-pointer'
-                        : 'text-neutral-500 opacity-60 cursor-not-allowed'
-                    }`}
-                  >
-                    <Cpu className={`w-3.5 h-3.5 ${isAgentOnline ? 'text-emerald-400' : 'text-neutral-500'}`} aria-hidden="true" />
-                    <div className="flex flex-col">
-                      <span className="font-medium">{t('request.targetAgent')}</span>
-                      <span className="text-[10px] text-neutral-500">
-                        {isAgentOnline ? t('request.executeOnAgentDescOnline') : t('request.executeOnAgentDescOffline')}
-                      </span>
-                    </div>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {urlError && (
-          <span id="url-error" role="alert" className="text-xs text-rose-400 px-1 font-medium">
-            {urlError}
-          </span>
-        )}
-      </div>
-
-      {/* Tabs navigation: Headers, Body, Auth */}
+  const requestDetailsContent = (
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      {/* Tabs navigation: Specification, Auth, Params, Headers, Body */}
       <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/20 px-3 sm:px-4 shrink-0">
         <div
           role="tablist"
@@ -684,7 +516,7 @@ export function RequestEditor({
                 aria-controls={`panel-${tab.id}`}
                 tabIndex={isActive ? 0 : -1}
                 onClick={() => {
-                  setActiveTab(tab.id);
+                  handleTabChange(tab.id);
                   if (tab.id === 'headers' || tab.id === 'body') {
                     setActiveArea(tab.id);
                   }
@@ -722,6 +554,130 @@ export function RequestEditor({
               disabled={isLoading}
             />
           </div>
+        </div>
+
+        {/* Auth Panel */}
+        <div
+          role="tabpanel"
+          id="panel-auth"
+          aria-labelledby="tab-auth"
+          hidden={activeTab !== 'auth'}
+          className={activeTab === 'auth' ? 'space-y-4 overflow-y-auto' : 'hidden'}
+        >
+          <div className="space-y-1">
+            <label htmlFor="auth-type-select" className="text-xs text-neutral-400 font-medium">
+              {t('request.authType')}
+            </label>
+            <select
+              id="auth-type-select"
+              aria-label={t('request.authTypeAria')}
+              value={auth.type}
+              disabled={isLoading}
+              onChange={(e) => handleAuthTypeChange(e.target.value as AuthConfig['type'])}
+              className="bg-neutral-900 border border-neutral-800 text-xs rounded-md px-3 py-1.5 text-neutral-200 outline-none focus:ring-1 focus:ring-blue-500 block w-full sm:w-64"
+            >
+              <option value="inherit">{t('request.authInherit')}</option>
+              <option value="none">{t('request.authNone')}</option>
+              <option value="bearer">{t('request.authBearer')}</option>
+              <option value="basic">{t('request.authBasic')}</option>
+              <option value="apikey">{t('request.authApiKey')}</option>
+            </select>
+          </div>
+
+          {auth.type === 'inherit' && (
+            <div className="p-3.5 rounded-lg bg-neutral-900/40 border border-neutral-800 text-neutral-400 text-xs flex items-center gap-2.5">
+              <Shield className="w-4 h-4 text-blue-400 shrink-0" />
+              <span>{t('request.authInheritNotice')}</span>
+            </div>
+          )}
+
+          {auth.type === 'bearer' && (
+            <div className="space-y-1">
+              <label htmlFor="bearer-token-input" className="text-xs text-neutral-400 font-medium">
+                {t('request.tokenLabel')}
+              </label>
+              <input
+                id="bearer-token-input"
+                type="text"
+                aria-label={t('request.tokenAria')}
+                placeholder={t('request.tokenPlaceholder')}
+                value={auth.token || ''}
+                disabled={isLoading}
+                onChange={(e) => handleAuthFieldChange('token', e.target.value)}
+                className="w-full sm:w-96 bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 font-mono outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          )}
+
+          {auth.type === 'basic' && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label htmlFor="basic-username-input" className="text-xs text-neutral-400 font-medium">
+                  {t('request.usernameLabel')}
+                </label>
+                <input
+                  id="basic-username-input"
+                  type="text"
+                  aria-label={t('request.usernameAria')}
+                  placeholder={t('request.usernamePlaceholder')}
+                  value={auth.username || ''}
+                  disabled={isLoading}
+                  onChange={(e) => handleAuthFieldChange('username', e.target.value)}
+                  className="w-full sm:w-80 bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="basic-password-input" className="text-xs text-neutral-400 font-medium">
+                  {t('request.passwordLabel')}
+                </label>
+                <input
+                  id="basic-password-input"
+                  type="password"
+                  aria-label={t('request.passwordAria')}
+                  placeholder={t('request.passwordPlaceholder')}
+                  value={auth.password || ''}
+                  disabled={isLoading}
+                  onChange={(e) => handleAuthFieldChange('password', e.target.value)}
+                  className="w-full sm:w-80 bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          )}
+
+          {auth.type === 'apikey' && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label htmlFor="apikey-key-input" className="text-xs text-neutral-400 font-medium">
+                  {t('request.apiKeyLabel')}
+                </label>
+                <input
+                  id="apikey-key-input"
+                  type="text"
+                  aria-label={t('request.apiKeyAria')}
+                  placeholder={t('request.apiKeyPlaceholder')}
+                  value={auth.key || ''}
+                  disabled={isLoading}
+                  onChange={(e) => handleAuthFieldChange('key', e.target.value)}
+                  className="w-full sm:w-80 bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 font-mono outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="apikey-value-input" className="text-xs text-neutral-400 font-medium">
+                  {t('request.apiValueLabel')}
+                </label>
+                <input
+                  id="apikey-value-input"
+                  type="text"
+                  aria-label={t('request.apiValueAria')}
+                  placeholder={t('request.apiValuePlaceholder')}
+                  value={auth.value || ''}
+                  disabled={isLoading}
+                  onChange={(e) => handleAuthFieldChange('value', e.target.value)}
+                  className="w-full sm:w-80 bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 font-mono outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Params Panel */}
@@ -948,131 +904,297 @@ export function RequestEditor({
             )}
           </div>
         </div>
+      </div>
+    </div>
+  );
 
-        {/* Auth Panel */}
-        <div
-          role="tabpanel"
-          id="panel-auth"
-          aria-labelledby="tab-auth"
-          hidden={activeTab !== 'auth'}
-          className={activeTab === 'auth' ? 'space-y-4' : 'hidden'}
-        >
-          <div className="space-y-1">
-            <label htmlFor="auth-type-select" className="text-xs text-neutral-400 font-medium">
-              {t('request.authType')}
-            </label>
-            <select
-              id="auth-type-select"
-              aria-label={t('request.authTypeAria')}
-              value={auth.type}
-              disabled={isLoading}
-              onChange={(e) => handleAuthTypeChange(e.target.value as AuthConfig['type'])}
-              className="bg-neutral-900 border border-neutral-800 text-xs rounded-md px-3 py-1.5 text-neutral-200 outline-none focus:ring-1 focus:ring-blue-500 block w-full sm:w-64"
-            >
-              <option value="inherit">{t('request.authInherit')}</option>
-              <option value="none">{t('request.authNone')}</option>
-              <option value="bearer">{t('request.authBearer')}</option>
-              <option value="basic">{t('request.authBasic')}</option>
-              <option value="apikey">{t('request.authApiKey')}</option>
-            </select>
-          </div>
-
-          {auth.type === 'inherit' && (
-            <div className="p-3.5 rounded-lg bg-neutral-900/40 border border-neutral-800 text-neutral-400 text-xs flex items-center gap-2.5">
-              <Shield className="w-4 h-4 text-blue-400 shrink-0" />
-              <span>{t('request.authInheritNotice')}</span>
-            </div>
-          )}
-
-          {auth.type === 'bearer' && (
-            <div className="space-y-1">
-              <label htmlFor="bearer-token-input" className="text-xs text-neutral-400 font-medium">
-                {t('request.tokenLabel')}
-              </label>
-              <input
-                id="bearer-token-input"
-                type="text"
-                aria-label={t('request.tokenAria')}
-                placeholder={t('request.tokenPlaceholder')}
-                value={auth.token || ''}
-                disabled={isLoading}
-                onChange={(e) => handleAuthFieldChange('token', e.target.value)}
-                className="w-full sm:w-96 bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 font-mono outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-          )}
-
-          {auth.type === 'basic' && (
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <label htmlFor="basic-username-input" className="text-xs text-neutral-400 font-medium">
-                  {t('request.usernameLabel')}
-                </label>
-                <input
-                  id="basic-username-input"
-                  type="text"
-                  aria-label={t('request.usernameAria')}
-                  placeholder={t('request.usernamePlaceholder')}
-                  value={auth.username || ''}
-                  disabled={isLoading}
-                  onChange={(e) => handleAuthFieldChange('username', e.target.value)}
-                  className="w-full sm:w-80 bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="basic-password-input" className="text-xs text-neutral-400 font-medium">
-                  {t('request.passwordLabel')}
-                </label>
-                <input
-                  id="basic-password-input"
-                  type="password"
-                  aria-label={t('request.passwordAria')}
-                  placeholder={t('request.passwordPlaceholder')}
-                  value={auth.password || ''}
-                  disabled={isLoading}
-                  onChange={(e) => handleAuthFieldChange('password', e.target.value)}
-                  className="w-full sm:w-80 bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          )}
-
-          {auth.type === 'apikey' && (
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <label htmlFor="apikey-key-input" className="text-xs text-neutral-400 font-medium">
-                  {t('request.apiKeyLabel')}
-                </label>
-                <input
-                  id="apikey-key-input"
-                  type="text"
-                  aria-label={t('request.apiKeyAria')}
-                  placeholder={t('request.apiKeyPlaceholder')}
-                  value={auth.key || ''}
-                  disabled={isLoading}
-                  onChange={(e) => handleAuthFieldChange('key', e.target.value)}
-                  className="w-full sm:w-80 bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 font-mono outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="apikey-value-input" className="text-xs text-neutral-400 font-medium">
-                  {t('request.apiValueLabel')}
-                </label>
-                <input
-                  id="apikey-value-input"
-                  type="text"
-                  aria-label={t('request.apiValueAria')}
-                  placeholder={t('request.apiValuePlaceholder')}
-                  value={auth.value || ''}
-                  disabled={isLoading}
-                  onChange={(e) => handleAuthFieldChange('value', e.target.value)}
-                  className="w-full sm:w-80 bg-neutral-900 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-200 font-mono outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
+  return (
+    <div className="flex flex-col h-full bg-neutral-950 text-neutral-100 overflow-hidden">
+      {/* Title Bar: Request Name, Dirty State, Save Action */}
+      <div className="h-9 px-3 sm:px-4 border-b border-neutral-800 bg-neutral-900/60 flex items-center justify-between gap-3 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider shrink-0">
+            {t('request.requestTitlePrefix')}
+          </span>
+          <span
+            data-testid="request-title"
+            className="text-xs font-medium text-neutral-200 truncate"
+            title={requestName || t('request.newRequest')}
+          >
+            {requestName || t('request.newRequest')}
+          </span>
+          {isDirty && (
+            <span
+              data-testid="dirty-indicator"
+              className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"
+              title={t('request.unsavedChanges')}
+              aria-label={t('request.unsavedChanges')}
+            />
           )}
         </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            aria-label={t('request.saveRequest')}
+            title={t('request.saveTooltip')}
+            onClick={handleSave}
+            disabled={isLoading || isSaving}
+            className="h-7 px-2.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-colors border border-neutral-700/60 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+          >
+            {isSaving ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400" aria-hidden="true" />
+            ) : (
+              <Save className="w-3.5 h-3.5 text-neutral-400" aria-hidden="true" />
+            )}
+            <span>{isSaving ? t('request.saving') : t('request.save')}</span>
+            {isDirty && (
+              <span
+                data-testid="save-button-dirty-dot"
+                className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"
+                aria-hidden="true"
+              />
+            )}
+          </button>
+        </div>
       </div>
+
+      {/* Top Bar Compact (h-9): Method, URL Input, Split Send Button */}
+      <div className="p-2 sm:p-2.5 border-b border-neutral-800 bg-neutral-900/40 flex flex-col gap-1.5 shrink-0">
+        <div className="flex items-start gap-1.5 sm:gap-2 w-full shrink-0">
+          <Select
+            sizeVariant="md"
+            aria-label={t('request.httpMethodAria')}
+            value={method}
+            disabled={isLoading}
+            onChange={(e) => handleMethodChange(e.target.value)}
+            className={`font-bold text-xs shrink-0 cursor-pointer min-w-[68px] sm:min-w-[76px] h-9 ${
+              HTTP_METHOD_BADGES[method] || 'text-blue-400 bg-neutral-800 border-neutral-700'
+            }`}
+            iconClassName="text-current opacity-70"
+          >
+            {HTTP_METHODS.map((m) => (
+              <option key={m} value={m} className="bg-neutral-900 text-neutral-200 font-semibold">
+                {m}
+              </option>
+            ))}
+          </Select>
+
+          <div className="flex-1 min-w-0 relative">
+            <Input
+              ref={urlInputRef}
+              autoGrow
+              aria-label={t('request.urlAria')}
+              placeholder={t('request.urlDefaultPlaceholder')}
+              value={url}
+              disabled={isLoading}
+              error={!!urlError}
+              onFocus={() => {
+                setActiveArea('url');
+                setCursorCoords(null);
+              }}
+              onChange={(e) => handleUrlChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              aria-invalid={!!urlError}
+              aria-describedby={urlError ? 'url-error' : undefined}
+              className="w-full"
+            />
+            <RequestAutocomplete
+              inputRef={urlInputRef}
+              value={url}
+              onChange={handleUrlChange}
+              availableRequests={availableRequests}
+              availableVariables={availableVariables}
+            />
+            {url && !isLoading && (
+              <button
+                type="button"
+                aria-label={t('request.clearUrl')}
+                onClick={() => handleUrlChange('')}
+                className="absolute right-2 top-2.5 text-neutral-400 hover:text-neutral-200 p-1 rounded hover:bg-neutral-800 transition-colors focus:outline-none"
+              >
+                <X className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+
+          {/* Split Send Button: [ Enviar | ▾ ] */}
+          <div ref={sendMenuRef} className="relative inline-flex rounded-md shadow-sm h-9 shrink-0 items-start">
+            <button
+              type="button"
+              aria-label={t('request.sendRequest')}
+              onClick={() => handleSend()}
+              disabled={isSendDisabled}
+              title={
+                effectiveTarget === 'Agent' && !isAgentOnline
+                  ? t('request.agentOfflineTooltip')
+                  : effectiveTarget === 'Agent'
+                  ? t('request.sendViaAgent')
+                  : t('request.sendViaServer')
+              }
+              className="h-9 px-3.5 rounded-l-md bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
+            >
+              {isLoading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+              ) : effectiveTarget === 'Agent' ? (
+                <Cpu className="w-3.5 h-3.5 text-blue-200" aria-hidden="true" />
+              ) : (
+                <Send className="w-3.5 h-3.5" aria-hidden="true" />
+              )}
+              <span>{isLoading ? t('request.sending') : t('request.send')}</span>
+            </button>
+
+            <button
+              type="button"
+              aria-label={t('request.sendOptions')}
+              aria-haspopup="true"
+              aria-expanded={isSendMenuOpen}
+              onClick={() => setIsSendMenuOpen((prev) => !prev)}
+              disabled={isLoading}
+              className="h-9 px-2 rounded-r-md bg-blue-700 hover:bg-blue-600 border-l border-blue-500/40 text-white flex items-center justify-center transition-colors focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 cursor-pointer"
+            >
+              <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+
+            {/* Dropdown for Alternative Target */}
+            {isSendMenuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full mt-1 w-56 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl shadow-black/80 py-1 z-50 text-xs animate-in fade-in duration-75"
+              >
+                <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-neutral-400 border-b border-neutral-800/80">
+                  {t('request.alternativeTarget')}
+                </div>
+
+                {alternateTarget === 'Server' ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    aria-label={t('request.executeOnServer')}
+                    onClick={() => handleSend('Server')}
+                    className="w-full text-left px-3 py-2 flex items-center gap-2 text-neutral-200 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
+                  >
+                    <Server className="w-3.5 h-3.5 text-neutral-400" aria-hidden="true" />
+                    <div className="flex flex-col">
+                      <span className="font-medium">{t('request.targetServer')}</span>
+                      <span className="text-[10px] text-neutral-500">
+                        {t('request.executeOnServerDesc')}
+                      </span>
+                    </div>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    aria-label={t('request.executeOnAgent')}
+                    disabled={!isAgentOnline}
+                    onClick={() => handleSend('Agent')}
+                    className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
+                      isAgentOnline
+                        ? 'text-neutral-200 hover:text-white hover:bg-neutral-800 cursor-pointer'
+                        : 'text-neutral-500 opacity-60 cursor-not-allowed'
+                    }`}
+                  >
+                    <Cpu className={`w-3.5 h-3.5 ${isAgentOnline ? 'text-emerald-400' : 'text-neutral-500'}`} aria-hidden="true" />
+                    <div className="flex flex-col">
+                      <span className="font-medium">{t('request.targetAgent')}</span>
+                      <span className="text-[10px] text-neutral-500">
+                        {isAgentOnline ? t('request.executeOnAgentDescOnline') : t('request.executeOnAgentDescOffline')}
+                      </span>
+                    </div>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {urlError && (
+          <span id="url-error" role="alert" className="text-xs text-rose-400 px-1 font-medium">
+            {urlError}
+          </span>
+        )}
+      </div>
+
+      {/* Bottom Area: Integrated Workspace (with responseSlot) vs Standalone */}
+      {responseSlot ? (
+        isDesktop ? (
+          <div className="flex flex-row overflow-hidden min-h-0 flex-1">
+            <div
+              style={{ flex: '0 0 ' + requestDetailsRatio + '%' }}
+              className="flex flex-col min-h-0 overflow-hidden"
+            >
+              {requestDetailsContent}
+            </div>
+            {splitterSlot}
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              {responseSlot}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
+            {/* Mobile Tab Switcher (Requisição vs Resposta) */}
+            <div className="flex border-b border-neutral-800 bg-neutral-900/90 px-3 py-1.5 gap-2 shrink-0">
+              <button
+                type="button"
+                aria-pressed={currentMobilePane === 'request'}
+                onClick={() => handleMobilePaneChange('request')}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                  currentMobilePane === 'request'
+                    ? 'bg-neutral-800 text-white shadow-sm'
+                    : 'text-neutral-400 hover:text-neutral-200'
+                }`}
+              >
+                {t('request.mobileRequestTab')}
+              </button>
+              <button
+                type="button"
+                aria-pressed={currentMobilePane === 'response'}
+                onClick={() => handleMobilePaneChange('response')}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 ${
+                  currentMobilePane === 'response'
+                    ? 'bg-neutral-800 text-white shadow-sm'
+                    : 'text-neutral-400 hover:text-neutral-200'
+                }`}
+              >
+                <span>{t('request.mobileResponseTab')}</span>
+                {typeof responseStatusCode === 'number' && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                      responseStatusCode >= 200 && responseStatusCode < 300
+                        ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                        : 'bg-rose-950 text-rose-400 border border-rose-800'
+                    }`}
+                  >
+                    {responseStatusCode}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Mobile Panes */}
+            <div
+              hidden={currentMobilePane !== 'request'}
+              className={currentMobilePane === 'request' ? 'flex-1 flex flex-col min-h-0' : 'hidden'}
+            >
+              {requestDetailsContent}
+            </div>
+            <div
+              hidden={currentMobilePane !== 'response'}
+              className={currentMobilePane === 'response' ? 'flex-1 flex flex-col min-h-0' : 'hidden'}
+            >
+              {responseSlot}
+            </div>
+          </div>
+        )
+      ) : (
+        requestDetailsContent
+      )}
 
       {/* Dependency Linker Modal */}
       <DependencyLinkerModal

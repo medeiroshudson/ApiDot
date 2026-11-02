@@ -2,11 +2,14 @@ import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
 import type { SyncReport } from '@/components/collection/CollectionSettingsModal';
 
+export type RequestTabType = 'specification' | 'auth' | 'params' | 'headers' | 'body';
+
 export interface LayoutState {
   sidebarWidth: number;
   requestResponseRatio: number;
   sidebarCollapsed: boolean;
   activeMobilePane: 'request' | 'response';
+  activeRequestTab: RequestTabType;
   isWorkspaceModalOpen: boolean;
   isSaveModalOpen: boolean;
   isEnvModalOpen: boolean;
@@ -24,6 +27,7 @@ export interface LayoutState {
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebarCollapsed: () => void;
   setActiveMobilePane: (pane: 'request' | 'response') => void;
+  setActiveRequestTab: (tab: RequestTabType) => void;
   setModalOpen: (modal: string, isOpen: boolean) => void;
   setAuditBanner: (banner: { collectionName: string; report: SyncReport } | null) => void;
   setSyncError: (error: string | null) => void;
@@ -44,6 +48,7 @@ export const INITIAL_LAYOUT_STATE = {
   requestResponseRatio: DEFAULT_REQUEST_RESPONSE_RATIO,
   sidebarCollapsed: false,
   activeMobilePane: 'request' as const,
+  activeRequestTab: 'specification' as const,
   isWorkspaceModalOpen: false,
   isSaveModalOpen: false,
   isEnvModalOpen: false,
@@ -141,6 +146,10 @@ export const useLayoutStore = create<LayoutState>()(
         set({ activeMobilePane: pane });
       },
 
+      setActiveRequestTab: (tab: RequestTabType) => {
+        set({ activeRequestTab: tab });
+      },
+
       setModalOpen: (modal: string, isOpen: boolean) => {
         const mappedKey = MODAL_KEY_MAP[modal];
         if (mappedKey) {
@@ -165,6 +174,7 @@ export const useLayoutStore = create<LayoutState>()(
         sidebarWidth: state.sidebarWidth,
         requestResponseRatio: state.requestResponseRatio,
         sidebarCollapsed: state.sidebarCollapsed,
+        activeRequestTab: state.activeRequestTab,
       }),
     }
   )

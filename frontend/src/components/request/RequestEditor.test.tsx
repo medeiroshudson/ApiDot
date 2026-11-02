@@ -74,7 +74,11 @@ describe('RequestEditor', () => {
     expect(bodyTab).toBeDefined();
     expect(authTab).toBeDefined();
 
-    // Default tab is Params
+    // Default tab is Specification
+    expect(document.getElementById('panel-specification')).not.toHaveAttribute('hidden');
+
+    // Switch to Params tab
+    fireEvent.click(paramsTab);
     expect(document.getElementById('panel-params')).not.toHaveAttribute('hidden');
 
     // Switch to Headers tab
@@ -97,7 +101,7 @@ describe('RequestEditor', () => {
     fireEvent.click(authTab);
     expect(screen.getByRole('combobox', { name: /authentication type/i })).toBeDefined();
 
-    // Switch to Specification tab
+    // Switch back to Specification tab
     fireEvent.click(specTab);
     expect(screen.getByTestId('specification-panel')).toBeInTheDocument();
   });
@@ -106,15 +110,23 @@ describe('RequestEditor', () => {
     render(<RequestEditor />);
 
     const specTab = screen.getByRole('tab', { name: /specification/i });
+    const authTab = screen.getByRole('tab', { name: /auth/i });
     const paramsTab = screen.getByRole('tab', { name: /params/i });
     const headersTab = screen.getByRole('tab', { name: /headers/i });
     const bodyTab = screen.getByRole('tab', { name: /body/i });
-    const authTab = screen.getByRole('tab', { name: /auth/i });
 
-    // Params is active by default (index 1)
-    expect(paramsTab).toHaveAttribute('tabindex', '0');
-    expect(specTab).toHaveAttribute('tabindex', '-1');
+    // Specification is active by default (index 0)
+    expect(specTab).toHaveAttribute('tabindex', '0');
+    expect(authTab).toHaveAttribute('tabindex', '-1');
+    expect(paramsTab).toHaveAttribute('tabindex', '-1');
     expect(headersTab).toHaveAttribute('tabindex', '-1');
+    expect(bodyTab).toHaveAttribute('tabindex', '-1');
+
+    fireEvent.keyDown(specTab, { key: 'ArrowRight' });
+    expect(authTab).toHaveAttribute('aria-selected', 'true');
+
+    fireEvent.keyDown(authTab, { key: 'ArrowRight' });
+    expect(paramsTab).toHaveAttribute('aria-selected', 'true');
 
     fireEvent.keyDown(paramsTab, { key: 'ArrowRight' });
     expect(headersTab).toHaveAttribute('aria-selected', 'true');
@@ -122,32 +134,29 @@ describe('RequestEditor', () => {
     fireEvent.keyDown(headersTab, { key: 'ArrowRight' });
     expect(bodyTab).toHaveAttribute('aria-selected', 'true');
 
-    fireEvent.keyDown(bodyTab, { key: 'ArrowRight' });
-    expect(authTab).toHaveAttribute('aria-selected', 'true');
-
-    fireEvent.keyDown(authTab, { key: 'ArrowLeft' });
-    expect(bodyTab).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(bodyTab, { key: 'ArrowLeft' });
+    expect(headersTab).toHaveAttribute('aria-selected', 'true');
   });
 
   it('renders all tab panels in DOM with hidden attribute matching active tab', () => {
     render(<RequestEditor />);
 
     const specPanel = document.getElementById('panel-specification');
+    const authPanel = document.getElementById('panel-auth');
     const paramsPanel = document.getElementById('panel-params');
     const headersPanel = document.getElementById('panel-headers');
     const bodyPanel = document.getElementById('panel-body');
-    const authPanel = document.getElementById('panel-auth');
 
-    expect(specPanel).toHaveAttribute('hidden');
-    expect(paramsPanel).not.toHaveAttribute('hidden');
+    expect(specPanel).not.toHaveAttribute('hidden');
+    expect(authPanel).toHaveAttribute('hidden');
+    expect(paramsPanel).toHaveAttribute('hidden');
     expect(headersPanel).toHaveAttribute('hidden');
     expect(bodyPanel).toHaveAttribute('hidden');
-    expect(authPanel).toHaveAttribute('hidden');
 
     const headersTab = screen.getByRole('tab', { name: /headers/i });
     fireEvent.click(headersTab);
 
-    expect(paramsPanel).toHaveAttribute('hidden');
+    expect(specPanel).toHaveAttribute('hidden');
     expect(headersPanel).not.toHaveAttribute('hidden');
   });
 
@@ -612,5 +621,65 @@ describe('RequestEditor', () => {
     const urlInput = screen.getByRole('textbox', { name: /request url/i });
     fireEvent.keyDown(urlInput, { key: 'Enter', code: 'Enter' });
     expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('renders tabs in new order with Authorization in second place and default to specification', () => {
+    render(<RequestEditor />);
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs[0]).toHaveTextContent(/specification|especificação/i);
+    expect(tabs[1]).toHaveTextContent(/authorization|autenticação/i);
+    expect(tabs[2]).toHaveTextContent(/params|parâmetros/i);
+    expect(tabs[3]).toHaveTextContent(/headers|cabeçalhos/i);
+    expect(tabs[4]).toHaveTextContent(/body|corpo/i);
+    expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('renders responseSlot and splitterSlot side-by-side below request bar when provided', () => {
+    render(
+      <RequestEditor
+        isDesktop={true}
+        requestDetailsRatio={60}
+        responseSlot={<div data-testid="mock-response-viewer">Response Content</div>}
+        splitterSlot={<div data-testid="mock-splitter">Splitter</div>}
+      />
+    );
+    expect(screen.getByTestId('mock-response-viewer')).toBeInTheDocument();
+    expect(screen.getByTestId('mock-splitter')).toBeInTheDocument();
+  });
+
+  it('respects activeTab prop and notifies onTabChange when tab is clicked', () => {
+    const onTabChange = vi.fn();
+    render(<RequestEditor activeTab="headers" onTabChange={onTabChange} />);
+
+    const headersTab = screen.getByRole('tab', { name: /headers/i });
+    expect(headersTab).toHaveAttribute('aria-selected', 'true');
+
+    const authTab = screen.getByRole('tab', { name: /auth/i });
+    fireEvent.click(authTab);
+
+    expect(onTabChange).toHaveBeenCalledWith('auth');
+  });
+
+  it('renders mobile switcher and switches between request and response when isDesktop is false and responseSlot is provided', () => {
+    const onMobilePaneChange = vi.fn();
+    render(
+      <RequestEditor
+        isDesktop={false}
+        activeMobilePane="request"
+        onMobilePaneChange={onMobilePaneChange}
+        responseStatusCode={200}
+        responseSlot={<div data-testid="mock-response-viewer">Response Content</div>}
+      />
+    );
+
+    const requestButton = screen.getByRole('button', { name: /^request$|^requisição$/i });
+    const responseButton = screen.getByRole('button', { name: /^response|^resposta/i });
+
+    expect(requestButton).toBeInTheDocument();
+    expect(responseButton).toBeInTheDocument();
+    expect(screen.getByText('200')).toBeInTheDocument();
+
+    fireEvent.click(responseButton);
+    expect(onMobilePaneChange).toHaveBeenCalledWith('response');
   });
 });

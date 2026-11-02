@@ -28,7 +28,12 @@ export function WorkspaceEditorPane({
 }: WorkspaceEditorPaneProps): React.JSX.Element {
   const { t } = useTranslation();
   const workspaceRef = useRef<HTMLDivElement>(null);
-  const [isDesktop, setIsDesktop] = useState(true);
+  const [isDesktop, setIsDesktop] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 768;
+    }
+    return true;
+  });
   const [executedCurl, setExecutedCurl] = useState<string | null>(null);
 
   // Layout Store
@@ -37,6 +42,8 @@ export function WorkspaceEditorPane({
   const resetRequestResponseRatio = useLayoutStore((s) => s.resetRequestResponseRatio);
   const activeMobilePane = useLayoutStore((s) => s.activeMobilePane);
   const setActiveMobilePane = useLayoutStore((s) => s.setActiveMobilePane);
+  const activeRequestTab = useLayoutStore((s) => s.activeRequestTab);
+  const setActiveRequestTab = useLayoutStore((s) => s.setActiveRequestTab);
 
   // Environment Store
   const environments = useEnvironmentStore((s) => s.environments);
@@ -388,96 +395,57 @@ export function WorkspaceEditorPane({
   return (
     <main
       ref={workspaceRef}
-      className="flex-1 flex flex-col md:flex-row overflow-hidden bg-neutral-950"
+      className="flex-1 h-full w-full flex flex-col overflow-hidden bg-neutral-950"
     >
-      {/* Mobile Tab Switcher (Requisição vs Resposta) */}
-      <div className="flex md:hidden border-b border-neutral-800 bg-neutral-900/90 px-3 py-1.5 gap-2 shrink-0">
-        <button
-          type="button"
-          onClick={() => setActiveMobilePane('request')}
-          className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-            activeMobilePane === 'request'
-              ? 'bg-neutral-800 text-white shadow-sm'
-              : 'text-neutral-400 hover:text-neutral-200'
-          }`}
-        >
-          {t('request.mobileRequestTab')}
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveMobilePane('response')}
-          className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center justify-center gap-1.5 ${
-            activeMobilePane === 'response'
-              ? 'bg-neutral-800 text-white shadow-sm'
-              : 'text-neutral-400 hover:text-neutral-200'
-          }`}
-        >
-          <span>{t('request.mobileResponseTab')}</span>
-          {response && (
-            <span
-              className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                response.statusCode >= 200 && response.statusCode < 300
-                  ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                  : 'bg-rose-950 text-rose-400 border border-rose-800'
-              }`}
-            >
-              {response.statusCode}
-            </span>
-          )}
-        </button>
-      </div>
-
-      {/* Request Editor Section */}
-      <section
-        style={{ flex: isDesktop ? `0 0 ${requestResponseRatio}%` : undefined }}
-        className={`border-b md:border-b-0 md:border-r border-neutral-800 overflow-hidden flex flex-col ${
-          activeMobilePane === 'request' ? 'flex flex-1' : 'hidden md:flex'
-        }`}
-      >
-        <RequestEditor
-          initialRequest={initialEditorRequest}
-          currentRequestId={effectiveRequestId}
-          requestName={effectiveRequestName}
-          onSaveExisting={handleSaveExistingInternal}
-          onSaveAs={handleSaveAs}
-          isSaving={isSavingRequest}
-          isAgentOnline={isAgentOnline}
-          isLoading={isLoading}
-          onSend={handleSend}
-          onChange={handleEditorChange}
-          availableRequests={requestHistory}
-          availableVariables={availableVariables}
-        />
-      </section>
-
-      {/* Divisor Request <-> Response (apenas desktop) */}
-      <div className="hidden md:flex items-stretch">
-        <PanelSplitter
-          id="request-response-splitter"
-          ariaLabel={t('request.resizeRequestResponse')}
-          valueNow={Math.round(requestResponseRatio)}
-          valueMin={20}
-          valueMax={80}
-          onDeltaChange={(deltaPx) => {
-            const w = workspaceRef.current?.clientWidth;
-            if (w) adjustRequestResponseRatio((deltaPx / w) * 100);
-          }}
-          onReset={resetRequestResponseRatio}
-        />
-      </div>
-
-      {/* Response Section */}
-      <section
-        className={`flex-1 overflow-hidden flex flex-col ${
-          activeMobilePane === 'response' ? 'flex' : 'hidden md:flex'
-        }`}
-      >
-        <ResponseViewer
-          response={response}
-          isLoading={isLoading}
-          executedCurl={executedCurl || undefined}
-        />
-      </section>
+      <RequestEditor
+        initialRequest={initialEditorRequest}
+        currentRequestId={effectiveRequestId}
+        requestName={effectiveRequestName}
+        onSaveExisting={handleSaveExistingInternal}
+        onSaveAs={handleSaveAs}
+        isSaving={isSavingRequest}
+        isAgentOnline={isAgentOnline}
+        isLoading={isLoading}
+        onSend={handleSend}
+        onChange={handleEditorChange}
+        availableRequests={requestHistory}
+        availableVariables={availableVariables}
+        activeTab={activeRequestTab}
+        onTabChange={setActiveRequestTab}
+        isDesktop={isDesktop}
+        requestDetailsRatio={requestResponseRatio}
+        activeMobilePane={activeMobilePane}
+        onMobilePaneChange={setActiveMobilePane}
+        responseStatusCode={response?.statusCode}
+        splitterSlot={
+          isDesktop ? (
+            <PanelSplitter
+              id="request-response-splitter"
+              ariaLabel={t('request.resizeRequestResponse')}
+              valueNow={Math.round(requestResponseRatio)}
+              valueMin={20}
+              valueMax={80}
+              onDeltaChange={(deltaPx) => {
+                const w = workspaceRef.current?.clientWidth;
+                if (w) adjustRequestResponseRatio((deltaPx / w) * 100);
+              }}
+              onReset={resetRequestResponseRatio}
+            />
+          ) : undefined
+        }
+        responseSlot={
+          <div
+            data-testid="response-viewer-container"
+            className="h-full w-full flex flex-col min-h-0 overflow-hidden"
+          >
+            <ResponseViewer
+              response={response}
+              isLoading={isLoading}
+              executedCurl={executedCurl || undefined}
+            />
+          </div>
+        }
+      />
     </main>
   );
 }

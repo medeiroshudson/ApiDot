@@ -54,6 +54,7 @@ describe('useLayoutStore', () => {
         requestResponseRatio: 50,
         sidebarCollapsed: false,
         activeMobilePane: 'request',
+        activeRequestTab: 'specification',
         isWorkspaceModalOpen: false,
         isSaveModalOpen: false,
         isEnvModalOpen: false,
@@ -202,6 +203,36 @@ describe('useLayoutStore', () => {
     });
   });
 
+  describe('Active Request Tab State & Persistence', () => {
+    it('should initialize activeRequestTab with specification by default', () => {
+      const state = useLayoutStore.getState();
+      expect(state.activeRequestTab).toBe('specification');
+    });
+
+    it('should update activeRequestTab and persist in partialize', () => {
+      useLayoutStore.getState().setActiveRequestTab('body');
+      expect(useLayoutStore.getState().activeRequestTab).toBe('body');
+
+      const persistOptions = (useLayoutStore as any).persist?.getOptions?.();
+      const partialized = persistOptions.partialize(useLayoutStore.getState());
+      expect(partialized.activeRequestTab).toBe('body');
+    });
+
+    it('should allow switching between all supported request tab types', () => {
+      const tabs: Array<'specification' | 'auth' | 'params' | 'headers' | 'body'> = [
+        'specification',
+        'auth',
+        'params',
+        'headers',
+        'body',
+      ];
+      for (const tab of tabs) {
+        useLayoutStore.getState().setActiveRequestTab(tab);
+        expect(useLayoutStore.getState().activeRequestTab).toBe(tab);
+      }
+    });
+  });
+
   describe('Modal Visibility Management (`setModalOpen`)', () => {
     it('should toggle modals using short modal names', () => {
       const store = useLayoutStore.getState();
@@ -289,7 +320,7 @@ describe('useLayoutStore', () => {
       expect(persistOptions?.name).toBe('apidot_layout_preferences');
     });
 
-    it('should partialize only layout dimensions and sidebarCollapsed state', () => {
+    it('should partialize only layout dimensions, sidebarCollapsed state, and activeRequestTab', () => {
       const persistOptions = (useLayoutStore as any).persist?.getOptions?.();
       expect(typeof persistOptions?.partialize).toBe('function');
 
@@ -298,6 +329,7 @@ describe('useLayoutStore', () => {
         requestResponseRatio: 65,
         sidebarCollapsed: true,
         activeMobilePane: 'response' as const,
+        activeRequestTab: 'headers' as const,
         isWorkspaceModalOpen: true,
         isSaveModalOpen: true,
         isEnvModalOpen: true,
@@ -313,6 +345,7 @@ describe('useLayoutStore', () => {
         sidebarWidth: 350,
         requestResponseRatio: 65,
         sidebarCollapsed: true,
+        activeRequestTab: 'headers',
       });
 
       // Confirm transient UI states are NOT persisted

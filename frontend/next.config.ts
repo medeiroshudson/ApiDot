@@ -40,6 +40,7 @@ loadRootDotEnv();
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: 'standalone',
+  reactCompiler: true,
   async rewrites() {
     return [
       {
