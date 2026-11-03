@@ -31,6 +31,7 @@ describe('Tauri v2 Desktop Configuration', () => {
     expect(config.app.windows).toBeInstanceOf(Array);
     expect(config.app.windows.length).toBeGreaterThan(0);
     expect(config.app.windows[0].title).toBe('ApiDot');
+    expect(config.app.windows[0].label).toBe('main');
     expect(config.app.windows[0].width).toBe(1280);
     expect(config.app.windows[0].height).toBe(800);
     expect(config.app.windows[0].resizable).toBe(true);
