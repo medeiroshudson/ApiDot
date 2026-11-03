@@ -218,6 +218,33 @@ describe('GlobalSettingsModal', () => {
     expect(useDeviceStore.getState().activeDeviceId).toBeNull();
   });
 
+  it('renders active badge for active device and allows toggling active device', async () => {
+    useDeviceStore.setState({
+      devices: mockDevices,
+      activeDeviceId: 'device-1',
+    });
+
+    render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="agents" />);
+
+    // Device 1 should have active badge
+    expect(screen.getByTestId('active-badge-device-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('active-badge-device-2')).not.toBeInTheDocument();
+
+    // Toggle active on device 2
+    const toggleBtn2 = screen.getByTestId('toggle-active-device-2');
+    await act(async () => {
+      fireEvent.click(toggleBtn2);
+    });
+
+    expect(useDeviceStore.getState().activeDeviceId).toBe('device-2');
+
+    // Toggle again to deactivate
+    await act(async () => {
+      fireEvent.click(toggleBtn2);
+    });
+    expect(useDeviceStore.getState().activeDeviceId).toBeNull();
+  });
+
   it('allows regenerating token and displays one-time token dialog with new token', async () => {
     useDeviceStore.setState({
       devices: mockDevices,

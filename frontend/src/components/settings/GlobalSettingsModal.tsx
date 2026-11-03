@@ -653,6 +653,15 @@ export function GlobalSettingsModal({
                                       {t('settings.statusOffline')}
                                     </span>
                                   )}
+
+                                  {isThisActive && (
+                                    <span
+                                      data-testid={`active-badge-${device.id}`}
+                                      className="px-2 py-0.5 rounded text-[11px] font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                                    >
+                                      {t('settings.activeDeviceBadge')}
+                                    </span>
+                                  )}
                                 </div>
 
                                 <div className="flex items-center gap-2 sm:gap-3 text-neutral-400 text-[11px] flex-wrap">
@@ -674,6 +683,23 @@ export function GlobalSettingsModal({
                             {/* Actions Toolbar */}
                             <div className="flex items-center justify-between sm:justify-end gap-1.5 pt-2.5 border-t border-neutral-800/60 flex-wrap">
                               <div className="flex items-center gap-1.5 flex-wrap">
+                                {!device.isRevoked && (
+                                  <button
+                                    type="button"
+                                    data-testid={`toggle-active-${device.id}`}
+                                    onClick={() => setActiveDeviceId(isThisActive ? null : device.id)}
+                                    title={isThisActive ? t('settings.deactivateDevice') : t('settings.setActiveDevice')}
+                                    className={`h-7 px-2.5 rounded-lg text-[11px] inline-flex items-center gap-1 transition-colors cursor-pointer ${
+                                      isThisActive
+                                        ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30 hover:bg-blue-600/30'
+                                        : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white'
+                                    }`}
+                                  >
+                                    <Check className={`w-3 h-3 ${isThisActive ? 'text-blue-400' : 'text-neutral-400'}`} />
+                                    <span>{isThisActive ? t('settings.deviceActive') : t('settings.useAsActive')}</span>
+                                  </button>
+                                )}
+
                                 <button
                                   type="button"
                                   onClick={() => setInstructionsDevice(device)}

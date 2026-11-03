@@ -7,6 +7,7 @@ import { useLayoutStore, INITIAL_LAYOUT_STATE } from '@/stores/useLayoutStore';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
 import { useRequestStore } from '@/stores/useRequestStore';
+import { useDeviceStore } from '@/stores/useDeviceStore';
 
 const mockPush = vi.fn();
 const mockReplace = vi.fn();
@@ -60,6 +61,7 @@ describe('WorkspaceShell', () => {
     useWorkspaceStore.getState().reset();
     useEnvironmentStore.getState().reset();
     useRequestStore.getState().reset();
+    useDeviceStore.getState().reset();
 
     useWorkspaceStore.setState({
       workspaces: mockWorkspaces,
@@ -328,5 +330,21 @@ describe('WorkspaceShell', () => {
     fireEvent.click(spacesOption);
 
     expect(mockPush).toHaveBeenCalledWith('/workspace/ws%20with%20spaces');
+  });
+
+  it('starts device polling on mount and stops on unmount', async () => {
+    const startPollingSpy = vi.spyOn(useDeviceStore.getState(), 'startPolling');
+    const stopPollingSpy = vi.spyOn(useDeviceStore.getState(), 'stopPolling');
+
+    const { unmount } = render(
+      <WorkspaceShell workspaceId="ws-test">
+        <div>Child Area</div>
+      </WorkspaceShell>
+    );
+
+    expect(startPollingSpy).toHaveBeenCalledWith(5000);
+
+    unmount();
+    expect(stopPollingSpy).toHaveBeenCalled();
   });
 });

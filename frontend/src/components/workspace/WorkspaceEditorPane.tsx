@@ -59,7 +59,9 @@ export function WorkspaceEditorPane({
   const currentEditorData = useRequestStore((s) => s.currentEditorData);
   const isSavingRequest = useRequestStore((s) => s.isSavingRequest);
   const isLoading = useRequestStore((s) => s.isLoading);
-  const isAgentOnline = useRequestStore((s) => s.isAgentOnline);
+  const isDeviceAgentOnline = useDeviceStore((s) => s.isAgentOnline());
+  const isRequestAgentOnline = useRequestStore((s) => s.isAgentOnline);
+  const isAgentOnline = isDeviceAgentOnline || isRequestAgentOnline;
   const requestHistory = useRequestStore((s) => s.requestHistory);
   const setCurrentEditorData = useRequestStore((s) => s.setCurrentEditorData);
   const setIsLoading = useRequestStore((s) => s.setIsLoading);

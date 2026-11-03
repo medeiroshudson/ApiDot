@@ -6,6 +6,7 @@ import { WorkspaceProvider } from '@/context/WorkspaceContext';
 import { useLayoutStore, INITIAL_LAYOUT_STATE } from '@/stores/useLayoutStore';
 import { useRequestStore, getScratchpadKey } from '@/stores/useRequestStore';
 import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
+import { useDeviceStore } from '@/stores/useDeviceStore';
 import { WorkspaceTreeDto } from '@/lib/treeApi';
 
 const mockPush = vi.fn();
@@ -84,6 +85,7 @@ describe('WorkspaceEditorPane', () => {
     useLayoutStore.setState(INITIAL_LAYOUT_STATE);
     useRequestStore.getState().reset();
     useEnvironmentStore.getState().reset();
+    useDeviceStore.getState().reset();
 
     vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
       const url = String(input);
@@ -743,5 +745,99 @@ describe('WorkspaceEditorPane', () => {
     });
 
     expect(useRequestStore.getState().currentEditorData?.url).toBe('https://scratchpad.example.com');
+  });
+
+  it('enables Send button when target is Agent and an agent is online in useDeviceStore (even with null activeDeviceId)', async () => {
+    // Populate useDeviceStore with an online agent, no activeDeviceId set
+    useDeviceStore.getState().setDevices([
+      {
+        id: 'dev-online-1',
+        name: 'Online Agent Device',
+        tokenPrefix: 'apidot_dev_1111',
+        createdAtUtc: '2026-10-27T00:00:00Z',
+        isRevoked: false,
+        isOnline: true,
+      },
+    ]);
+    useDeviceStore.getState().setActiveDeviceId(null);
+
+    useRequestStore.getState().setCurrentEditorData({
+      method: 'GET',
+      url: 'https://api.example.com/agent-target',
+      target: 'Agent',
+      headers: '',
+      body: '',
+      auth: { type: 'none' },
+    });
+
+    await renderEditorPane('ws-1', null);
+
+    const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
+    expect(sendButton).not.toBeDisabled();
+  });
+
+  it('disables Send button when target is Agent and all agents are offline', async () => {
+    useDeviceStore.getState().setDevices([
+      {
+        id: 'dev-offline-1',
+        name: 'Offline Agent Device',
+        tokenPrefix: 'apidot_dev_2222',
+        createdAtUtc: '2026-10-27T00:00:00Z',
+        isRevoked: false,
+        isOnline: false,
+      },
+    ]);
+    useDeviceStore.getState().setActiveDeviceId(null);
+
+    useRequestStore.getState().setCurrentEditorData({
+      method: 'GET',
+      url: 'https://api.example.com/agent-offline',
+      target: 'Agent',
+      headers: '',
+      body: '',
+      auth: { type: 'none' },
+    });
+
+    await renderEditorPane('ws-1', null);
+
+    const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
+    expect(sendButton).toBeDisabled();
+  });
+
+  it('disables Send button when target is Agent and explicitly chosen active device is offline', async () => {
+    useDeviceStore.getState().setDevices([
+      {
+        id: 'dev-offline-1',
+        name: 'Offline Node',
+        tokenPrefix: 'apidot_dev_2222',
+        createdAtUtc: '2026-10-27T00:00:00Z',
+        isRevoked: false,
+        isOnline: false,
+      },
+      {
+        id: 'dev-online-2',
+        name: 'Online Node',
+        tokenPrefix: 'apidot_dev_3333',
+        createdAtUtc: '2026-10-27T00:00:00Z',
+        isRevoked: false,
+        isOnline: true,
+      },
+    ]);
+    // Explicitly select the offline device
+    useDeviceStore.getState().setActiveDeviceId('dev-offline-1');
+
+    useRequestStore.getState().setCurrentEditorData({
+      method: 'GET',
+      url: 'https://api.example.com/agent-explicit-offline',
+      target: 'Agent',
+      headers: '',
+      body: '',
+      auth: { type: 'none' },
+    });
+
+    await renderEditorPane('ws-1', null);
+
+    const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
+    expect(sendButton).toBeDisabled();
   });
 });

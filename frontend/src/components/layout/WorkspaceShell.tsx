@@ -39,6 +39,7 @@ import { useLayoutStore } from '@/stores/useLayoutStore';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
 import { useRequestStore, CLEAN_SCRATCHPAD } from '@/stores/useRequestStore';
+import { useDeviceStore } from '@/stores/useDeviceStore';
 import {
   WorkspaceProvider,
   useWorkspaceContext,
@@ -163,7 +164,9 @@ function WorkspaceShellContent({
   const currentEditorData = useRequestStore((s) => s.currentEditorData);
   const pendingSaveData = useRequestStore((s) => s.pendingSaveData);
   const requestHistory = useRequestStore((s) => s.requestHistory);
-  const isAgentOnline = useRequestStore((s) => s.isAgentOnline);
+  const isDeviceAgentOnline = useDeviceStore((s) => s.isAgentOnline());
+  const isRequestAgentOnline = useRequestStore((s) => s.isAgentOnline);
+  const isAgentOnline = isDeviceAgentOnline || isRequestAgentOnline;
   const setActiveRequest = useRequestStore((s) => s.setActiveRequest);
   const setPendingSaveData = useRequestStore((s) => s.setPendingSaveData);
 
@@ -232,6 +235,17 @@ function WorkspaceShellContent({
 
   // Global Settings Modal State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const startDevicePolling = useDeviceStore((s) => s.startPolling);
+  const stopDevicePolling = useDeviceStore((s) => s.stopPolling);
+
+  useEffect(() => {
+    if (!isSettingsOpen) {
+      startDevicePolling(5000);
+    }
+    return () => {
+      stopDevicePolling();
+    };
+  }, [isSettingsOpen, startDevicePolling, stopDevicePolling]);
 
   // cURL Import / Export States
   const [isImportCurlModalOpen, setIsImportCurlModalOpen] = useState(false);

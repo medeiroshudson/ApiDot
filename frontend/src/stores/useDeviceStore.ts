@@ -8,6 +8,7 @@ import {
   revokeDevice as revokeDeviceApi,
   regenerateToken as regenerateTokenApi,
 } from '@/lib/deviceApi';
+import { useRequestStore } from '@/stores/useRequestStore';
 
 export const DEVICE_STORAGE_KEY = 'apidot_device_id';
 
@@ -63,8 +64,21 @@ export interface DeviceState {
   stopPolling: () => void;
   getActiveDevice: () => AgentDeviceDto | null;
   isCurrentDeviceOnline: () => boolean;
+  isAgentOnline: () => boolean;
   initFromLocalStorage: () => string | null;
   reset: () => void;
+}
+
+export const selectIsAgentOnline = (state: DeviceState): boolean => {
+  return state.isAgentOnline();
+};
+
+function syncRequestStoreAgentOnline(isOnline: boolean): void {
+  try {
+    useRequestStore.getState().setIsAgentOnline(isOnline);
+  } catch {
+    // Ignore store sync errors
+  }
 }
 
 export const useDeviceStore = create<DeviceState>()((set, get) => ({
@@ -77,12 +91,14 @@ export const useDeviceStore = create<DeviceState>()((set, get) => ({
   setDevices: (devices: AgentDeviceDto[]) => {
     const validList = Array.isArray(devices) ? devices : [];
     set({ devices: validList });
+    syncRequestStoreAgentOnline(get().isAgentOnline());
   },
 
   setActiveDeviceId: (id: string | null) => {
     const cleanId = id && id.trim() ? id.trim() : null;
     setStoredDeviceId(cleanId);
     set({ activeDeviceId: cleanId });
+    syncRequestStoreAgentOnline(get().isAgentOnline());
   },
 
   fetchDevices: async (options?: { silent?: boolean }): Promise<AgentDeviceDto[]> => {
@@ -99,10 +115,12 @@ export const useDeviceStore = create<DeviceState>()((set, get) => ({
         isLoading: false,
         error: null,
       }));
+      syncRequestStoreAgentOnline(get().isAgentOnline());
       return validList;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Falha ao buscar dispositivos';
       set({ isLoading: false, error: message });
+      syncRequestStoreAgentOnline(get().isAgentOnline());
       return [];
     }
   },
@@ -112,7 +130,15 @@ export const useDeviceStore = create<DeviceState>()((set, get) => ({
     try {
       const response = await createDeviceApi(name);
       const list = await fetchDevicesApi().catch(() => get().devices);
-      set({ devices: list, isLoading: false, error: null });
+      const validList = Array.isArray(list) ? list : [];
+      set({ devices: validList, isLoading: false, error: null });
+
+      const currentActiveId = get().activeDeviceId;
+      if (!currentActiveId && response.id) {
+        get().setActiveDeviceId(response.id);
+      } else {
+        syncRequestStoreAgentOnline(get().isAgentOnline());
+      }
       return response;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Falha ao criar dispositivo';
@@ -130,6 +156,7 @@ export const useDeviceStore = create<DeviceState>()((set, get) => ({
         isLoading: false,
         error: null,
       }));
+      syncRequestStoreAgentOnline(get().isAgentOnline());
       return revoked;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Falha ao revogar dispositivo';
@@ -143,7 +170,9 @@ export const useDeviceStore = create<DeviceState>()((set, get) => ({
     try {
       const response = await regenerateTokenApi(id);
       const list = await fetchDevicesApi().catch(() => get().devices);
-      set({ devices: list, isLoading: false, error: null });
+      const validList = Array.isArray(list) ? list : [];
+      set({ devices: validList, isLoading: false, error: null });
+      syncRequestStoreAgentOnline(get().isAgentOnline());
       return response;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Falha ao regenerar token';
@@ -185,6 +214,17 @@ export const useDeviceStore = create<DeviceState>()((set, get) => ({
     return Boolean(active && active.isOnline && !active.isRevoked);
   },
 
+  isAgentOnline: (): boolean => {
+    const { activeDeviceId, devices } = get();
+    if (activeDeviceId) {
+      const active = devices.find((d) => d.id === activeDeviceId);
+      if (active) {
+        return Boolean(active.isOnline && !active.isRevoked);
+      }
+    }
+    return devices.some((d) => d.isOnline && !d.isRevoked);
+  },
+
   initFromLocalStorage: (): string | null => {
     const stored = getStoredDeviceId();
     if (stored) {
@@ -206,5 +246,6 @@ export const useDeviceStore = create<DeviceState>()((set, get) => ({
       error: null,
       isPolling: false,
     });
+    syncRequestStoreAgentOnline(false);
   },
 }));
