@@ -19,13 +19,15 @@ import {
   ShieldCheck,
   FolderGit2,
 } from 'lucide-react';
-import { ExecutionTarget, TargetSelector } from '../request/TargetSelector';
+import { ExecutionTarget } from '../request/TargetSelector';
+import { Select } from '@/components/common/Select';
 import { CollectionNodeDto, FolderNodeDto, RequestItemNodeDto } from '@/lib/treeApi';
 import { CodeEditor } from '../common/CodeEditor';
 import { AuthConfig } from '../request/RequestEditor';
 import { useTranslation } from '@/hooks/useTranslation';
 import { VariableGrid, VariableItem } from '../environment/VariableGrid';
 import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
+import { useDeviceStore } from '@/stores/useDeviceStore';
 
 export interface SyncReport {
   addedRequests: number;
@@ -46,6 +48,7 @@ export interface CollectionSettingsModalProps {
   onSave?: (data: {
     name?: string;
     defaultTarget?: ExecutionTarget;
+    targetDeviceId?: string | null;
     auth?: AuthConfig;
     specUrl?: string;
     specContent?: string;
@@ -118,9 +121,12 @@ export function CollectionSettingsModal({
 }: CollectionSettingsModalProps) {
   const { t } = useTranslation();
   const setCollectionVariablesForId = useEnvironmentStore((s) => s.setCollectionVariablesForId);
+  const devices = useDeviceStore((s) => s.devices);
+  const activeDeviceId = useDeviceStore((s) => s.activeDeviceId);
   const [activeTab, setActiveTab] = useState<CollectionModalTab>('general');
   const [name, setName] = useState('');
   const [defaultTarget, setDefaultTarget] = useState<ExecutionTarget>('Inherit');
+  const [targetDeviceId, setTargetDeviceId] = useState<string | null>(null);
   const [auth, setAuth] = useState<AuthConfig>({ type: 'none' });
   const [specUrl, setSpecUrl] = useState('');
   const [specContent, setSpecContent] = useState('');
@@ -186,6 +192,7 @@ export function CollectionSettingsModal({
     if (isOpen && collection) {
       setName(collection.name || '');
       setDefaultTarget(collection.defaultTarget || 'Inherit');
+      setTargetDeviceId(collection.targetDeviceId || null);
       setSpecUrl(collection.openApiSpecUrl || '');
       setSpecContent((collection as { openApiSpecContent?: string | null })?.openApiSpecContent || '');
       setAuth((collection as { auth?: AuthConfig })?.auth || { type: 'none' });
@@ -209,6 +216,42 @@ export function CollectionSettingsModal({
       setCollectionVariablesForId(collection.id, updatedVars);
     }
   };
+
+  const collectionTargetValue = useMemo(() => {
+    if (defaultTarget === 'Inherit') return 'inherit';
+    if (defaultTarget === 'Server') return 'server';
+    if (defaultTarget === 'Agent') {
+      if (targetDeviceId) return `device:${targetDeviceId}`;
+      return 'active_device';
+    }
+    return 'inherit';
+  }, [defaultTarget, targetDeviceId]);
+
+  const handleCollectionTargetChange = (val: string) => {
+    if (val === 'inherit' || val === 'Inherit') {
+      setDefaultTarget('Inherit');
+      setTargetDeviceId(null);
+    } else if (val === 'server' || val === 'Server') {
+      setDefaultTarget('Server');
+      setTargetDeviceId(null);
+    } else if (val === 'active_device' || val === 'Agent') {
+      setDefaultTarget('Agent');
+      setTargetDeviceId(null);
+    } else if (val.startsWith('device:')) {
+      const devId = val.replace('device:', '');
+      setDefaultTarget('Agent');
+      setTargetDeviceId(devId);
+    }
+  };
+
+  const isSelectedTargetOnline = useMemo(() => {
+    if (defaultTarget !== 'Agent') return false;
+    if (targetDeviceId) {
+      const dev = devices.find((d) => d.id === targetDeviceId);
+      return Boolean(dev && dev.isOnline && !dev.isRevoked);
+    }
+    return isAgentOnline;
+  }, [defaultTarget, targetDeviceId, devices, isAgentOnline]);
 
   useEffect(() => {
     if (isOpen) {
@@ -340,6 +383,7 @@ export function CollectionSettingsModal({
       await onSave?.({
         name: name.trim() || collection.name,
         defaultTarget,
+        targetDeviceId,
         auth,
         specUrl: specUrl.trim() || undefined,
         specContent: specContent.trim() || undefined,
@@ -514,19 +558,46 @@ export function CollectionSettingsModal({
               </div>
 
               <div className="space-y-1.5 pt-2 border-t border-neutral-800/80">
-                <label className="text-xs font-medium text-neutral-300 block">
+                <label htmlFor="collection-target-select" className="text-xs font-medium text-neutral-300 block">
                   {t('collectionSettings.defaultTargetLabel')}
                 </label>
                 <p className="text-[11px] text-neutral-400 mb-2">
                   {t('collectionSettings.defaultTargetDesc')}
                 </p>
-                <TargetSelector
-                  value={defaultTarget}
-                  onChange={setDefaultTarget}
-                  isAgentOnline={isAgentOnline}
-                  disabled={isBusy}
-                  className="w-full sm:w-64"
-                />
+                <div className="flex items-center gap-2">
+                  <Select
+                    id="collection-target-select"
+                    sizeVariant="sm"
+                    aria-label={t('request.targetExecution')}
+                    value={collectionTargetValue}
+                    onChange={(e) => handleCollectionTargetChange(e.target.value)}
+                    disabled={isBusy}
+                    className="w-full sm:w-64"
+                  >
+                    <option value="inherit">{t('collectionSettings.targetInheritGlobal')}</option>
+                    <option value="server">{t('collectionSettings.targetServer')}</option>
+                    <option value="active_device">{t('collectionSettings.targetActiveDevice')}</option>
+                    {devices
+                      .filter((d) => !d.isRevoked)
+                      .map((d) => (
+                        <option key={d.id} value={`device:${d.id}`}>
+                          {d.name} {d.isOnline ? '(Online)' : '(Offline)'}
+                        </option>
+                      ))}
+                  </Select>
+
+                  {defaultTarget === 'Agent' && (
+                    <span
+                      role="status"
+                      data-testid="collection-target-agent-pulse"
+                      className={`h-2.5 w-2.5 rounded-full transition-colors ${
+                        isSelectedTargetOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
+                      }`}
+                      title={isSelectedTargetOnline ? t('request.agentConnected') : t('request.agentDisconnected')}
+                      aria-label={isSelectedTargetOnline ? t('request.agentConnected') : t('request.agentDisconnected')}
+                    />
+                  )}
+                </div>
               </div>
             </div>
           )}

@@ -404,4 +404,48 @@ describe('GlobalSettingsModal', () => {
     expect(screen.getByText('Global Settings')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /general & interface/i })).toBeInTheDocument();
   });
+
+  it('renders global execution target selector and allows updating global target', async () => {
+    useDeviceStore.setState({
+      devices: mockDevices,
+      activeDeviceId: 'device-1',
+    });
+
+    render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
+
+    expect(screen.getByText('Default Execution Target')).toBeInTheDocument();
+    const targetSelect = screen.getByRole('combobox', { name: /default execution target/i });
+    expect(targetSelect).toBeInTheDocument();
+
+    // Default option is active_device
+    expect(targetSelect).toHaveValue('active_device');
+
+    // Switch to Cloud / Server
+    await act(async () => {
+      fireEvent.change(targetSelect, { target: { value: 'server' } });
+    });
+
+    expect(useDeviceStore.getState().globalDefaultTarget).toBe('Server');
+    expect(useDeviceStore.getState().globalDefaultDeviceId).toBeNull();
+    expect(localStorage.getItem('apidot_global_target')).toBe('Server');
+
+    // Switch to specific device
+    await act(async () => {
+      fireEvent.change(targetSelect, { target: { value: 'device:device-2' } });
+    });
+
+    expect(useDeviceStore.getState().globalDefaultTarget).toBe('Agent');
+    expect(useDeviceStore.getState().globalDefaultDeviceId).toBe('device-2');
+    expect(localStorage.getItem('apidot_global_target')).toBe('Agent');
+    expect(localStorage.getItem('apidot_global_device_id')).toBe('device-2');
+
+    // Switch back to active_device
+    await act(async () => {
+      fireEvent.change(targetSelect, { target: { value: 'active_device' } });
+    });
+
+    expect(useDeviceStore.getState().globalDefaultTarget).toBe('Agent');
+    expect(useDeviceStore.getState().globalDefaultDeviceId).toBeNull();
+    expect(localStorage.getItem('apidot_global_device_id')).toBeNull();
+  });
 });

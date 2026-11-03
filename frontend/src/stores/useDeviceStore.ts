@@ -8,13 +8,18 @@ import {
   revokeDevice as revokeDeviceApi,
   regenerateToken as regenerateTokenApi,
 } from '@/lib/deviceApi';
+import { ExecutionTarget } from '@/lib/treeApi';
 import { useRequestStore } from '@/stores/useRequestStore';
 
 export const DEVICE_STORAGE_KEY = 'apidot_device_id';
+export const GLOBAL_TARGET_STORAGE_KEY = 'apidot_global_target';
+export const GLOBAL_DEVICE_ID_STORAGE_KEY = 'apidot_global_device_id';
 
 export const INITIAL_DEVICE_STATE = {
   devices: [] as AgentDeviceDto[],
   activeDeviceId: null as string | null,
+  globalDefaultTarget: 'Agent' as ExecutionTarget,
+  globalDefaultDeviceId: null as string | null,
   isLoading: false,
   error: null as string | null,
   isPolling: false,
@@ -45,17 +50,72 @@ function setStoredDeviceId(id: string | null): void {
   }
 }
 
+function getStoredGlobalTarget(): ExecutionTarget {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const val = localStorage.getItem(GLOBAL_TARGET_STORAGE_KEY);
+      if (val === 'Server' || val === 'Agent' || val === 'Inherit') {
+        return val as ExecutionTarget;
+      }
+    }
+  } catch {
+    // Ignore storage access errors
+  }
+  return 'Agent';
+}
+
+function setStoredGlobalTarget(target: ExecutionTarget): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem(GLOBAL_TARGET_STORAGE_KEY, target);
+    }
+  } catch {
+    // Ignore storage access errors
+  }
+}
+
+function getStoredGlobalDeviceId(): string | null {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const val = localStorage.getItem(GLOBAL_DEVICE_ID_STORAGE_KEY);
+      return val && val.trim() ? val.trim() : null;
+    }
+  } catch {
+    // Ignore storage access errors
+  }
+  return null;
+}
+
+function setStoredGlobalDeviceId(id: string | null): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      if (id && id.trim()) {
+        localStorage.setItem(GLOBAL_DEVICE_ID_STORAGE_KEY, id.trim());
+      } else {
+        localStorage.removeItem(GLOBAL_DEVICE_ID_STORAGE_KEY);
+      }
+    }
+  } catch {
+    // Ignore storage access errors
+  }
+}
+
 let pollingIntervalId: ReturnType<typeof setInterval> | null = null;
 
 export interface DeviceState {
   devices: AgentDeviceDto[];
   activeDeviceId: string | null;
+  globalDefaultTarget: ExecutionTarget;
+  globalDefaultDeviceId: string | null;
   isLoading: boolean;
   error: string | null;
   isPolling: boolean;
 
   setDevices: (devices: AgentDeviceDto[]) => void;
   setActiveDeviceId: (id: string | null) => void;
+  setGlobalDefaultTarget: (target: ExecutionTarget) => void;
+  setGlobalDefaultDeviceId: (id: string | null) => void;
+  setGlobalTargetAndDevice: (target: ExecutionTarget, deviceId: string | null) => void;
   fetchDevices: (options?: { silent?: boolean }) => Promise<AgentDeviceDto[]>;
   createDevice: (name: string) => Promise<CreateAgentDeviceResponse>;
   revokeDevice: (id: string) => Promise<AgentDeviceDto>;
@@ -84,9 +144,29 @@ function syncRequestStoreAgentOnline(isOnline: boolean): void {
 export const useDeviceStore = create<DeviceState>()((set, get) => ({
   devices: [],
   activeDeviceId: getStoredDeviceId(),
+  globalDefaultTarget: getStoredGlobalTarget(),
+  globalDefaultDeviceId: getStoredGlobalDeviceId(),
   isLoading: false,
   error: null,
   isPolling: false,
+
+  setGlobalDefaultTarget: (target: ExecutionTarget) => {
+    setStoredGlobalTarget(target);
+    set({ globalDefaultTarget: target });
+  },
+
+  setGlobalDefaultDeviceId: (id: string | null) => {
+    const cleanId = id && id.trim() ? id.trim() : null;
+    setStoredGlobalDeviceId(cleanId);
+    set({ globalDefaultDeviceId: cleanId });
+  },
+
+  setGlobalTargetAndDevice: (target: ExecutionTarget, deviceId: string | null) => {
+    const cleanId = deviceId && deviceId.trim() ? deviceId.trim() : null;
+    setStoredGlobalTarget(target);
+    setStoredGlobalDeviceId(cleanId);
+    set({ globalDefaultTarget: target, globalDefaultDeviceId: cleanId });
+  },
 
   setDevices: (devices: AgentDeviceDto[]) => {
     const validList = Array.isArray(devices) ? devices : [];
@@ -227,8 +307,19 @@ export const useDeviceStore = create<DeviceState>()((set, get) => ({
 
   initFromLocalStorage: (): string | null => {
     const stored = getStoredDeviceId();
+    const storedTarget = getStoredGlobalTarget();
+    const storedGlobalDev = getStoredGlobalDeviceId();
     if (stored) {
-      set({ activeDeviceId: stored });
+      set({
+        activeDeviceId: stored,
+        globalDefaultTarget: storedTarget,
+        globalDefaultDeviceId: storedGlobalDev,
+      });
+    } else {
+      set({
+        globalDefaultTarget: storedTarget,
+        globalDefaultDeviceId: storedGlobalDev,
+      });
     }
     return stored;
   },
@@ -239,9 +330,13 @@ export const useDeviceStore = create<DeviceState>()((set, get) => ({
       pollingIntervalId = null;
     }
     setStoredDeviceId(null);
+    setStoredGlobalTarget('Agent');
+    setStoredGlobalDeviceId(null);
     set({
       devices: [],
       activeDeviceId: null,
+      globalDefaultTarget: 'Agent',
+      globalDefaultDeviceId: null,
       isLoading: false,
       error: null,
       isPolling: false,

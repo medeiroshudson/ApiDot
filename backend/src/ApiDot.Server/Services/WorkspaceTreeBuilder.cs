@@ -41,7 +41,8 @@ public class WorkspaceTreeBuilder : IWorkspaceTreeBuilder
             col.DefaultTarget,
             col.OpenApiSpecUrl,
             rootFolders,
-            directRequests);
+            directRequests,
+            col.TargetDeviceId);
     }
 
     public FolderNodeDto BuildFolderNode(

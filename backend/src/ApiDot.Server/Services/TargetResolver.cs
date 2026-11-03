@@ -7,16 +7,21 @@ public class TargetResolver : ITargetResolver
 {
     public ExecutionTarget ResolveTarget(RequestItem request)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        return ResolveTargetWithDevice(request).Target;
+    }
 
-        if (request.Target != ExecutionTarget.Inherit)
-        {
-            return request.Target;
-        }
+    public TargetResolutionResult ResolveTargetWithDevice(
+        RequestItem request,
+        Guid? activeDeviceId = null,
+        ExecutionTarget globalTarget = ExecutionTarget.Inherit,
+        Guid? globalDeviceId = null)
+    {
+        ArgumentNullException.ThrowIfNull(request);
 
         var currentFolder = request.Folder;
         var collection = request.Collection;
         HashSet<Guid> visited = new();
+        ExecutionTarget folderTarget = ExecutionTarget.Inherit;
 
         while (currentFolder is not null)
         {
@@ -25,21 +30,50 @@ public class TargetResolver : ITargetResolver
                 throw new InvalidOperationException("Circular folder reference detected in folder hierarchy.");
             }
 
-            if (currentFolder.DefaultTarget != ExecutionTarget.Inherit)
+            if (folderTarget == ExecutionTarget.Inherit && currentFolder.DefaultTarget != ExecutionTarget.Inherit)
             {
-                return currentFolder.DefaultTarget;
+                folderTarget = currentFolder.DefaultTarget;
             }
 
             collection ??= currentFolder.Collection;
-
             currentFolder = currentFolder.ParentFolder;
+        }
+
+        Guid? ResolveAgentDeviceId() => collection?.TargetDeviceId ?? globalDeviceId ?? activeDeviceId;
+
+        if (request.Target != ExecutionTarget.Inherit)
+        {
+            return request.Target == ExecutionTarget.Agent
+                ? new TargetResolutionResult(ExecutionTarget.Agent, ResolveAgentDeviceId())
+                : new TargetResolutionResult(ExecutionTarget.Server, null);
+        }
+
+        if (folderTarget != ExecutionTarget.Inherit)
+        {
+            return folderTarget == ExecutionTarget.Agent
+                ? new TargetResolutionResult(ExecutionTarget.Agent, ResolveAgentDeviceId())
+                : new TargetResolutionResult(ExecutionTarget.Server, null);
         }
 
         if (collection is not null && collection.DefaultTarget != ExecutionTarget.Inherit)
         {
-            return collection.DefaultTarget;
+            return collection.DefaultTarget == ExecutionTarget.Agent
+                ? new TargetResolutionResult(ExecutionTarget.Agent, collection.TargetDeviceId ?? globalDeviceId ?? activeDeviceId)
+                : new TargetResolutionResult(ExecutionTarget.Server, null);
         }
 
-        return ExecutionTarget.Server;
+        if (globalTarget != ExecutionTarget.Inherit)
+        {
+            return globalTarget == ExecutionTarget.Agent
+                ? new TargetResolutionResult(ExecutionTarget.Agent, ResolveAgentDeviceId())
+                : new TargetResolutionResult(ExecutionTarget.Server, null);
+        }
+
+        if (activeDeviceId.HasValue)
+        {
+            return new TargetResolutionResult(ExecutionTarget.Agent, activeDeviceId.Value);
+        }
+
+        return new TargetResolutionResult(ExecutionTarget.Server, null);
     }
 }

@@ -100,6 +100,9 @@ namespace ApiDot.Server.Migrations
                         .HasMaxLength(2048)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("TargetDeviceId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("WorkspaceId")
                         .HasColumnType("TEXT");
 
@@ -328,8 +331,8 @@ namespace ApiDot.Server.Migrations
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .UseCollation("NOCASE")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
 
                     b.Property<bool>("IsRoot")
                         .HasColumnType("INTEGER");

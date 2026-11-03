@@ -478,6 +478,7 @@ function WorkspaceShellContent({
   const handleSaveCollectionSettings = async (data: {
     name?: string;
     defaultTarget?: ExecutionTarget;
+    targetDeviceId?: string | null;
     specUrl?: string;
     specContent?: string;
   }) => {
@@ -485,11 +486,13 @@ function WorkspaceShellContent({
 
     if (
       (data.name && data.name !== editingCollection.name) ||
-      (data.defaultTarget && data.defaultTarget !== editingCollection.defaultTarget)
+      (data.defaultTarget && data.defaultTarget !== editingCollection.defaultTarget) ||
+      data.targetDeviceId !== editingCollection.targetDeviceId
     ) {
       await updateCollection(editingCollection.id, {
         name: data.name || editingCollection.name,
         defaultTarget: data.defaultTarget || editingCollection.defaultTarget,
+        targetDeviceId: data.targetDeviceId,
       });
     }
 

@@ -77,6 +77,8 @@ describe('useDeviceStore', () => {
       expect(INITIAL_DEVICE_STATE).toEqual({
         devices: [],
         activeDeviceId: null,
+        globalDefaultTarget: 'Agent',
+        globalDefaultDeviceId: null,
         isLoading: false,
         error: null,
         isPolling: false,
