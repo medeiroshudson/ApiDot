@@ -280,7 +280,7 @@ export function WorkspaceEditorPane({
         });
         setExecutedCurl(executedCurlCmd);
 
-        const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+        const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
         const resolvedTarget = resolveEffectiveTarget(request.target, tree, requestId);
         const isAgentTarget = resolvedTarget === 'Agent';
 

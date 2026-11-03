@@ -1,6 +1,8 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as treeApi from '@/lib/treeApi';
 import { WorkspaceDto } from '@/lib/treeApi';
+import * as runtime from '@/lib/desktop/runtime';
+import * as offlineStorage from '@/lib/storage/offlineStorage';
 import {
   useWorkspaceStore,
   WORKSPACE_STORAGE_KEY,
@@ -16,6 +18,23 @@ vi.mock('@/lib/treeApi', async () => {
   };
 });
 
+vi.mock('@/lib/desktop/runtime', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/desktop/runtime')>('@/lib/desktop/runtime');
+  return {
+    ...actual,
+    isDesktop: vi.fn().mockReturnValue(false),
+  };
+});
+
+vi.mock('@/lib/storage/offlineStorage', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/storage/offlineStorage')>('@/lib/storage/offlineStorage');
+  return {
+    ...actual,
+    saveWorkspaceOffline: vi.fn().mockResolvedValue(undefined),
+    loadWorkspacesOffline: vi.fn().mockResolvedValue([]),
+  };
+});
+
 const mockWorkspaces: WorkspaceDto[] = [
   { id: 'ws-1', name: 'Personal Workspace', createdAtUtc: '2026-01-01T00:00:00Z' },
   { id: 'ws-2', name: 'Team Workspace', createdAtUtc: '2026-01-02T00:00:00Z' },
@@ -26,6 +45,8 @@ describe('useWorkspaceStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    vi.mocked(runtime.isDesktop).mockReturnValue(false);
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
     useWorkspaceStore.setState({
       workspaces: [],
       activeWorkspaceId: null,
@@ -291,6 +312,99 @@ describe('useWorkspaceStore', () => {
       expect(parsed.state.workspaces).toBeUndefined();
       expect(parsed.state.isLoading).toBeUndefined();
       expect(parsed.state.error).toBeUndefined();
+    });
+  });
+
+  describe('8. Desktop Offline Fallback & Local Storage', () => {
+    beforeEach(() => {
+      vi.mocked(runtime.isDesktop).mockReturnValue(true);
+      vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    });
+
+    it('caches workspaces locally using saveWorkspaceOffline without enqueueing sync mutation when online', async () => {
+      vi.mocked(treeApi.fetchWorkspacesApi).mockResolvedValueOnce(mockWorkspaces);
+
+      const result = await useWorkspaceStore.getState().fetchWorkspaces();
+
+      expect(result).toEqual(mockWorkspaces);
+      expect(offlineStorage.saveWorkspaceOffline).toHaveBeenCalledTimes(mockWorkspaces.length);
+      expect(offlineStorage.saveWorkspaceOffline).toHaveBeenCalledWith(
+        mockWorkspaces[0],
+        { enqueueMutation: false }
+      );
+    });
+
+    it('loads directly from loadWorkspacesOffline when offline in desktop mode', async () => {
+      vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+      const offlineMock: WorkspaceDto[] = [
+        { id: 'ws-offline', name: 'Offline Cache', createdAtUtc: '2026-01-01' },
+      ];
+      vi.mocked(offlineStorage.loadWorkspacesOffline).mockResolvedValueOnce(offlineMock);
+
+      const result = await useWorkspaceStore.getState().fetchWorkspaces();
+
+      expect(treeApi.fetchWorkspacesApi).not.toHaveBeenCalled();
+      expect(offlineStorage.loadWorkspacesOffline).toHaveBeenCalledTimes(1);
+      expect(result).toEqual(offlineMock);
+      expect(useWorkspaceStore.getState().workspaces).toEqual(offlineMock);
+      expect(useWorkspaceStore.getState().activeWorkspaceId).toBe('ws-offline');
+      expect(useWorkspaceStore.getState().error).toBeNull();
+    });
+
+    it('falls back to loadWorkspacesOffline when fetchWorkspacesApi fails on network error in desktop mode', async () => {
+      vi.mocked(treeApi.fetchWorkspacesApi).mockRejectedValueOnce(
+        new Error('Network error / Server unreachable')
+      );
+      const cachedWorkspaces: WorkspaceDto[] = [
+        { id: 'ws-cached', name: 'Cached WS', createdAtUtc: '2026-01-01' },
+      ];
+      vi.mocked(offlineStorage.loadWorkspacesOffline).mockResolvedValueOnce(cachedWorkspaces);
+
+      const result = await useWorkspaceStore.getState().fetchWorkspaces();
+
+      expect(treeApi.fetchWorkspacesApi).toHaveBeenCalledTimes(1);
+      expect(offlineStorage.loadWorkspacesOffline).toHaveBeenCalledTimes(1);
+      expect(result).toEqual(cachedWorkspaces);
+      expect(useWorkspaceStore.getState().workspaces).toEqual(cachedWorkspaces);
+      expect(useWorkspaceStore.getState().activeWorkspaceId).toBe('ws-cached');
+      expect(useWorkspaceStore.getState().error).toBeNull();
+    });
+
+    it('creates local workspace and saves offline when creating while offline in desktop mode', async () => {
+      vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+
+      const created = await useWorkspaceStore.getState().createWorkspace('Local Only WS');
+
+      expect(treeApi.createWorkspaceApi).not.toHaveBeenCalled();
+      expect(created.name).toBe('Local Only WS');
+      expect(offlineStorage.saveWorkspaceOffline).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Local Only WS' })
+      );
+      expect(useWorkspaceStore.getState().workspaces).toContainEqual(created);
+      expect(useWorkspaceStore.getState().activeWorkspaceId).toBe(created.id);
+    });
+
+    it('creates on server and saves copy offline when online in desktop mode', async () => {
+      vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+      const serverCreated: WorkspaceDto = {
+        id: 'ws-server-new',
+        name: 'Server WS',
+        createdAtUtc: '2026-01-05T00:00:00Z',
+      };
+      vi.mocked(treeApi.createWorkspaceApi).mockResolvedValueOnce(serverCreated);
+      vi.mocked(treeApi.fetchWorkspacesApi).mockResolvedValueOnce([
+        ...mockWorkspaces,
+        serverCreated,
+      ]);
+
+      const created = await useWorkspaceStore.getState().createWorkspace('Server WS');
+
+      expect(treeApi.createWorkspaceApi).toHaveBeenCalledWith('Server WS');
+      expect(offlineStorage.saveWorkspaceOffline).toHaveBeenCalledWith(
+        serverCreated,
+        { enqueueMutation: false }
+      );
+      expect(created).toEqual(serverCreated);
     });
   });
 });

@@ -3,6 +3,9 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use apidot_desktop::sidecar::{get_sidecar_info, SidecarManager};
+use apidot_desktop::storage::{
+    fs_delete_storage, fs_list_storage, fs_load_storage, fs_save_storage,
+};
 
 fn main() {
     let sidecar_manager = Arc::new(Mutex::new(SidecarManager::new()));
@@ -11,7 +14,13 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .manage(sidecar_manager.clone())
-        .invoke_handler(tauri::generate_handler![get_sidecar_info])
+        .invoke_handler(tauri::generate_handler![
+            get_sidecar_info,
+            fs_save_storage,
+            fs_load_storage,
+            fs_list_storage,
+            fs_delete_storage,
+        ])
         .setup({
             let sidecar_manager = sidecar_manager.clone();
             move |_app| {
