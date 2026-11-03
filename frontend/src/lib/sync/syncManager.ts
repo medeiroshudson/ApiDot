@@ -118,8 +118,24 @@ export async function processSyncQueue(
     const conflictCount =
       typeof data?.conflictCount === 'number' ? data.conflictCount : conflicts.length;
 
-    // Esvazia a fila de mutações após reconciliação bem-sucedida pelo servidor
-    await clearPendingMutations(options?.adapters);
+    // Remove apenas as mutações processadas com sucesso neste lote, preservando mutações enfileiradas in-flight
+    const currentQueue = await getPendingMutations(options?.adapters);
+    const processedIds = new Set(mutations.map((m) => m.id));
+    const remainingQueue = currentQueue.filter((m) => !processedIds.has(m.id));
+
+    if (remainingQueue.length === 0) {
+      await clearPendingMutations(options?.adapters);
+    } else {
+      const saveFn = options?.adapters?.saveFile;
+      if (saveFn) {
+        await saveFn('queue/pending_mutations.json', JSON.stringify(remainingQueue, null, 2));
+      } else {
+        await clearPendingMutations(options?.adapters);
+        for (const item of remainingQueue) {
+          await queuePendingMutation(item, options?.adapters);
+        }
+      }
+    }
 
     return {
       success: true,

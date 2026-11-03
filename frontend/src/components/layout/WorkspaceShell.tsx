@@ -255,6 +255,8 @@ function WorkspaceShellContent({
       return;
     }
     const cleanup = startSyncListener({
+      pollIntervalMs: 15000,
+      checkHealth: true,
       onSyncComplete: (result) => {
         if (result.appliedCount > 0) {
           void reloadTree();
