@@ -34,7 +34,10 @@ public static class HttpExecutor
         return HandlerFactory?.Invoke(ignoreSsl) ?? (ignoreSsl ? InsecureHandler.Value : DefaultHandler.Value);
     }
 
-    public static async Task<HttpResponsePayload> ExecuteAsync(HttpRequestDispatch dispatch, CancellationToken cancellationToken = default)
+    public static async Task<HttpResponsePayload> ExecuteAsync(
+        HttpRequestDispatch dispatch,
+        bool defaultIgnoreSsl = false,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(dispatch);
 
@@ -47,7 +50,7 @@ public static class HttpExecutor
                 cts.CancelAfter(TimeSpan.FromSeconds(dispatch.TimeoutSeconds));
             }
 
-            var ignoreSsl = dispatch.IgnoreSslErrors;
+            var ignoreSsl = dispatch.IgnoreSslErrors || defaultIgnoreSsl;
             var handler = GetHandler(ignoreSsl);
 
             using var client = new HttpClient(handler, disposeHandler: false);

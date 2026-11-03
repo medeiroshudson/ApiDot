@@ -1,4 +1,6 @@
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using ApiDot.Agent.Configuration;
 using ApiDot.Agent.Services;
 using ApiDot.Core.Models;
@@ -21,7 +23,7 @@ public static class SidecarCommand
 
     public static Func<AgentCliOptions, CancellationToken, Task>? WebSocketStarter { get; set; }
 
-    public static WebApplication BuildWebApplication(int port, string? secret, string[]? builderArgs = null)
+    public static WebApplication BuildWebApplication(int port, string? secret, bool defaultIgnoreSsl = false, string[]? builderArgs = null)
     {
         var builder = WebApplication.CreateSlimBuilder(builderArgs ?? []);
 
@@ -39,8 +41,15 @@ public static class SidecarCommand
             if (context.Request.Path.StartsWithSegments("/execute"))
             {
                 if (!context.Request.Headers.TryGetValue(SecretHeaderName, out var providedSecret)
-                    || string.IsNullOrEmpty(secret)
-                    || !string.Equals(providedSecret.ToString(), secret, StringComparison.Ordinal))
+                    || string.IsNullOrEmpty(secret))
+                {
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    return;
+                }
+
+                var providedBytes = Encoding.UTF8.GetBytes(providedSecret.ToString());
+                var secretBytes = Encoding.UTF8.GetBytes(secret);
+                if (providedBytes.Length != secretBytes.Length || !CryptographicOperations.FixedTimeEquals(providedBytes, secretBytes))
                 {
                     context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                     return;
@@ -59,7 +68,7 @@ public static class SidecarCommand
                 return Results.BadRequest();
             }
 
-            var payload = await HttpExecutor.ExecuteAsync(dispatch, cancellationToken);
+            var payload = await HttpExecutor.ExecuteAsync(dispatch, defaultIgnoreSsl, cancellationToken);
             return Results.Ok(payload);
         });
 
@@ -88,13 +97,19 @@ public static class SidecarCommand
                 secret = Guid.NewGuid().ToString("N");
             }
 
-            var app = BuildWebApplication(options.Port, secret);
+            await using var app = BuildWebApplication(options.Port, secret, options.IgnoreSsl);
             await app.StartAsync(cancellationToken);
 
             var actualPort = GetBoundPort(app);
             if (actualPort == 0 && options.Port > 0)
             {
                 actualPort = options.Port;
+            }
+
+            if (actualPort <= 0)
+            {
+                Console.Error.WriteLine("Error: Unable to bind or determine sidecar loopback port.");
+                return 1;
             }
 
             Console.WriteLine($"{ReadyMarkerPrefix}{actualPort}]");
