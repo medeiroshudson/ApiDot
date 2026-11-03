@@ -45,7 +45,7 @@ import {
   useWorkspaceContext,
 } from '@/context/WorkspaceContext';
 import { useTranslation } from '@/hooks/useTranslation';
-import { isDesktop } from '@/lib/desktop/runtime';
+import { isDesktop, listenDesktopEvent } from '@/lib/desktop/runtime';
 import { startSyncListener } from '@/lib/sync/syncManager';
 import { CheckCircle2, X, AlertCircle } from 'lucide-react';
 
@@ -248,6 +248,45 @@ function WorkspaceShellContent({
       stopDevicePolling();
     };
   }, [isSettingsOpen, startDevicePolling, stopDevicePolling]);
+
+  // Global settings keyboard shortcut (Cmd+, / Ctrl+,) and desktop IPC listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+        e.preventDefault();
+        setIsSettingsOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    let unlistenDesktop: (() => void) | undefined;
+    let isSubscribed = true;
+
+    if (isDesktop()) {
+      listenDesktopEvent('open-global-settings', () => {
+        setIsSettingsOpen(true);
+      })
+        .then((unlisten) => {
+          if (isSubscribed) {
+            unlistenDesktop = unlisten;
+          } else {
+            unlisten();
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to register open-global-settings desktop listener:', err);
+        });
+    }
+
+    return () => {
+      isSubscribed = false;
+      window.removeEventListener('keydown', handleKeyDown);
+      if (unlistenDesktop) {
+        unlistenDesktop();
+      }
+    };
+  }, []);
 
   // Reconnection synchronization listener for Desktop environment
   useEffect(() => {

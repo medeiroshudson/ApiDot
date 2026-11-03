@@ -81,3 +81,63 @@ export async function getSidecarInfo(): Promise<SidecarInfo> {
 
   return cachedSidecarInfo;
 }
+
+/**
+ * Subscribes to a Tauri desktop event if running in a desktop environment.
+ * Resolves to an unlisten cleanup function.
+ */
+export async function listenDesktopEvent<T = unknown>(
+  event: string,
+  handler: (payload: T) => void
+): Promise<() => void> {
+  if (typeof window === 'undefined' || !isDesktop()) {
+    return () => {};
+  }
+
+  const tauriInternals = (window as any).__TAURI_INTERNALS__;
+  const tauriGlobal = (window as any).__TAURI__;
+
+  let listenFn: ((eventName: string, cb: (e: any) => void) => Promise<any> | any) | undefined;
+
+  if (typeof tauriGlobal?.event?.listen === 'function') {
+    listenFn = tauriGlobal.event.listen.bind(tauriGlobal.event);
+  } else if (typeof tauriGlobal?.listen === 'function') {
+    listenFn = tauriGlobal.listen.bind(tauriGlobal);
+  } else if (typeof tauriInternals?.event?.listen === 'function') {
+    listenFn = tauriInternals.event.listen.bind(tauriInternals.event);
+  } else if (typeof tauriInternals?.listen === 'function') {
+    listenFn = tauriInternals.listen.bind(tauriInternals);
+  }
+
+  let unlistenTauri: (() => void) | undefined;
+
+  if (listenFn) {
+    try {
+      const rawUnlisten = await listenFn(event, (eventObj: any) => {
+        const payload =
+          eventObj && typeof eventObj === 'object' && 'payload' in eventObj
+            ? eventObj.payload
+            : eventObj;
+        handler(payload as T);
+      });
+      if (typeof rawUnlisten === 'function') {
+        unlistenTauri = rawUnlisten;
+      }
+    } catch (err) {
+      console.error(`Failed to register desktop event listener for "${event}":`, err);
+    }
+  }
+
+  const windowListener = (customEv: Event) => {
+    const detail = (customEv as CustomEvent).detail;
+    handler(detail as T);
+  };
+  window.addEventListener(event, windowListener);
+
+  return () => {
+    if (unlistenTauri) {
+      unlistenTauri();
+    }
+    window.removeEventListener(event, windowListener);
+  };
+}
