@@ -47,9 +47,14 @@ export async function openExternalBrowser(url: string): Promise<void> {
     invokeFn = tauriGlobal.invoke.bind(tauriGlobal);
   }
 
+  let targetUrl = url;
+  if (typeof window !== 'undefined' && url.startsWith('/') && window.location?.origin) {
+    targetUrl = `${window.location.origin.replace(/\/+$/, '')}${url}`;
+  }
+
   if (invokeFn) {
     try {
-      await invokeFn('plugin:shell|open', { path: url });
+      await invokeFn('plugin:shell|open', { path: targetUrl });
       return;
     } catch {
       // Fallback if invoke fails
@@ -57,7 +62,7 @@ export async function openExternalBrowser(url: string): Promise<void> {
   }
 
   if (typeof window.open === 'function') {
-    window.open(url, '_blank');
+    window.open(targetUrl, '_blank');
   }
 }
 
@@ -110,15 +115,30 @@ export async function pollDesktopSidecarSession(
 
     // Wait intervalMs before the next poll, immediately waking up if aborted
     await new Promise<void>((resolve) => {
-      const timer = setTimeout(resolve, intervalMs);
-      if (signal) {
-        const onAbort = () => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let onAbort: (() => void) | undefined;
+
+      const cleanup = () => {
+        if (timer !== undefined) {
           clearTimeout(timer);
+        }
+        if (signal && onAbort) {
           signal.removeEventListener('abort', onAbort);
+        }
+      };
+
+      if (signal) {
+        onAbort = () => {
+          cleanup();
           resolve();
         };
         signal.addEventListener('abort', onAbort, { once: true });
       }
+
+      timer = setTimeout(() => {
+        cleanup();
+        resolve();
+      }, intervalMs);
     });
   }
 
@@ -134,6 +154,7 @@ export async function exchangeDesktopToken(token: string, baseUrl?: string): Pro
 
   const res = await fetch(url, {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
     },
@@ -191,7 +212,10 @@ export async function startDesktopSsoFlow(
     }
 
     const callbackUrl = `http://127.0.0.1:${port}/auth/callback`;
-    const base = (options.serverUrl || '').replace(/\/+$/, '');
+    const defaultBase = typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : 'https://apidot.hmedeiros.dev';
+    const base = (options.serverUrl || defaultBase).replace(/\/+$/, '');
     let loginUrl = `${base}/api/auth/login?desktop_callback=${encodeURIComponent(callbackUrl)}`;
 
     if (options.returnUrl) {

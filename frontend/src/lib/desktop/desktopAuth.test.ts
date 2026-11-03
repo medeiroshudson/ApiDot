@@ -76,6 +76,21 @@ describe('desktopAuth', () => {
       );
     });
 
+    it('defaults base to window.location.origin when serverUrl is not provided', async () => {
+      const mockOpen = vi.fn().mockResolvedValue(undefined);
+
+      await startDesktopSsoFlow({
+        openBrowser: mockOpen,
+        pollSession: vi.fn().mockResolvedValue('tok-1'),
+        exchangeToken: vi.fn().mockResolvedValue({ id: 'u1' } as any),
+        port: 12345,
+      });
+
+      expect(mockOpen).toHaveBeenCalledWith(
+        `${window.location.origin}/api/auth/login?desktop_callback=http%3A%2F%2F127.0.0.1%3A12345%2Fauth%2Fcallback`
+      );
+    });
+
     it('handles cancellation via AbortSignal gracefully', async () => {
       const controller = new AbortController();
       controller.abort();
@@ -164,7 +179,10 @@ describe('desktopAuth', () => {
       expect(token).toBeNull();
     });
 
-    it('returns null when timeout is reached without token', async () => {
+    it('returns null when timeout is reached without token and cleans up abort listener', async () => {
+      const controller = new AbortController();
+      const removeSpy = vi.spyOn(controller.signal, 'removeEventListener');
+
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
@@ -172,11 +190,13 @@ describe('desktopAuth', () => {
       } as Response);
 
       const token = await pollDesktopSidecarSession(54321, 'my-secret', {
+        signal: controller.signal,
         intervalMs: 10,
         timeoutMs: 30,
       });
 
       expect(token).toBeNull();
+      expect(removeSpy).toHaveBeenCalledWith('abort', expect.any(Function));
     });
   });
 
@@ -193,6 +213,7 @@ describe('desktopAuth', () => {
 
       expect(global.fetch).toHaveBeenCalledWith('https://api.apidot.dev/api/auth/desktop-exchange', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -237,6 +258,21 @@ describe('desktopAuth', () => {
       await openExternalBrowser('https://apidot.hmedeiros.dev/fallback');
 
       expect(mockWindowOpen).toHaveBeenCalledWith('https://apidot.hmedeiros.dev/fallback', '_blank');
+    });
+
+    it('resolves relative URLs to absolute URLs using window.location.origin before invoking Tauri IPC', async () => {
+      const mockInvoke = vi.fn().mockResolvedValue(undefined);
+      (window as any).__TAURI__ = {
+        core: {
+          invoke: mockInvoke,
+        },
+      };
+
+      await openExternalBrowser('/api/auth/login?desktop_callback=http%3A%2F%2F127.0.0.1%3A123%2Fauth%2Fcallback');
+
+      expect(mockInvoke).toHaveBeenCalledWith('plugin:shell|open', {
+        path: `${window.location.origin}/api/auth/login?desktop_callback=http%3A%2F%2F127.0.0.1%3A123%2Fauth%2Fcallback`,
+      });
     });
   });
 });
