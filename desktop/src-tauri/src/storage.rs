@@ -39,7 +39,9 @@ pub fn sanitize_relative_path(rel_path: &str) -> Result<PathBuf, String> {
         return Err("Invalid path containing null character".to_string());
     }
 
-    let trimmed = rel_path.trim_start_matches(|c| c == '/' || c == '\\');
+    // Normaliza separadores de caminho estilo Windows para Unix antes de analisar componentes
+    let normalized = rel_path.replace('\\', '/');
+    let trimmed = normalized.trim().trim_start_matches('/');
     if trimmed.is_empty() {
         return Err("Invalid empty path".to_string());
     }
@@ -66,6 +68,11 @@ pub fn sanitize_relative_path(rel_path: &str) -> Result<PathBuf, String> {
     // Verificação adicional para garantir que não haja escape do diretório base
     if !full_path.starts_with(&root) {
         return Err("Resolved path escapes storage root directory".to_string());
+    }
+
+    // Impede que referências como "." ou "./" resolvam para a própria raiz do armazenamento
+    if full_path == root {
+        return Err("Path refers to storage root directory; target must be a child entry".to_string());
     }
 
     Ok(full_path)
@@ -106,7 +113,8 @@ pub async fn fs_load_storage(rel_path: String) -> Result<String, String> {
 /// Comando IPC Tauri para listar entradas (arquivos/diretórios) sob `~/.apidot/storage/<rel_dir>`.
 #[tauri::command]
 pub async fn fs_list_storage(rel_dir: String) -> Result<Vec<String>, String> {
-    let trimmed = rel_dir.trim().trim_start_matches(|c| c == '/' || c == '\\');
+    let normalized = rel_dir.replace('\\', '/');
+    let trimmed = normalized.trim().trim_matches('/');
     let dir_path = if trimmed.is_empty() || trimmed == "." {
         get_storage_root()
     } else {

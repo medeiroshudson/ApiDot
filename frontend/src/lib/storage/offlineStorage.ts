@@ -357,18 +357,20 @@ export async function deleteWorkspaceOffline(
 
   await deleteFn(filePath);
 
-  const mutation: PendingMutation = {
-    id: workspaceId,
-    entityType: 'Workspace',
-    action: 'Delete',
-    payloadJson: JSON.stringify({ id: workspaceId }),
-    updatedAtUtc: new Date().toISOString(),
-  };
+  if (adapters?.enqueueMutation !== false) {
+    const mutation: PendingMutation = {
+      id: workspaceId,
+      entityType: 'Workspace',
+      action: 'Delete',
+      payloadJson: JSON.stringify({ id: workspaceId }),
+      updatedAtUtc: new Date().toISOString(),
+    };
 
-  if (adapters?.queueMutation) {
-    await adapters.queueMutation(mutation);
-  } else if (adapters?.enqueueMutation !== false) {
-    await queuePendingMutation(mutation, adapters);
+    if (adapters?.queueMutation) {
+      await adapters.queueMutation(mutation);
+    } else {
+      await queuePendingMutation(mutation, adapters);
+    }
   }
 }
 
@@ -385,17 +387,25 @@ export async function deleteCollectionOffline(
 
   await deleteFn(filePath);
 
-  const mutation: PendingMutation = {
-    id: collectionId,
-    entityType: 'Collection',
-    action: 'Delete',
-    payloadJson: JSON.stringify({ id: collectionId, workspaceId }),
-    updatedAtUtc: new Date().toISOString(),
-  };
+  if (adapters?.enqueueMutation !== false) {
+    const mutation: PendingMutation = {
+      id: collectionId,
+      entityType: 'Collection',
+      action: 'Delete',
+      payloadJson: JSON.stringify({ id: collectionId, workspaceId }),
+      updatedAtUtc: new Date().toISOString(),
+    };
 
-  if (adapters?.queueMutation) {
-    await adapters.queueMutation(mutation);
-  } else if (adapters?.enqueueMutation !== false) {
-    await queuePendingMutation(mutation, adapters);
+    if (adapters?.queueMutation) {
+      await adapters.queueMutation(mutation);
+    } else {
+      await queuePendingMutation(mutation, adapters);
+    }
   }
 }
+
+/**
+ * Aliases de compatibilidade para atender às interfaces do plano original.
+ */
+export const saveWorkspaceLocally = saveWorkspaceOffline;
+export const loadWorkspacesLocally = loadWorkspacesOffline;

@@ -2,6 +2,8 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   saveWorkspaceOffline,
   loadWorkspacesOffline,
+  saveWorkspaceLocally,
+  loadWorkspacesLocally,
   saveCollectionOffline,
   loadCollectionsOffline,
   queuePendingMutation,
@@ -328,6 +330,34 @@ describe('offlineStorage (Local-First Disk Storage & Mutation Queue)', () => {
           action: 'Delete',
         })
       );
+    });
+
+    it('suppresses mutation when enqueueMutation is false in deleteWorkspaceOffline and deleteCollectionOffline', async () => {
+      const mockDelete = vi.fn().mockResolvedValue(true);
+      const mockQueue = vi.fn().mockResolvedValue(true);
+
+      await deleteWorkspaceOffline('ws-silent', {
+        deleteFile: mockDelete,
+        queueMutation: mockQueue,
+        enqueueMutation: false,
+      });
+
+      expect(mockDelete).toHaveBeenCalledWith('workspaces/ws-silent.json');
+      expect(mockQueue).not.toHaveBeenCalled();
+
+      await deleteCollectionOffline('col-silent', 'ws-123', {
+        deleteFile: mockDelete,
+        queueMutation: mockQueue,
+        enqueueMutation: false,
+      });
+
+      expect(mockDelete).toHaveBeenCalledWith('collections/ws-123/col-silent.json');
+      expect(mockQueue).not.toHaveBeenCalled();
+    });
+
+    it('exports saveWorkspaceLocally and loadWorkspacesLocally as functional aliases', async () => {
+      expect(saveWorkspaceLocally).toBe(saveWorkspaceOffline);
+      expect(loadWorkspacesLocally).toBe(loadWorkspacesOffline);
     });
   });
 

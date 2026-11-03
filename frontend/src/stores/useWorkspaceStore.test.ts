@@ -351,6 +351,21 @@ describe('useWorkspaceStore', () => {
       expect(useWorkspaceStore.getState().error).toBeNull();
     });
 
+    it('immediately resets state and returns empty array without calling fetchWorkspacesApi when offline in desktop mode with empty offline storage', async () => {
+      vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+      vi.mocked(offlineStorage.loadWorkspacesOffline).mockResolvedValueOnce([]);
+
+      const result = await useWorkspaceStore.getState().fetchWorkspaces();
+
+      expect(treeApi.fetchWorkspacesApi).not.toHaveBeenCalled();
+      expect(offlineStorage.loadWorkspacesOffline).toHaveBeenCalledTimes(1);
+      expect(result).toEqual([]);
+      expect(useWorkspaceStore.getState().workspaces).toEqual([]);
+      expect(useWorkspaceStore.getState().activeWorkspaceId).toBeNull();
+      expect(useWorkspaceStore.getState().isLoading).toBe(false);
+      expect(useWorkspaceStore.getState().error).toBeNull();
+    });
+
     it('falls back to loadWorkspacesOffline when fetchWorkspacesApi fails on network error in desktop mode', async () => {
       vi.mocked(treeApi.fetchWorkspacesApi).mockRejectedValueOnce(
         new Error('Network error / Server unreachable')

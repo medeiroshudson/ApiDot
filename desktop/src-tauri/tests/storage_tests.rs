@@ -31,11 +31,14 @@ fn test_path_traversal_prevention_parent_dir() {
     let traversal_attempts = [
         "../secret.txt",
         "..\\secret.txt",
+        "..\\..\\secret.txt",
         "workspaces/../../etc/passwd",
+        "workspaces\\..\\..\\etc\\passwd",
         "workspaces/../ws-1.json",
         "foo/bar/../../../baz",
         "..",
         "/..",
+        "\\..",
     ];
 
     for attempt in &traversal_attempts {
@@ -49,6 +52,27 @@ fn test_path_traversal_prevention_parent_dir() {
         assert!(
             err.contains("Path traversal detected") || err.contains("not allowed"),
             "Error for '{}' should explain rejection: {}",
+            attempt,
+            err
+        );
+    }
+}
+
+#[test]
+fn test_root_directory_reference_rejected() {
+    let root_attempts = [".", "./", ".\\", "/.", "\\."];
+
+    for attempt in &root_attempts {
+        let result = sanitize_relative_path(attempt);
+        assert!(
+            result.is_err(),
+            "Root directory reference '{}' should be rejected by sanitize_relative_path",
+            attempt
+        );
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("Path refers to storage root directory") || err.contains("not allowed"),
+            "Error for '{}' should explain root rejection: {}",
             attempt,
             err
         );
@@ -132,6 +156,30 @@ async fn test_delete_nonexistent_file_is_idempotent() {
 
     let delete_res = fs_delete_storage("workspaces/does_not_exist.json".to_string()).await;
     assert!(delete_res.is_ok(), "Deleting nonexistent file should be idempotent and succeed");
+
+    let _ = std::fs::remove_dir_all(&test_dir);
+    std::env::remove_var("APIDOT_STORAGE_ROOT");
+}
+
+#[tokio::test]
+async fn test_delete_root_directory_is_rejected() {
+    let test_dir = std::env::temp_dir().join(format!("apidot_test_del_root_{}", uuid::Uuid::new_v4()));
+    std::env::set_var("APIDOT_STORAGE_ROOT", &test_dir);
+
+    // Salva um arquivo primeiro para garantir que a pasta raiz exista
+    let _ = fs_save_storage("keep_me.txt".to_string(), "important".to_string()).await;
+
+    // Tentativa de deletar "." deve falhar e não apagar a raiz
+    let delete_dot = fs_delete_storage(".".to_string()).await;
+    assert!(delete_dot.is_err(), "Deleting '.' should be rejected");
+
+    let delete_dot_slash = fs_delete_storage("./".to_string()).await;
+    assert!(delete_dot_slash.is_err(), "Deleting './' should be rejected");
+
+    // Confirma que a pasta raiz e o arquivo continuam intactos
+    assert!(test_dir.exists(), "Root directory should NOT be deleted");
+    let load_res = fs_load_storage("keep_me.txt".to_string()).await;
+    assert_eq!(load_res.unwrap(), "important");
 
     let _ = std::fs::remove_dir_all(&test_dir);
     std::env::remove_var("APIDOT_STORAGE_ROOT");

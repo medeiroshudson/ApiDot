@@ -63,26 +63,34 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
         if (isDesktop() && isOffline) {
           const offlineList = await loadWorkspacesOffline();
-          if (offlineList.length > 0) {
-            const currentActiveId = get().activeWorkspaceId;
-            let chosenId: string = offlineList[0].id;
-
-            if (preferredId && offlineList.some((w) => w.id === preferredId)) {
-              chosenId = preferredId;
-            } else if (currentActiveId && offlineList.some((w) => w.id === currentActiveId)) {
-              chosenId = currentActiveId;
-            } else {
-              chosenId = offlineList[0].id;
-            }
-
+          if (offlineList.length === 0) {
             set({
-              workspaces: offlineList,
-              activeWorkspaceId: chosenId,
+              workspaces: [],
+              activeWorkspaceId: null,
               isLoading: false,
               error: null,
             });
-            return offlineList;
+            return [];
           }
+
+          const currentActiveId = get().activeWorkspaceId;
+          let chosenId: string = offlineList[0].id;
+
+          if (preferredId && offlineList.some((w) => w.id === preferredId)) {
+            chosenId = preferredId;
+          } else if (currentActiveId && offlineList.some((w) => w.id === currentActiveId)) {
+            chosenId = currentActiveId;
+          } else {
+            chosenId = offlineList[0].id;
+          }
+
+          set({
+            workspaces: offlineList,
+            activeWorkspaceId: chosenId,
+            isLoading: false,
+            error: null,
+          });
+          return offlineList;
         }
 
         try {
