@@ -6,6 +6,8 @@ public record LocalLoginRequest(string? Email, string? Password);
 
 public record UpdateLocaleRequest(string Locale);
 
+public record DesktopExchangeRequest(string? Token);
+
 public record AuthWorkspaceDto(Guid Id, string Name, string Role);
 
 public record AuthUserDto(

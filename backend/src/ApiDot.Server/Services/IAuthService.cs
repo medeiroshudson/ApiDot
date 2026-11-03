@@ -46,4 +46,15 @@ public interface IAuthService
         bool isPersistent = true);
 
     Task SignOutAsync(HttpContext httpContext);
+
+    string CreateDesktopExchangeToken(
+        Guid userId,
+        string email,
+        string name,
+        TimeSpan? lifetime = null);
+
+    Task<(bool Success, UserDto? User, string? ErrorMessage)> ValidateAndConsumeDesktopTokenAsync(
+        string token,
+        HttpContext httpContext,
+        CancellationToken cancellationToken = default);
 }

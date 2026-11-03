@@ -136,6 +136,27 @@ public static class ServiceCollectionExtensions
                     context.Principal = new ClaimsPrincipal(identity);
                 };
 
+                options.Events.OnTicketReceived = context =>
+                {
+                    if (context.Properties?.Items.TryGetValue("desktop_callback", out var desktopCallback) == true
+                        && !string.IsNullOrWhiteSpace(desktopCallback))
+                    {
+                        var authService = context.HttpContext.RequestServices.GetRequiredService<IAuthService>();
+                        var userIdClaim = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                        var emailClaim = context.Principal?.FindFirst(ClaimTypes.Email)?.Value;
+                        var nameClaim = context.Principal?.FindFirst(ClaimTypes.Name)?.Value;
+
+                        if (Guid.TryParse(userIdClaim, out var userId) && !string.IsNullOrWhiteSpace(emailClaim))
+                        {
+                            var exchangeToken = authService.CreateDesktopExchangeToken(userId, emailClaim, nameClaim ?? emailClaim);
+                            var delimiter = desktopCallback.Contains('?') ? "&" : "?";
+                            context.ReturnUri = $"{desktopCallback}{delimiter}token={Uri.EscapeDataString(exchangeToken)}";
+                        }
+                    }
+
+                    return Task.CompletedTask;
+                };
+
                 options.Events.OnRemoteFailure = context =>
                 {
                     context.Response.Redirect("/login?error=" + Uri.EscapeDataString(context.Failure?.Message ?? "SSO Cancelled"));
