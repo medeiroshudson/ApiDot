@@ -34,22 +34,22 @@ export interface SyncOptions {
 let isSyncing = false;
 
 /**
- * Reseta o estado interno de sincronização (útil para testes unitários).
+ * Resets the internal sync in-progress state (useful for unit tests).
  */
 export function resetSyncState(): void {
   isSyncing = false;
 }
 
 /**
- * Retorna se há uma operação de sincronização ativa em andamento.
+ * Returns whether a synchronization operation is currently running.
  */
 export function isSyncInProgress(): boolean {
   return isSyncing;
 }
 
 /**
- * Envia uma lista de mutações pendentes para o endpoint de reconciliação em lote
- * `POST /api/sync/batch`. Ao obter resposta 200 OK com sucesso, limpa a fila local.
+ * Dispatches a list of pending mutations to the batch reconciliation endpoint
+ * `POST /api/sync/batch`. Upon HTTP 200 OK, removes the processed mutations from the local queue.
  */
 export async function processSyncQueue(
   mutations: PendingMutation[],
@@ -119,7 +119,7 @@ export async function processSyncQueue(
     const conflictCount =
       typeof data?.conflictCount === 'number' ? data.conflictCount : conflicts.length;
 
-    // Remove apenas as mutações processadas com sucesso neste lote, preservando mutações enfileiradas in-flight
+    // Only remove mutations that were successfully processed in this batch, preserving in-flight mutations
     const currentQueue = await getPendingMutations(options?.adapters);
     const processedIds = new Set(mutations.map((m) => m.id));
     const remainingQueue = currentQueue.filter((m) => !processedIds.has(m.id));
@@ -157,8 +157,8 @@ export async function processSyncQueue(
 }
 
 /**
- * Lê todas as mutações enfileiradas no armazenamento local e executa a reconciliação.
- * Se a fila estiver vazia, retorna imediatamente sem despachar requisição HTTP.
+ * Reads all queued mutations from local storage and dispatches them to the server.
+ * Returns immediately without making an HTTP request if the queue is empty.
  */
 export async function syncPendingMutations(
   options?: SyncOptions
@@ -207,9 +207,9 @@ export async function syncPendingMutations(
 }
 
 /**
- * Inicia o listener de reconexão automática e polling de integridade.
- * Escuta o evento `online` do navegador e despacha as mutações locais pendentes.
- * Retorna função de limpeza para desregistrar os listeners.
+ * Starts automatic reconnection listener and health polling.
+ * Listens to browser `online` events and synchronizes pending local mutations.
+ * Returns a cleanup function to unregister listeners.
  */
 export function startSyncListener(options?: SyncOptions): () => void {
   if (typeof window === 'undefined') {
@@ -239,7 +239,7 @@ export function startSyncListener(options?: SyncOptions): () => void {
 
   window.addEventListener('online', handleOnline);
 
-  // Polling de conectividade com /health quando configurado
+  // Periodic connectivity polling to /health when configured
   if (options?.pollIntervalMs && options.pollIntervalMs > 0) {
     pollTimer = setInterval(async () => {
       if (isCleanedUp) return;
@@ -253,7 +253,7 @@ export function startSyncListener(options?: SyncOptions): () => void {
             void runSync();
           }
         } catch {
-          // Servidor ainda inacessível
+          // Server still unreachable
         }
       } else {
         void runSync();
@@ -261,7 +261,7 @@ export function startSyncListener(options?: SyncOptions): () => void {
     }, options.pollIntervalMs);
   }
 
-  // Dispara checagem inicial se o ambiente já estiver online
+  // Trigger initial synchronization check if already online
   if (typeof navigator === 'undefined' || navigator.onLine !== false) {
     void runSync();
   }

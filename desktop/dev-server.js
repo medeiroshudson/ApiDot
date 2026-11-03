@@ -25,7 +25,7 @@ async function main() {
   const isRunning = await checkExistingServer(targetUrl);
   if (isRunning) {
     console.log(`✓ Web frontend already running on ${targetUrl} (Docker Compose or active dev server). Reusing.`);
-    // Mantém o processo vivo para o Tauri monitorar
+    // Keep process alive for Tauri beforeDevCommand monitoring
     setInterval(() => {}, 60000);
     return;
   }

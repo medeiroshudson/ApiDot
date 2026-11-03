@@ -22,7 +22,7 @@ fn main() {
         .setup({
             let sidecar_manager = sidecar_manager.clone();
             move |_app| {
-                // Inicia o sidecar em segundo plano na abertura da aplicação
+                // Start sidecar in the background upon application startup
                 tauri::async_runtime::spawn(async move {
                     let mut mgr = sidecar_manager.lock().await;
                     if let Err(err) = mgr.start_sidecar().await {

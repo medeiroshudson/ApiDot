@@ -17,6 +17,7 @@ fn main() {
     if !target_binary.exists() {
         let _ = fs::create_dir_all(&binaries_dir);
 
+        // Search for pre-compiled ApiDot.Agent binaries
         let rid = if target.contains("darwin") || target.contains("apple") {
             if target.contains("aarch64") { "osx-arm64" } else { "osx-x64" }
         } else if target.contains("windows") {
@@ -44,6 +45,7 @@ fn main() {
         }
 
         if !copied {
+            // Attempt to compile via dotnet publish if dotnet is available
             let status = Command::new("dotnet")
                 .args(["publish", "../../backend/src/ApiDot.Agent", "-c", "Release"])
                 .status();
@@ -62,6 +64,7 @@ fn main() {
             }
         }
 
+        // Fallback development stub if compilation is skipped
         if !copied {
             #[cfg(unix)]
             {

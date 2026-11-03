@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Permitir que o aplicativo Desktop autentique via SSO abrindo o navegador padrão do usuário (onde a sessão do Authentik já está ativa), redirecionando para o Sidecar local em loopback (`/auth/callback`), exibindo tela de sucesso com i18n (`/auth/desktop-success`) e concluindo o login no app automaticamente.
+**Goal:** Enable desktop application SSO authentication by opening the user's default browser (where an Authentik session is already active), redirecting to the local sidecar loopback (`/auth/callback`), displaying a localized confirmation page (`/auth/desktop-success`), and completing login automatically in the desktop app.
 
-**Architecture:** O aplicativo Desktop abre a URL de login no navegador externo via Tauri opener com o parâmetro `desktop_callback=http://127.0.0.1:<port>/auth/callback`. O `ApiDot.Server` valida a sessão OIDC existente no Authentik, emite um token efêmero de uso único (`DesktopExchangeToken`) e redireciona o navegador para o Sidecar local. O Sidecar armazena o token e redireciona o navegador para `/auth/desktop-success` (Next.js com i18n). O desktop consulta o Sidecar via loopback (`GET /auth/session`), troca o token em `POST /api/auth/desktop-exchange` e entra no workspace.
+**Architecture:** The desktop app opens the login URL in the external system browser via Tauri opener with `desktop_callback=http://127.0.0.1:<port>/auth/callback`. `ApiDot.Server` validates the active OIDC session in Authentik, issues an ephemeral single-use token (`DesktopExchangeToken`), and redirects the browser to the local sidecar. The sidecar captures the token and redirects the browser to `/auth/desktop-success` (Next.js with i18n). The desktop app queries the sidecar via loopback (`GET /auth/session`), exchanges the token at `POST /api/auth/desktop-exchange`, and navigates to the workspace.
 
 **Tech Stack:** .NET 9 (ASP.NET Core, Kestrel Slim, OIDC), Next.js 16.4.4, React 19.3.1, Tauri v2, Zustand 5, TypeScript 5.7, Vitest, xUnit.
 
@@ -12,19 +12,19 @@
 
 ## Global Constraints
 
-- **Tokens Efêmeros e de Uso Único:** O `DesktopExchangeToken` expira estritamente em 5 minutos e é invalidado imediatamente após a primeira troca em `POST /api/auth/desktop-exchange`.
-- **Proteção do Endpoint de Sessão:** A rota `GET /auth/session` no Sidecar exige o cabeçalho `X-ApiDot-Sidecar-Secret`.
-- **Página de Sucesso com i18n:** A rota `/auth/desktop-success` deve utilizar o sistema nativo de traduções do ApiDot (`en-US` como padrão, `pt-BR`).
-- **Segurança de Origem e Loopback:** Apenas URLs de callback apontando para `http://127.0.0.1:<port>/auth/callback` ou `http://localhost:<port>/auth/callback` são aceitas como `desktop_callback`.
-- **Preservação do Modo Web:** No navegador web, o fluxo de SSO permanece inalterado navegando diretamente para `/api/auth/login`.
+- **Ephemeral Single-Use Tokens:** `DesktopExchangeToken` expires strictly in 5 minutes and is invalidated immediately upon first exchange at `POST /api/auth/desktop-exchange`.
+- **Session Endpoint Security:** Endpoint `GET /auth/session` on the sidecar requires the `X-ApiDot-Sidecar-Secret` header.
+- **Localized Success Page:** The `/auth/desktop-success` route must use the native ApiDot translation system (`en-US` default, `pt-BR`).
+- **Loopback Origin Security:** Only callback URLs pointing to `http://127.0.0.1:<port>/auth/callback` or `http://localhost:<port>/auth/callback` are accepted as `desktop_callback`.
+- **Web Mode Preservation:** Standard web browsers preserve direct navigation to `/api/auth/login`.
 
 ## Review Focus
 
-1. **Tentativa de injeção de `desktop_callback` malicioso:** O servidor valida que o hostname é estritamente `127.0.0.1` ou `localhost` e o caminho é `/auth/callback`, rejeitando URLs externas com `400 Bad Request`.
-2. **Reutilização de token de troca:** Tentativa de trocar o mesmo `DesktopExchangeToken` pela segunda vez resulta em `401 Unauthorized`.
-3. **Cancelamento do usuário no Desktop:** Se o usuário clicar em "Cancelar" na janela do Desktop durante o estado de espera, o polling é interrompido sem travar a interface.
-4. **Tradução no navegador:** Ao abrir `/auth/desktop-success`, a página detecta ou respeita a localidade do usuário sem erros de hidratação.
-5. **CORS no Sidecar:** A rota `/auth/session` permite a leitura do token pelo frontend do desktop sem bloqueios de CORS.
+1. **Malicious `desktop_callback` Injection:** The server validates that the host is strictly `127.0.0.1` or `localhost` and path is `/auth/callback`, rejecting external URLs with `400 Bad Request`.
+2. **Token Reuse:** Attempting to exchange the same `DesktopExchangeToken` a second time results in `401 Unauthorized`.
+3. **Desktop User Cancellation:** If the user cancels the waiting state in the desktop window, polling halts cleanly without freezing the UI.
+4. **Browser Localization:** Navigating to `/auth/desktop-success` renders cleanly without hydration mismatches in both `en-US` and `pt-BR`.
+5. **Sidecar CORS:** Endpoint `/auth/session` allows retrieval by the desktop frontend without CORS errors.
 
 ---
 
@@ -38,9 +38,9 @@
 
 **Interfaces:**
 - Consumes: `HttpContext`, `IAuthService`
-- Produces: `POST /api/auth/desktop-exchange -> UserDto` e suporte a `desktop_callback` em `/api/auth/login`
+- Produces: `POST /api/auth/desktop-exchange -> UserDto` and `desktop_callback` support in `/api/auth/login`
 
-- [ ] **Step 1: Escrever teste de falha para emissão e troca de DesktopExchangeToken**
+- [ ] **Step 1: Write failing test for DesktopExchangeToken issuance and exchange**
 
 ```csharp
 [Fact]
@@ -57,16 +57,16 @@ public async Task DesktopExchange_WithValidToken_ReturnsUserDtoAndSetsCookie()
 }
 ```
 
-- [ ] **Step 2: Executar teste para verificar falha**
+- [ ] **Step 2: Run test to verify failure**
 
 Run: `dotnet test backend/tests/ApiDot.Server.Tests --filter DesktopAuthEndpointsTests -v minimal`  
-Expected: FAIL com 404 Not Found
+Expected: FAIL with 404 Not Found
 
-- [ ] **Step 3: Implementar geração, validação e endpoint `POST /api/auth/desktop-exchange`**
+- [ ] **Step 3: Implement token generation, validation, and `POST /api/auth/desktop-exchange`**
 
-No `AuthService.cs`, manter cache/dicionário thread-safe com expiração de 5 minutos para tokens de troca. Adicionar `CreateDesktopExchangeToken` e `ValidateAndConsumeDesktopTokenAsync`. Em `AuthEndpoints.cs`, receber parâmetro `desktop_callback` em `/api/auth/login`, validar que a URL aponta para loopback (`127.0.0.1` ou `localhost`), e mapear `POST /api/auth/desktop-exchange` validando o token, autenticando a sessão via `SignInAsync` e retornando `UserDto`.
+In `AuthService.cs`, implement thread-safe dictionary with 5-minute TTL for exchange tokens. Add `CreateDesktopExchangeToken` and `ValidateAndConsumeDesktopTokenAsync`. In `AuthEndpoints.cs`, accept `desktop_callback` in `/api/auth/login`, validate loopback origin (`127.0.0.1` or `localhost`), and map `POST /api/auth/desktop-exchange` establishing session via `SignInAsync` and returning `UserDto`.
 
-- [ ] **Step 4: Executar testes de integração para verificar aprovação**
+- [ ] **Step 4: Run integration tests to verify pass**
 
 Run: `dotnet test backend/tests/ApiDot.Server.Tests --filter DesktopAuthEndpointsTests -v minimal`  
 Expected: PASS
@@ -87,10 +87,10 @@ git commit -m "feat(auth): implement desktop sso exchange token and login callba
 - Test: `backend/tests/ApiDot.Server.Tests/Agent/SidecarAuthEndpointsTests.cs`
 
 **Interfaces:**
-- Consumes: Parâmetros `token` em `GET /auth/callback`, header `X-ApiDot-Sidecar-Secret` em `GET /auth/session`
+- Consumes: Parameter `token` on `GET /auth/callback`, header `X-ApiDot-Sidecar-Secret` on `GET /auth/session`
 - Produces: `GET /auth/callback -> 302 Redirect`, `GET /auth/session -> { token }`
 
-- [ ] **Step 1: Escrever teste de falha para rotas de autenticação do Sidecar**
+- [ ] **Step 1: Write failing test for Sidecar auth routes**
 
 ```csharp
 [Fact]
@@ -120,16 +120,16 @@ public async Task Sidecar_AuthCallback_StoresTokenAndRedirectsToSuccessPage()
 }
 ```
 
-- [ ] **Step 2: Executar teste para verificar falha**
+- [ ] **Step 2: Run test to verify failure**
 
 Run: `dotnet test backend/tests/ApiDot.Server.Tests --filter SidecarAuthEndpointsTests -v minimal`  
-Expected: FAIL com 404 Not Found
+Expected: FAIL with 404 Not Found
 
-- [ ] **Step 3: Implementar endpoints `/auth/callback` e `/auth/session` no Kestrel Slim**
+- [ ] **Step 3: Implement `/auth/callback` and `/auth/session` endpoints in Kestrel Slim**
 
-Em `SidecarCommand.cs`, declarar variável volátil/thread-safe para o token de autenticação pendente. Mapear `GET /auth/callback` para capturar `token` e retornar redirect `302` para `${serverUrl}/auth/desktop-success`. Mapear `GET /auth/session` (com validação de segredo) para retornar o token capturado e limpá-lo após leitura.
+In `SidecarCommand.cs`, implement thread-safe pending token storage. Map `GET /auth/callback` to capture `token` and return 302 redirect to `${targetOrigin}/auth/desktop-success`. Map `GET /auth/session` (with secret validation) returning the token and clearing it upon read.
 
-- [ ] **Step 4: Executar testes para verificar aprovação e recompilar Native AOT**
+- [ ] **Step 4: Run tests and verify Native AOT build**
 
 Run: `dotnet test backend/tests/ApiDot.Server.Tests --filter SidecarAuthEndpointsTests -v minimal`  
 Run: `node desktop/prepare.js`  
@@ -144,7 +144,7 @@ git commit -m "feat(agent): add sidecar /auth/callback and /auth/session loopbac
 
 ---
 
-### Task 3: Página de Confirmação i18n (`/auth/desktop-success`)
+### Task 3: Localized Confirmation Page (`/auth/desktop-success`)
 
 **Files:**
 - Create: `frontend/src/app/auth/desktop-success/page.tsx`
@@ -154,9 +154,9 @@ git commit -m "feat(agent): add sidecar /auth/callback and /auth/session loopbac
 
 **Interfaces:**
 - Consumes: `useTranslation()`
-- Produces: Rota `/auth/desktop-success` com títulos e mensagens em inglês e português
+- Produces: Route `/auth/desktop-success` with titles and descriptions in English and Portuguese
 
-- [ ] **Step 1: Escrever teste de falha para a página `/auth/desktop-success`**
+- [ ] **Step 1: Write failing test for `/auth/desktop-success` page**
 
 ```typescript
 it('renders authentication success message and open desktop button in en-US and pt-BR', () => {
@@ -166,16 +166,16 @@ it('renders authentication success message and open desktop button in en-US and 
 });
 ```
 
-- [ ] **Step 2: Executar teste para verificar falha**
+- [ ] **Step 2: Run test to verify failure**
 
 Run: `npm --prefix frontend test -- desktop-success/page.test.tsx`  
-Expected: FAIL com módulo inexistente
+Expected: FAIL with module not found
 
-- [ ] **Step 3: Implementar página e chaves de tradução**
+- [ ] **Step 3: Implement page and translation keys**
 
-Adicionar chaves `auth.desktopSuccessTitle`, `auth.desktopSuccessMessage`, `auth.desktopSuccessButton` em `en-US.ts` e `pt-BR.ts`. Criar `frontend/src/app/auth/desktop-success/page.tsx` com visual escuro consistente com o ApiDot, ícone de check verde esmeralda e botão de ação.
+Add keys `auth.desktopSuccessTitle`, `auth.desktopSuccessMessage`, and `auth.desktopSuccessButton` in `en-US.ts` and `pt-BR.ts`. Create `frontend/src/app/auth/desktop-success/page.tsx` with dark theme styling, emerald check icon, and action button.
 
-- [ ] **Step 4: Executar testes para verificar aprovação**
+- [ ] **Step 4: Run tests to verify pass**
 
 Run: `npm --prefix frontend test -- desktop-success/page.test.tsx`  
 Expected: PASS
@@ -189,7 +189,7 @@ git commit -m "feat(frontend): add localized /auth/desktop-success confirmation 
 
 ---
 
-### Task 4: Integração Desktop no Login (`LoginPage.tsx` & `desktopAuth.ts`)
+### Task 4: Desktop Login Integration (`LoginPage.tsx` & `desktopAuth.ts`)
 
 **Files:**
 - Create: `frontend/src/lib/desktop/desktopAuth.ts`
@@ -200,9 +200,9 @@ git commit -m "feat(frontend): add localized /auth/desktop-success confirmation 
 
 **Interfaces:**
 - Consumes: `isDesktop()`, `getSidecarInfo()`, `loginDesktopSso()`
-- Produces: Fluxo completo de SSO no navegador padrão com polling de token e hidratação de sessão
+- Produces: Complete desktop SSO flow with browser delegation, polling, and session hydration
 
-- [ ] **Step 1: Escrever teste de falha para o fluxo de autenticação desktop**
+- [ ] **Step 1: Write failing test for desktop authentication flow**
 
 ```typescript
 it('initiates desktop SSO flow, opens browser, polls sidecar session and exchanges token', async () => {
@@ -222,16 +222,16 @@ it('initiates desktop SSO flow, opens browser, polls sidecar session and exchang
 });
 ```
 
-- [ ] **Step 2: Executar teste para verificar falha**
+- [ ] **Step 2: Run test to verify failure**
 
 Run: `npm --prefix frontend test -- desktopAuth.test.ts`  
-Expected: FAIL com módulo inexistente
+Expected: FAIL with module not found
 
-- [ ] **Step 3: Implementar `desktopAuth.ts` e integração no `LoginPage.tsx`**
+- [ ] **Step 3: Implement `desktopAuth.ts` and integration into `LoginPage.tsx`**
 
-Em `desktopAuth.ts`, implementar função que abre a URL no navegador padrão usando o plugin opener do Tauri / `window.__TAURI__.core.invoke`, inicia polling em `http://127.0.0.1:<port>/auth/session` com timeout de 2 minutos, e troca o token em `/api/auth/desktop-exchange`. Em `LoginPage.tsx`, se `isDesktop()` for verdadeiro, interceptar o clique no botão SSO para acionar o fluxo desktop exibindo estado de espera (*"Aguardando autenticação no navegador..."*) com botão de cancelar.
+In `desktopAuth.ts`, implement function to launch external browser via Tauri shell opener, start polling `http://127.0.0.1:<port>/auth/session` with 2-minute timeout, and exchange token at `/api/auth/desktop-exchange`. In `LoginPage.tsx`, if `isDesktop()` is true, intercept SSO button click to trigger desktop flow, rendering waiting state with cancel button.
 
-- [ ] **Step 4: Executar testes de login do frontend**
+- [ ] **Step 4: Run frontend login tests**
 
 Run: `npm --prefix frontend test -- desktopAuth.test.ts login/page.test.tsx`  
 Expected: PASS
@@ -245,33 +245,33 @@ git commit -m "feat(desktop): integrate external browser sso flow with sidecar c
 
 ---
 
-### Task 5: Validação Geral de Builds, Tipos e Suítes de Testes
+### Task 5: Full Build, Types, and Test Suite Validation
 
 **Files:**
-- Test: Execução integral de testes (.NET backend, Vitest frontend e Desktop validators)
+- Test: Full test suite execution across all projects
 
-- [ ] **Step 1: Executar testes do backend .NET**
+- [ ] **Step 1: Run .NET backend tests**
 
 Run: `dotnet test backend/ApiDot.sln -v minimal`  
 Expected: PASS
 
-- [ ] **Step 2: Executar testes do frontend com Vitest**
+- [ ] **Step 2: Run frontend Vitest suite**
 
 Run: `npm --prefix frontend test`  
 Expected: PASS
 
-- [ ] **Step 3: Executar typecheck rigoroso do TypeScript**
+- [ ] **Step 3: Run strict TypeScript type check**
 
 Run: `./frontend/node_modules/.bin/tsc --project frontend/tsconfig.json --noEmit`  
-Expected: 0 erros
+Expected: 0 errors
 
-- [ ] **Step 4: Executar compilação de produção do Next.js e validação desktop**
+- [ ] **Step 4: Run Next.js production build and desktop validators**
 
 Run: `npm --prefix frontend run build`  
 Run: `npm --prefix desktop run test`  
 Expected: PASS
 
-- [ ] **Step 5: Commit final da integração**
+- [ ] **Step 5: Final commit**
 
 ```bash
 git add .
