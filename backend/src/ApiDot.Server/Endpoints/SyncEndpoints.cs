@@ -88,28 +88,40 @@ public static class SyncEndpoints
 
                 var normalizedType = mutation.EntityType.Trim().ToLowerInvariant();
 
-                switch (normalizedType)
+                try
                 {
-                    case "workspace":
-                        await ProcessWorkspaceMutationAsync(mutation, isUpsert, db, currentUserContext, conflicts, () => appliedCount++, cancellationToken);
-                        break;
+                    switch (normalizedType)
+                    {
+                        case "workspace":
+                            await ProcessWorkspaceMutationAsync(mutation, isUpsert, db, currentUserContext, conflicts, () => appliedCount++, cancellationToken);
+                            break;
 
-                    case "collection":
-                        await ProcessCollectionMutationAsync(mutation, isUpsert, db, currentUserContext, conflicts, () => appliedCount++, cancellationToken);
-                        break;
+                        case "collection":
+                            await ProcessCollectionMutationAsync(mutation, isUpsert, db, currentUserContext, conflicts, () => appliedCount++, cancellationToken);
+                            break;
 
-                    case "folder":
-                        await ProcessFolderMutationAsync(mutation, isUpsert, db, currentUserContext, conflicts, () => appliedCount++, cancellationToken);
-                        break;
+                        case "folder":
+                            await ProcessFolderMutationAsync(mutation, isUpsert, db, currentUserContext, conflicts, () => appliedCount++, cancellationToken);
+                            break;
 
-                    case "request":
-                    case "requestitem":
-                        await ProcessRequestMutationAsync(mutation, isUpsert, db, currentUserContext, conflicts, () => appliedCount++, cancellationToken);
-                        break;
+                        case "request":
+                        case "requestitem":
+                            await ProcessRequestMutationAsync(mutation, isUpsert, db, currentUserContext, conflicts, () => appliedCount++, cancellationToken);
+                            break;
 
-                    default:
-                        conflicts.Add(new SyncConflict(mutation.Id, mutation.EntityType, $"Unsupported entity type '{mutation.EntityType}'.", "Skipped"));
-                        break;
+                        default:
+                            conflicts.Add(new SyncConflict(mutation.Id, mutation.EntityType, $"Unsupported entity type '{mutation.EntityType}'.", "Skipped"));
+                            break;
+                    }
+                }
+                catch (DbUpdateException ex)
+                {
+                    db.ChangeTracker.Clear();
+                    conflicts.Add(new SyncConflict(
+                        mutation.Id,
+                        mutation.EntityType,
+                        $"Database constraint failure: {ex.InnerException?.Message ?? ex.Message}",
+                        "Skipped due to constraint violation"));
                 }
             }
 
@@ -284,22 +296,24 @@ public static class SyncEndpoints
             var name = string.IsNullOrWhiteSpace(payload?.Name) ? "New Collection" : payload.Name.Trim();
             if (name.Length > 200) name = name[..200];
 
-            var workspaceId = payload?.WorkspaceId ?? existing?.WorkspaceId ?? Guid.Empty;
-            if (workspaceId == Guid.Empty)
-            {
-                conflicts.Add(new SyncConflict(mutation.Id, "Collection", "WorkspaceId is required for collection.", "Skipped"));
-                return;
-            }
-
-            var workspaceExists = await db.Workspaces.TagWith("/* __ws_scope__ */").AnyAsync(w => w.Id == workspaceId, cancellationToken);
-            if (!workspaceExists || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, workspaceId, cancellationToken))
-            {
-                conflicts.Add(new SyncConflict(mutation.Id, "Collection", $"Workspace '{workspaceId}' not found or unauthorized.", "Skipped"));
-                return;
-            }
-
             if (existing != null)
             {
+                // [CRIT-1] Explicitly verify access to existing.WorkspaceId
+                if (!await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, existing.WorkspaceId, cancellationToken))
+                {
+                    conflicts.Add(new SyncConflict(mutation.Id, "Collection", "Unauthorized access to collection's workspace.", "Skipped"));
+                    return;
+                }
+
+                // [CRIT-1] Reject moving entities across workspaces via sync
+                if (payload?.WorkspaceId.HasValue == true && payload.WorkspaceId.Value != Guid.Empty && payload.WorkspaceId.Value != existing.WorkspaceId)
+                {
+                    conflicts.Add(new SyncConflict(mutation.Id, "Collection", "Moving entities across workspaces via sync is not supported.", "Skipped"));
+                    return;
+                }
+
+                var workspaceId = existing.WorkspaceId;
+
                 if (mutation.UpdatedAtUtc < existing.CreatedAtUtc)
                 {
                     var backupName = FormatBackupName(name);
@@ -331,6 +345,20 @@ public static class SyncEndpoints
             }
             else
             {
+                var workspaceId = payload?.WorkspaceId ?? Guid.Empty;
+                if (workspaceId == Guid.Empty)
+                {
+                    conflicts.Add(new SyncConflict(mutation.Id, "Collection", "WorkspaceId is required for collection.", "Skipped"));
+                    return;
+                }
+
+                var workspaceExists = await db.Workspaces.TagWith("/* __ws_scope__ */").AnyAsync(w => w.Id == workspaceId, cancellationToken);
+                if (!workspaceExists || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, workspaceId, cancellationToken))
+                {
+                    conflicts.Add(new SyncConflict(mutation.Id, "Collection", $"Workspace '{workspaceId}' not found or unauthorized.", "Skipped"));
+                    return;
+                }
+
                 var col = new Collection
                 {
                     Id = mutation.Id,
@@ -392,24 +420,36 @@ public static class SyncEndpoints
             var name = string.IsNullOrWhiteSpace(payload?.Name) ? "New Folder" : payload.Name.Trim();
             if (name.Length > 200) name = name[..200];
 
-            var workspaceId = payload?.WorkspaceId ?? existing?.WorkspaceId ?? Guid.Empty;
-            if (workspaceId == Guid.Empty)
-            {
-                conflicts.Add(new SyncConflict(mutation.Id, "Folder", "WorkspaceId is required for folder.", "Skipped"));
-                return;
-            }
-
-            var workspaceExists = await db.Workspaces.TagWith("/* __ws_scope__ */").AnyAsync(w => w.Id == workspaceId, cancellationToken);
-            if (!workspaceExists || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, workspaceId, cancellationToken))
-            {
-                conflicts.Add(new SyncConflict(mutation.Id, "Folder", $"Workspace '{workspaceId}' not found or unauthorized.", "Skipped"));
-                return;
-            }
-
-            var collectionId = payload?.CollectionId ?? existing?.CollectionId;
-
             if (existing != null)
             {
+                // [CRIT-1] Explicitly verify access to existing.WorkspaceId
+                if (!await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, existing.WorkspaceId, cancellationToken))
+                {
+                    conflicts.Add(new SyncConflict(mutation.Id, "Folder", "Unauthorized access to folder's workspace.", "Skipped"));
+                    return;
+                }
+
+                // [CRIT-1] Reject moving entities across workspaces via sync
+                if (payload?.WorkspaceId.HasValue == true && payload.WorkspaceId.Value != Guid.Empty && payload.WorkspaceId.Value != existing.WorkspaceId)
+                {
+                    conflicts.Add(new SyncConflict(mutation.Id, "Folder", "Moving entities across workspaces via sync is not supported.", "Skipped"));
+                    return;
+                }
+
+                var workspaceId = existing.WorkspaceId;
+                var collectionId = payload?.CollectionId ?? existing.CollectionId;
+
+                if (collectionId.HasValue)
+                {
+                    var collectionExists = await db.Collections.TagWith("/* __ws_scope__ */")
+                        .AnyAsync(c => c.Id == collectionId.Value && c.WorkspaceId == workspaceId, cancellationToken);
+                    if (!collectionExists)
+                    {
+                        conflicts.Add(new SyncConflict(mutation.Id, "Folder", $"Target collection '{collectionId}' not found in workspace.", "Skipped"));
+                        return;
+                    }
+                }
+
                 if (mutation.UpdatedAtUtc < existing.CreatedAtUtc)
                 {
                     var backupName = FormatBackupName(name);
@@ -439,6 +479,32 @@ public static class SyncEndpoints
             }
             else
             {
+                var workspaceId = payload?.WorkspaceId ?? Guid.Empty;
+                if (workspaceId == Guid.Empty)
+                {
+                    conflicts.Add(new SyncConflict(mutation.Id, "Folder", "WorkspaceId is required for folder.", "Skipped"));
+                    return;
+                }
+
+                var workspaceExists = await db.Workspaces.TagWith("/* __ws_scope__ */").AnyAsync(w => w.Id == workspaceId, cancellationToken);
+                if (!workspaceExists || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, workspaceId, cancellationToken))
+                {
+                    conflicts.Add(new SyncConflict(mutation.Id, "Folder", $"Workspace '{workspaceId}' not found or unauthorized.", "Skipped"));
+                    return;
+                }
+
+                var collectionId = payload?.CollectionId;
+                if (collectionId.HasValue)
+                {
+                    var collectionExists = await db.Collections.TagWith("/* __ws_scope__ */")
+                        .AnyAsync(c => c.Id == collectionId.Value && c.WorkspaceId == workspaceId, cancellationToken);
+                    if (!collectionExists)
+                    {
+                        conflicts.Add(new SyncConflict(mutation.Id, "Folder", $"Target collection '{collectionId}' not found in workspace.", "Skipped"));
+                        return;
+                    }
+                }
+
                 var folder = new Folder
                 {
                     Id = mutation.Id,
@@ -505,25 +571,26 @@ public static class SyncEndpoints
             var url = string.IsNullOrWhiteSpace(payload?.Url) ? "https://example.com" : payload.Url.Trim();
             if (url.Length > 2048) url = url[..2048];
 
-            var workspaceId = payload?.WorkspaceId ?? existing?.WorkspaceId ?? Guid.Empty;
-            if (workspaceId == Guid.Empty)
-            {
-                conflicts.Add(new SyncConflict(mutation.Id, "Request", "WorkspaceId is required for request.", "Skipped"));
-                return;
-            }
-
-            var workspaceExists = await db.Workspaces.TagWith("/* __ws_scope__ */").AnyAsync(w => w.Id == workspaceId, cancellationToken);
-            if (!workspaceExists || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, workspaceId, cancellationToken))
-            {
-                conflicts.Add(new SyncConflict(mutation.Id, "Request", $"Workspace '{workspaceId}' not found or unauthorized.", "Skipped"));
-                return;
-            }
-
-            var collectionId = payload?.CollectionId ?? existing?.CollectionId;
-            var folderId = payload?.FolderId ?? existing?.FolderId;
-
             if (existing != null)
             {
+                // [CRIT-1] Explicitly verify access to existing.WorkspaceId
+                if (!await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, existing.WorkspaceId, cancellationToken))
+                {
+                    conflicts.Add(new SyncConflict(mutation.Id, "Request", "Unauthorized access to request's workspace.", "Skipped"));
+                    return;
+                }
+
+                // [CRIT-1] Reject moving entities across workspaces via sync
+                if (payload?.WorkspaceId.HasValue == true && payload.WorkspaceId.Value != Guid.Empty && payload.WorkspaceId.Value != existing.WorkspaceId)
+                {
+                    conflicts.Add(new SyncConflict(mutation.Id, "Request", "Moving entities across workspaces via sync is not supported.", "Skipped"));
+                    return;
+                }
+
+                var workspaceId = existing.WorkspaceId;
+                var collectionId = payload?.CollectionId ?? existing.CollectionId;
+                var folderId = payload?.FolderId ?? existing.FolderId;
+
                 if (mutation.UpdatedAtUtc < existing.CreatedAtUtc)
                 {
                     var backupName = FormatBackupName(name);
@@ -565,6 +632,23 @@ public static class SyncEndpoints
             }
             else
             {
+                var workspaceId = payload?.WorkspaceId ?? Guid.Empty;
+                if (workspaceId == Guid.Empty)
+                {
+                    conflicts.Add(new SyncConflict(mutation.Id, "Request", "WorkspaceId is required for request.", "Skipped"));
+                    return;
+                }
+
+                var workspaceExists = await db.Workspaces.TagWith("/* __ws_scope__ */").AnyAsync(w => w.Id == workspaceId, cancellationToken);
+                if (!workspaceExists || !await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, workspaceId, cancellationToken))
+                {
+                    conflicts.Add(new SyncConflict(mutation.Id, "Request", $"Workspace '{workspaceId}' not found or unauthorized.", "Skipped"));
+                    return;
+                }
+
+                var collectionId = payload?.CollectionId;
+                var folderId = payload?.FolderId;
+
                 var reqItem = new RequestItem
                 {
                     Id = mutation.Id,

@@ -495,6 +495,199 @@ public class SyncBatchEndpointsTests : IClassFixture<WebApplicationFactory<Progr
         result.Conflicts[0].Reason.Should().Contain("Unsupported entity type");
     }
 
+    [Fact]
+    public async Task SyncBatch_BOLA_AttemptUpdateVictimCollectionFromAttackerWorkspace_IsRejectedWithConflict()
+    {
+        var userAId = Guid.NewGuid();
+        var userBId = Guid.NewGuid();
+        var wsAId = Guid.NewGuid();
+        var wsBId = Guid.NewGuid();
+        var colAId = Guid.NewGuid();
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
+            var userA = new User { Id = userAId, Email = "victim@sync.test", DisplayName = "Victim", PasswordHash = "hash" };
+            var userB = new User { Id = userBId, Email = "attacker@sync.test", DisplayName = "Attacker", PasswordHash = "hash" };
+            db.Users.AddRange(userA, userB);
+
+            var wsA = new Workspace { Id = wsAId, Name = "Victim WS", CreatedAtUtc = DateTime.UtcNow };
+            var wsB = new Workspace { Id = wsBId, Name = "Attacker WS", CreatedAtUtc = DateTime.UtcNow };
+            db.Workspaces.AddRange(wsA, wsB);
+
+            db.WorkspaceMembers.AddRange(
+                new WorkspaceMember { WorkspaceId = wsAId, UserId = userAId, Role = WorkspaceRole.Owner, JoinedAtUtc = DateTime.UtcNow },
+                new WorkspaceMember { WorkspaceId = wsBId, UserId = userBId, Role = WorkspaceRole.Owner, JoinedAtUtc = DateTime.UtcNow });
+
+            var colA = new Collection { Id = colAId, Name = "Original Victim Col", WorkspaceId = wsAId, CreatedAtUtc = DateTime.UtcNow.AddMinutes(-5) };
+            db.Collections.Add(colA);
+
+            await db.SaveChangesAsync();
+        }
+
+        // Attacker B attempts IDOR/BOLA update on Victim A's collection by pointing workspaceId to Attacker WS
+        var scopedFactoryB = CreateScopedFactory(userId: userBId, isRoot: false, isAuthenticated: true);
+        var clientB = scopedFactoryB.CreateClient();
+
+        var request = new SyncBatchRequest
+        {
+            Mutations =
+            [
+                new()
+                {
+                    Id = colAId,
+                    EntityType = "Collection",
+                    Action = "Upsert",
+                    UpdatedAtUtc = DateTime.UtcNow,
+                    PayloadJson = $"{{\"id\":\"{colAId}\",\"name\":\"Hacked Name\",\"workspaceId\":\"{wsBId}\"}}"
+                }
+            ]
+        };
+
+        var response = await clientB.PostAsJsonAsync("/api/sync/batch", request);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var result = await response.Content.ReadFromJsonAsync<SyncBatchResponse>();
+        result.Should().NotBeNull();
+        result!.AppliedCount.Should().Be(0);
+        result.ConflictCount.Should().Be(1);
+        result.Conflicts[0].Reason.Should().Contain("Unauthorized access to collection's workspace.");
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
+            var col = await db.Collections.TagWith("/* __ws_scope__ */").FirstOrDefaultAsync(c => c.Id == colAId);
+            col.Should().NotBeNull();
+            col!.Name.Should().Be("Original Victim Col");
+            col.WorkspaceId.Should().Be(wsAId);
+        }
+    }
+
+    [Fact]
+    public async Task SyncBatch_AttemptMoveEntityAcrossWorkspaces_IsRejectedWithConflict()
+    {
+        var userAId = Guid.NewGuid();
+        var ws1Id = Guid.NewGuid();
+        var ws2Id = Guid.NewGuid();
+        var colId = Guid.NewGuid();
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
+            var userA = new User { Id = userAId, Email = "owner@sync.test", DisplayName = "Owner", PasswordHash = "hash" };
+            db.Users.Add(userA);
+
+            var ws1 = new Workspace { Id = ws1Id, Name = "WS 1", CreatedAtUtc = DateTime.UtcNow };
+            var ws2 = new Workspace { Id = ws2Id, Name = "WS 2", CreatedAtUtc = DateTime.UtcNow };
+            db.Workspaces.AddRange(ws1, ws2);
+
+            db.WorkspaceMembers.AddRange(
+                new WorkspaceMember { WorkspaceId = ws1Id, UserId = userAId, Role = WorkspaceRole.Owner, JoinedAtUtc = DateTime.UtcNow },
+                new WorkspaceMember { WorkspaceId = ws2Id, UserId = userAId, Role = WorkspaceRole.Owner, JoinedAtUtc = DateTime.UtcNow });
+
+            var col = new Collection { Id = colId, Name = "Col 1", WorkspaceId = ws1Id, CreatedAtUtc = DateTime.UtcNow.AddMinutes(-5) };
+            db.Collections.Add(col);
+
+            await db.SaveChangesAsync();
+        }
+
+        var scopedFactory = CreateScopedFactory(userId: userAId, isRoot: false, isAuthenticated: true);
+        var client = scopedFactory.CreateClient();
+
+        var request = new SyncBatchRequest
+        {
+            Mutations =
+            [
+                new()
+                {
+                    Id = colId,
+                    EntityType = "Collection",
+                    Action = "Upsert",
+                    UpdatedAtUtc = DateTime.UtcNow,
+                    PayloadJson = $"{{\"id\":\"{colId}\",\"name\":\"Col 1 Moved\",\"workspaceId\":\"{ws2Id}\"}}"
+                }
+            ]
+        };
+
+        var response = await client.PostAsJsonAsync("/api/sync/batch", request);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var result = await response.Content.ReadFromJsonAsync<SyncBatchResponse>();
+        result.Should().NotBeNull();
+        result!.AppliedCount.Should().Be(0);
+        result.ConflictCount.Should().Be(1);
+        result.Conflicts[0].Reason.Should().Be("Moving entities across workspaces via sync is not supported.");
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
+            var col = await db.Collections.TagWith("/* __ws_scope__ */").FirstOrDefaultAsync(c => c.Id == colId);
+            col.Should().NotBeNull();
+            col!.WorkspaceId.Should().Be(ws1Id);
+        }
+    }
+
+    [Fact]
+    public async Task SyncBatch_ForeignKeyViolation_RecordsConflictAndContinuesBatch()
+    {
+        var client = _factory.CreateClient();
+        var wsId = Guid.NewGuid();
+        var validWs2Id = Guid.NewGuid();
+        var nonExistentColId = Guid.NewGuid();
+        var invalidReqId = Guid.NewGuid();
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
+            var ws = new Workspace { Id = wsId, Name = "Parent WS", CreatedAtUtc = DateTime.UtcNow };
+            db.Workspaces.Add(ws);
+            await db.SaveChangesAsync();
+        }
+
+        var request = new SyncBatchRequest
+        {
+            Mutations =
+            [
+                new()
+                {
+                    Id = invalidReqId,
+                    EntityType = "Request",
+                    Action = "Upsert",
+                    UpdatedAtUtc = DateTime.UtcNow,
+                    PayloadJson = $"{{\"id\":\"{invalidReqId}\",\"name\":\"Invalid Req\",\"url\":\"https://fk.test\",\"workspaceId\":\"{wsId}\",\"collectionId\":\"{nonExistentColId}\"}}"
+                },
+                new()
+                {
+                    Id = validWs2Id,
+                    EntityType = "Workspace",
+                    Action = "Upsert",
+                    UpdatedAtUtc = DateTime.UtcNow,
+                    PayloadJson = $"{{\"id\":\"{validWs2Id}\",\"name\":\"Valid Subsequent WS\"}}"
+                }
+            ]
+        };
+
+        var response = await client.PostAsJsonAsync("/api/sync/batch", request);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var result = await response.Content.ReadFromJsonAsync<SyncBatchResponse>();
+        result.Should().NotBeNull();
+        result!.AppliedCount.Should().Be(1);
+        result.ConflictCount.Should().Be(1);
+        result.Conflicts[0].Reason.Should().Contain("Database constraint failure");
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
+            var ws2 = await db.Workspaces.TagWith("/* __ws_scope__ */").FirstOrDefaultAsync(w => w.Id == validWs2Id);
+            ws2.Should().NotBeNull();
+            ws2!.Name.Should().Be("Valid Subsequent WS");
+
+            var req = await db.RequestItems.TagWith("/* __ws_scope__ */").FirstOrDefaultAsync(r => r.Id == invalidReqId);
+            req.Should().BeNull();
+        }
+    }
+
     private sealed class TestUserContext : ICurrentUserContext
     {
         public TestUserContext(bool isRoot, bool isAuthenticated, Guid? userId = null)
