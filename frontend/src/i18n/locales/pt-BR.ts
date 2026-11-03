@@ -663,6 +663,8 @@ const ptBR = {
     desktopSuccessTitle: 'Autenticação Concluída com Sucesso',
     desktopSuccessMessage: 'Você foi autenticado com sucesso. Você já pode fechar esta aba e voltar ao ApiDot Desktop.',
     desktopSuccessButton: 'Abrir o ApiDot Desktop',
+    waitingBrowserAuth: 'Aguardando autenticação no navegador...',
+    cancelWaiting: 'Cancelar',
   },
   home: {
     loading: 'Carregando workspace...',

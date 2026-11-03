@@ -661,6 +661,8 @@ const enUS = {
     desktopSuccessTitle: 'Authentication Successful',
     desktopSuccessMessage: 'You have successfully signed in. You can now close this tab and return to ApiDot Desktop.',
     desktopSuccessButton: 'Open ApiDot Desktop',
+    waitingBrowserAuth: 'Waiting for authentication in your browser...',
+    cancelWaiting: 'Cancel',
   },
   home: {
     loading: 'Loading workspace...',

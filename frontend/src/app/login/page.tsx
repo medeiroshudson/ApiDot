@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useTranslation } from '@/hooks/useTranslation';
+import { isDesktop } from '@/lib/desktop/runtime';
+import { startDesktopSsoFlow } from '@/lib/desktop/desktopAuth';
 import { LogIn, Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
@@ -17,12 +19,21 @@ export default function LoginPage() {
     fetchConfig,
     isAuthenticated,
     loginLocal,
+    loginDesktopSso,
   } = useAuthStore();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isWaitingBrowserAuth, setIsWaitingBrowserAuth] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   const getReturnUrl = () => {
     if (typeof window !== 'undefined') {
@@ -74,6 +85,51 @@ export default function LoginPage() {
   }, []);
 
   const isOidcEnabled = config === null || config.oidcEnabled === true;
+
+  const handleDesktopSso = async () => {
+    if (isWaitingBrowserAuth) return;
+    setError(null);
+    setIsWaitingBrowserAuth(true);
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    try {
+      const result = await startDesktopSsoFlow({
+        returnUrl: getReturnUrl(),
+        signal: abortController.signal,
+      });
+
+      if (abortController.signal.aborted) {
+        return;
+      }
+
+      if (result.success && result.user) {
+        loginDesktopSso(result.user);
+        routerRef.current.replace(getReturnUrl());
+      } else if (!result.success && result.error && result.error !== 'Authentication cancelled') {
+        setError(result.error);
+      }
+    } catch (err: unknown) {
+      if (!abortController.signal.aborted) {
+        const message = err instanceof Error ? err.message : t('auth.authFailed');
+        setError(message);
+      }
+    } finally {
+      if (abortControllerRef.current === abortController) {
+        setIsWaitingBrowserAuth(false);
+        abortControllerRef.current = null;
+      }
+    }
+  };
+
+  const handleCancelDesktopAuth = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsWaitingBrowserAuth(false);
+  };
 
   const handleLocalSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -127,21 +183,48 @@ export default function LoginPage() {
         {/* SSO Button & Divider */}
         {isOidcEnabled && (
           <div className="flex flex-col gap-5">
-            <a
-              href={`/api/auth/login${getReturnUrl() !== '/' ? `?returnUrl=${encodeURIComponent(getReturnUrl())}` : ''}`}
-              role="button"
-              onKeyDown={(e) => {
-                if (e.key === ' ' || e.key === 'Spacebar') {
-                  e.preventDefault();
-                  window.location.href = `/api/auth/login${getReturnUrl() !== '/' ? `?returnUrl=${encodeURIComponent(getReturnUrl())}` : ''}`;
-                }
-              }}
-              aria-label={t('auth.ssoSignIn')}
-              className="w-full inline-flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-medium text-sm transition-colors shadow-lg shadow-blue-600/20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-neutral-900 cursor-pointer"
-            >
-              <LogIn className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span>{t('auth.ssoSignIn')}</span>
-            </a>
+            {isWaitingBrowserAuth ? (
+              <div className="flex flex-col items-center gap-3 p-4 rounded-xl bg-neutral-950/80 border border-neutral-800 text-center animate-in fade-in duration-200">
+                <div className="flex items-center gap-2.5 text-sm text-neutral-300">
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-500 shrink-0" aria-hidden="true" />
+                  <span>{t('auth.waitingBrowserAuth')}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCancelDesktopAuth}
+                  aria-label={t('auth.cancelWaiting')}
+                  className="px-3 py-1 rounded-md text-xs font-medium text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
+                >
+                  {t('auth.cancelWaiting')}
+                </button>
+              </div>
+            ) : isDesktop() ? (
+              <button
+                type="button"
+                onClick={handleDesktopSso}
+                aria-label={t('auth.ssoSignIn')}
+                className="w-full inline-flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-medium text-sm transition-colors shadow-lg shadow-blue-600/20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-neutral-900 cursor-pointer"
+              >
+                <LogIn className="w-4 h-4 shrink-0" aria-hidden="true" />
+                <span>{t('auth.ssoSignIn')}</span>
+              </button>
+            ) : (
+              <a
+                href={`/api/auth/login${getReturnUrl() !== '/' ? `?returnUrl=${encodeURIComponent(getReturnUrl())}` : ''}`}
+                role="button"
+                onKeyDown={(e) => {
+                  if (e.key === ' ' || e.key === 'Spacebar') {
+                    e.preventDefault();
+                    window.location.href = `/api/auth/login${getReturnUrl() !== '/' ? `?returnUrl=${encodeURIComponent(getReturnUrl())}` : ''}`;
+                  }
+                }}
+                aria-label={t('auth.ssoSignIn')}
+                className="w-full inline-flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-medium text-sm transition-colors shadow-lg shadow-blue-600/20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-neutral-900 cursor-pointer"
+              >
+                <LogIn className="w-4 h-4 shrink-0" aria-hidden="true" />
+                <span>{t('auth.ssoSignIn')}</span>
+              </a>
+            )}
 
             <div className="relative flex items-center justify-center">
               <div className="absolute inset-0 flex items-center">

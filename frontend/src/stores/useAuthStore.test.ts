@@ -202,6 +202,24 @@ describe('useAuthStore', () => {
       expect(state.isLoading).toBe(false);
       expect(state.error).toBe('Invalid email or password.');
     });
+
+    it('loginDesktopSso sets user, isAuthenticated and initializes user locale', () => {
+      const userWithLocale: AuthUser = {
+        ...mockUser,
+        locale: 'pt-BR',
+      };
+      const initSpy = vi.spyOn(useI18nStore.getState(), 'initFromUser');
+
+      useAuthStore.getState().loginDesktopSso(userWithLocale);
+
+      const state = useAuthStore.getState();
+      expect(state.user).toEqual(userWithLocale);
+      expect(state.isAuthenticated).toBe(true);
+      expect(state.isLoading).toBe(false);
+      expect(state.error).toBeNull();
+      expect(initSpy).toHaveBeenCalledWith('pt-BR');
+      initSpy.mockRestore();
+    });
   });
 
   describe('5. logout', () => {

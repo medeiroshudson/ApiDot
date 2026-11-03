@@ -28,6 +28,7 @@ export interface AuthState {
   checkAuth: () => Promise<AuthUser | null>;
   fetchConfig: () => Promise<AuthConfig>;
   loginLocal: (email: string, password: string) => Promise<AuthUser>;
+  loginDesktopSso: (user: AuthUser) => void;
   logout: () => Promise<void>;
   reset: () => void;
 }
@@ -114,6 +115,18 @@ export const useAuthStore = create<AuthState>()((set) => ({
         error: message,
       });
       throw err;
+    }
+  },
+
+  loginDesktopSso: (user: AuthUser) => {
+    set({
+      user,
+      isAuthenticated: true,
+      isLoading: false,
+      error: null,
+    });
+    if (user.locale) {
+      useI18nStore.getState().initFromUser(user.locale);
     }
   },
 
