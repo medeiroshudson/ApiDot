@@ -1,10 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod sidecar;
-
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use sidecar::{get_sidecar_info, SidecarManager};
+use apidot_desktop::sidecar::{get_sidecar_info, SidecarManager};
 
 fn main() {
     let sidecar_manager = Arc::new(Mutex::new(SidecarManager::new()));

@@ -54,9 +54,26 @@ impl SidecarManager {
         }
     }
 
+    /// Verifica se o processo filho do sidecar está em execução ativa, limpando referências em caso de término.
+    pub fn poll_active(&mut self) -> bool {
+        if let Some(child) = &mut self.child {
+            match child.try_wait() {
+                Ok(Some(_status)) => {
+                    self.child = None;
+                    self.info = None;
+                    false
+                }
+                Ok(None) => true,
+                Err(_) => false,
+            }
+        } else {
+            false
+        }
+    }
+
     /// Verifica se o processo filho do sidecar está ativo e os metadados de porta estão disponíveis.
-    pub fn is_running(&self) -> bool {
-        self.child.is_some() && self.info.is_some()
+    pub fn is_running(&mut self) -> bool {
+        self.poll_active() && self.info.is_some()
     }
 
     /// Retorna uma cópia dos metadados de porta e segredo do sidecar, se disponível.
@@ -67,8 +84,8 @@ impl SidecarManager {
     /// Inicia o processo `apidot-agent sidecar --port 0 --secret <secret>`, captura a porta atribuída e armazena os metadados.
     pub async fn start_sidecar(&mut self) -> Result<SidecarInfo, String> {
         // Se já estiver em execução com metadados válidos, retorna as informações atuais
-        if let Some(info) = &self.info {
-            if self.child.is_some() {
+        if self.poll_active() {
+            if let Some(info) = &self.info {
                 return Ok(info.clone());
             }
         }
@@ -85,6 +102,7 @@ impl SidecarManager {
             .arg("0")
             .arg("--secret")
             .arg(&secret)
+            .env("APIDOT_SIDECAR_SECRET", &secret)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .kill_on_drop(true);
@@ -258,8 +276,11 @@ pub fn resolve_sidecar_binary_path() -> PathBuf {
         "binaries/apidot-agent",
         "binaries/apidot-agent.exe",
         "backend/src/ApiDot.Agent/bin/Release/net9.0/publish/ApiDot.Agent",
+        "backend/src/ApiDot.Agent/bin/Release/net9.0/publish/ApiDot.Agent.exe",
         "backend/src/ApiDot.Agent/bin/Debug/net9.0/ApiDot.Agent",
+        "backend/src/ApiDot.Agent/bin/Debug/net9.0/ApiDot.Agent.exe",
         "apidot-agent",
+        "apidot-agent.exe",
     ];
 
     for candidate in &dev_candidates {
@@ -278,7 +299,7 @@ pub async fn get_sidecar_info(
     state: tauri::State<'_, Arc<Mutex<SidecarManager>>>,
 ) -> Result<SidecarInfo, String> {
     let mut manager = state.lock().await;
-    if manager.info.is_none() && manager.child.is_none() {
+    if !manager.poll_active() {
         manager.start_sidecar().await
     } else {
         match &manager.info {
