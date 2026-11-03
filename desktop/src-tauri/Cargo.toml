@@ -3,6 +3,15 @@ name = "apidot-desktop"
 version = "0.5.1"
 edition = "2021"
 
+[lib]
+name = "apidot_desktop"
+path = "src/lib.rs"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "apidot-desktop"
+path = "src/main.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

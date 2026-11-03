@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
-    "test": "node validate-config.js"
+    "test": "node validate-config.js && node validate-sidecar.js"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0"
