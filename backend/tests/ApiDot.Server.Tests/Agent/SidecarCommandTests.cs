@@ -12,6 +12,7 @@ using Xunit;
 
 namespace ApiDot.Server.Tests.Agent;
 
+[Collection("SidecarCommandTests")]
 public class SidecarCommandTests
 {
     private class TestHttpMessageHandler : HttpMessageHandler
@@ -287,16 +288,17 @@ public class SidecarCommandTests
     [Fact]
     public async Task Sidecar_WhenServiceIsNotActive_StartsWebSocketConnection()
     {
+        using var cts = new CancellationTokenSource();
+        cts.CancelAfter(10000);
+
         var webSocketStarted = false;
         SidecarCommand.WebSocketStarter = (_, _) =>
         {
             webSocketStarted = true;
+            cts.Cancel();
             return Task.CompletedTask;
         };
         SidecarCommand.IsServiceActiveCheck = () => false;
-
-        using var cts = new CancellationTokenSource();
-        cts.CancelAfter(500);
 
         var options = new AgentCliOptions
         {

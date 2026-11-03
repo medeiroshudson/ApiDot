@@ -58,14 +58,14 @@ public class TargetResolver : ITargetResolver
         if (collection is not null && collection.DefaultTarget != ExecutionTarget.Inherit)
         {
             return collection.DefaultTarget == ExecutionTarget.Agent
-                ? new TargetResolutionResult(ExecutionTarget.Agent, collection.TargetDeviceId ?? globalDeviceId ?? activeDeviceId)
+                ? new TargetResolutionResult(ExecutionTarget.Agent, ResolveAgentDeviceId())
                 : new TargetResolutionResult(ExecutionTarget.Server, null);
         }
 
         if (globalTarget != ExecutionTarget.Inherit)
         {
             return globalTarget == ExecutionTarget.Agent
-                ? new TargetResolutionResult(ExecutionTarget.Agent, ResolveAgentDeviceId())
+                ? new TargetResolutionResult(ExecutionTarget.Agent, globalDeviceId ?? activeDeviceId)
                 : new TargetResolutionResult(ExecutionTarget.Server, null);
         }
 

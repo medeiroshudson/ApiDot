@@ -206,6 +206,7 @@ export function useCollectionTree(
           workspaceId: targetWorkspaceId,
           name: data.name,
           defaultTarget: data.defaultTarget,
+          targetDeviceId: data.targetDeviceId,
         });
         await reload();
         return created;
