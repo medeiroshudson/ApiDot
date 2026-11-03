@@ -238,3 +238,11 @@ public static class SidecarCommand
         }
     }
 }
+
+public class SidecarAgentCommand : IAgentCommand
+{
+    public bool CanHandle(AgentCommandType commandType) => commandType == AgentCommandType.Sidecar;
+
+    public Task<int> ExecuteAsync(AgentCliOptions options, CancellationToken cancellationToken = default) =>
+        SidecarCommand.RunAsync(options, cancellationToken);
+}
