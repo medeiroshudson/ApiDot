@@ -75,6 +75,9 @@ function resolveEffectiveTarget(
   if (useDeviceStore.getState().activeDeviceId) {
     return 'Agent';
   }
+  if (isDesktop()) {
+    return 'Agent';
+  }
   return 'Server';
 }
 

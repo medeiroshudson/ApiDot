@@ -38,6 +38,21 @@ public static class SidecarCommand
 
         app.Use(async (context, next) =>
         {
+            var origin = context.Request.Headers["Origin"].ToString();
+            context.Response.Headers["Access-Control-Allow-Origin"] = string.IsNullOrEmpty(origin) ? "*" : origin;
+            context.Response.Headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS";
+            context.Response.Headers["Access-Control-Allow-Headers"] = $"{SecretHeaderName}, Content-Type, Authorization";
+            if (context.Request.Headers.ContainsKey("Access-Control-Request-Private-Network"))
+            {
+                context.Response.Headers["Access-Control-Allow-Private-Network"] = "true";
+            }
+
+            if (HttpMethods.IsOptions(context.Request.Method))
+            {
+                context.Response.StatusCode = StatusCodes.Status204NoContent;
+                return;
+            }
+
             if (context.Request.Path.StartsWithSegments("/execute"))
             {
                 if (!context.Request.Headers.TryGetValue(SecretHeaderName, out var providedSecret)

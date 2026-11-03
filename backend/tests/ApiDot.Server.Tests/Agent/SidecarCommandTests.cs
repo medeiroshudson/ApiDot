@@ -182,6 +182,34 @@ public class SidecarCommandTests
     }
 
     [Fact]
+    public async Task Sidecar_LoopbackListener_OptionsPreflight_Returns204WithCorsHeaders()
+    {
+        var secret = "super-secret-123";
+        var app = SidecarCommand.BuildWebApplication(0, secret);
+        await app.StartAsync();
+
+        try
+        {
+            var port = SidecarCommand.GetBoundPort(app);
+            using var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            using var request = new HttpRequestMessage(HttpMethod.Options, "/execute");
+            request.Headers.Add("Origin", "http://localhost:3000");
+            request.Headers.Add("Access-Control-Request-Method", "POST");
+            request.Headers.Add("Access-Control-Request-Headers", "x-apidot-sidecar-secret, content-type");
+
+            var response = await client.SendAsync(request);
+            response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+            response.Headers.GetValues("Access-Control-Allow-Origin").Should().Contain("http://localhost:3000");
+            response.Headers.GetValues("Access-Control-Allow-Methods").FirstOrDefault().Should().Contain("POST");
+        }
+        finally
+        {
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task Sidecar_LoopbackListener_WithValidSecret_ExecutesDispatchAndReturnsPayload()
     {
         var secret = "super-secret-123";
