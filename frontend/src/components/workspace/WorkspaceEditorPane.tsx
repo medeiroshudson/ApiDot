@@ -5,11 +5,15 @@ import { PanelSplitter } from '@/components/layout/PanelSplitter';
 import {
   RequestEditor,
   RequestData,
+  ExecutionTarget,
 } from '@/components/request/RequestEditor';
 import { ResponseViewer, ResponseData } from '@/components/response/ResponseViewer';
 import { AutocompleteVariable } from '@/components/request/RequestAutocomplete';
 import { DependencyRequest, interpolateVariables } from '@/lib/variables';
 import { generateCurlCommand } from '@/lib/curl/curlGenerator';
+import { WorkspaceTreeDto } from '@/lib/treeApi';
+import { isDesktop, getSidecarInfo } from '@/lib/desktop/runtime';
+import { executeViaDesktopSidecar } from '@/lib/desktop/desktopExecutor';
 import { useLayoutStore } from '@/stores/useLayoutStore';
 import { useRequestStore, CLEAN_SCRATCHPAD, getScratchpadKey } from '@/stores/useRequestStore';
 import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
@@ -22,13 +26,57 @@ export interface WorkspaceEditorPaneProps {
   requestId?: string | null;
 }
 
+function resolveEffectiveTarget(
+  target: ExecutionTarget | undefined,
+  tree: WorkspaceTreeDto | null,
+  requestId: string | null
+): ExecutionTarget {
+  if (target && target !== 'Inherit') {
+    return target;
+  }
+  if (requestId && tree?.collections) {
+    for (const col of tree.collections) {
+      if (col.requests?.some((r) => r.id === requestId)) {
+        if (col.defaultTarget && col.defaultTarget !== 'Inherit') {
+          return col.defaultTarget;
+        }
+        break;
+      }
+      const findInFolders = (folders: typeof col.folders): ExecutionTarget | null => {
+        for (const f of folders) {
+          if (f.requests?.some((r) => r.id === requestId)) {
+            if (f.defaultTarget && f.defaultTarget !== 'Inherit') return f.defaultTarget;
+            if (col.defaultTarget && col.defaultTarget !== 'Inherit') return col.defaultTarget;
+            return null;
+          }
+          if (f.subFolders) {
+            const found = findInFolders(f.subFolders);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      const foundInFolder = findInFolders(col.folders);
+      if (foundInFolder) return foundInFolder;
+    }
+  }
+  const globalTarget = useDeviceStore.getState().globalDefaultTarget;
+  if (globalTarget && globalTarget !== 'Inherit') {
+    return globalTarget;
+  }
+  if (useDeviceStore.getState().activeDeviceId) {
+    return 'Agent';
+  }
+  return 'Server';
+}
+
 export function WorkspaceEditorPane({
   workspaceId,
   requestId = null,
 }: WorkspaceEditorPaneProps): React.JSX.Element {
   const { t } = useTranslation();
   const workspaceRef = useRef<HTMLDivElement>(null);
-  const [isDesktop, setIsDesktop] = useState(() => {
+  const [isDesktopLayout, setIsDesktopLayout] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth >= 768;
     }
@@ -88,7 +136,7 @@ export function WorkspaceEditorPane({
   useEffect(() => {
     const checkDesktop = () => {
       if (typeof window !== 'undefined') {
-        setIsDesktop(window.innerWidth >= 768);
+        setIsDesktopLayout(window.innerWidth >= 768);
       }
     };
     checkDesktop();
@@ -224,98 +272,126 @@ export function WorkspaceEditorPane({
         });
         setExecutedCurl(executedCurlCmd);
 
-        const activeDeviceId = useDeviceStore.getState().activeDeviceId;
-        const executionHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (activeDeviceId && activeDeviceId.trim()) {
-          executionHeaders['X-Device-Id'] = activeDeviceId.trim();
-        }
+        const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+        const resolvedTarget = resolveEffectiveTarget(request.target, tree, requestId);
+        const isAgentTarget = resolvedTarget === 'Agent';
 
-        const res = await fetch('/api/requests/execute', {
-          method: 'POST',
-          headers: executionHeaders,
-          body: JSON.stringify({
-            workspaceId: workspaceId || undefined,
+        let responsePayload: ResponseData;
+
+        if (isDesktop() && (isAgentTarget || isOffline)) {
+          const sidecarInfo = await getSidecarInfo();
+          const dispatch = {
             method: request.method,
             url: resolvedUrl,
-            target: request.target,
             headers: interpolatedHeaders,
+            bodyType: interpolatedBody
+              ? (interpolatedBody.trim().startsWith('{') || interpolatedBody.trim().startsWith('[') ? 1 : 4)
+              : 0,
             bodyContent: interpolatedBody,
-            environmentName: activeEnvironment || undefined,
-            environmentVariables: activeVariables,
-            variables: activeVariables,
-          }),
-        });
+            target: request.target,
+            timeoutSeconds: 30,
+            ignoreSslErrors: false,
+          };
 
-        const durationMs = Date.now() - startTime;
-        const contentType = res.headers.get('content-type') || '';
-        let bodyText = '';
-        let timing = null;
-        let targetStatusCode = res.status;
-        let targetStatusText = res.statusText || (res.ok ? 'OK' : 'Error');
-        const targetHeaders: Record<string, string> = {};
+          responsePayload = await executeViaDesktopSidecar({
+            port: sidecarInfo.port,
+            secret: sidecarInfo.secret,
+            dispatch,
+          });
+        } else {
+          const activeDeviceId = useDeviceStore.getState().activeDeviceId;
+          const executionHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (activeDeviceId && activeDeviceId.trim()) {
+            executionHeaders['X-Device-Id'] = activeDeviceId.trim();
+          }
 
-        if (
-          contentType.includes('application/json') ||
-          contentType.includes('application/problem+json')
-        ) {
-          const json = await res.json();
-          if (json.timing) {
-            timing = json.timing;
-          }
-          if (typeof json.statusCode === 'number') {
-            targetStatusCode = json.statusCode;
-          }
-          if (json.statusText) {
-            targetStatusText = json.statusText;
-          }
-          if (json.headers && typeof json.headers === 'object') {
-            Object.entries(json.headers).forEach(([k, v]) => {
-              targetHeaders[k] = Array.isArray(v) ? v.join(', ') : String(v);
+          const res = await fetch('/api/requests/execute', {
+            method: 'POST',
+            headers: executionHeaders,
+            body: JSON.stringify({
+              workspaceId: workspaceId || undefined,
+              method: request.method,
+              url: resolvedUrl,
+              target: request.target,
+              headers: interpolatedHeaders,
+              bodyContent: interpolatedBody,
+              environmentName: activeEnvironment || undefined,
+              environmentVariables: activeVariables,
+              variables: activeVariables,
+            }),
+          });
+
+          const durationMs = Date.now() - startTime;
+          const contentType = res.headers.get('content-type') || '';
+          let bodyText = '';
+          let timing = null;
+          let targetStatusCode = res.status;
+          let targetStatusText = res.statusText || (res.ok ? 'OK' : 'Error');
+          const targetHeaders: Record<string, string> = {};
+
+          if (
+            contentType.includes('application/json') ||
+            contentType.includes('application/problem+json')
+          ) {
+            const json = await res.json();
+            if (json.timing) {
+              timing = json.timing;
+            }
+            if (typeof json.statusCode === 'number') {
+              targetStatusCode = json.statusCode;
+            }
+            if (json.statusText) {
+              targetStatusText = json.statusText;
+            }
+            if (json.headers && typeof json.headers === 'object') {
+              Object.entries(json.headers).forEach(([k, v]) => {
+                targetHeaders[k] = Array.isArray(v) ? v.join(', ') : String(v);
+              });
+            }
+
+            if (typeof json.body === 'string') {
+              if (json.body.length === 0) {
+                bodyText = '';
+              } else {
+                try {
+                  const binary = atob(json.body);
+                  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+                  bodyText = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+                } catch {
+                  bodyText = json.body;
+                }
+              }
+            } else if (json.body !== undefined && json.body !== null) {
+              bodyText = JSON.stringify(json.body, null, 2);
+            } else if (json.errorMessage) {
+              bodyText = json.errorMessage;
+            } else {
+              bodyText = JSON.stringify(json, null, 2);
+            }
+          } else {
+            bodyText = await res.text();
+            res.headers.forEach((val, key) => {
+              targetHeaders[key] = val;
             });
           }
 
-          if (typeof json.body === 'string') {
-            if (json.body.length === 0) {
-              bodyText = '';
-            } else {
-              try {
-                const binary = atob(json.body);
-                const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-                bodyText = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-              } catch {
-                bodyText = json.body;
-              }
-            }
-          } else if (json.body !== undefined && json.body !== null) {
-            bodyText = JSON.stringify(json.body, null, 2);
-          } else if (json.errorMessage) {
-            bodyText = json.errorMessage;
-          } else {
-            bodyText = JSON.stringify(json, null, 2);
-          }
-        } else {
-          bodyText = await res.text();
-          res.headers.forEach((val, key) => {
-            targetHeaders[key] = val;
-          });
+          responsePayload = {
+            statusCode: targetStatusCode,
+            statusText: targetStatusText,
+            durationMs,
+            headers: targetHeaders,
+            body: bodyText,
+            timing,
+          };
         }
-
-        const responsePayload: ResponseData = {
-          statusCode: targetStatusCode,
-          statusText: targetStatusText,
-          durationMs,
-          headers: targetHeaders,
-          body: bodyText,
-          timing,
-        };
 
         setResponse(responsePayload, requestId, workspaceId);
 
-        let parsedBodyForHistory: unknown = bodyText;
+        let parsedBodyForHistory: unknown = responsePayload.body || '';
         try {
-          parsedBodyForHistory = JSON.parse(bodyText);
+          parsedBodyForHistory = JSON.parse(responsePayload.body || '');
         } catch {
-          parsedBodyForHistory = bodyText;
+          parsedBodyForHistory = responsePayload.body;
         }
 
         const effectiveName =
@@ -330,8 +406,8 @@ export function WorkspaceEditorPane({
           method: request.method,
           url: request.url,
           response: {
-            statusCode: targetStatusCode,
-            headers: targetHeaders,
+            statusCode: responsePayload.statusCode,
+            headers: (responsePayload.headers as Record<string, string>) || {},
             body: parsedBodyForHistory as any,
           },
         };
@@ -414,13 +490,13 @@ export function WorkspaceEditorPane({
         availableVariables={availableVariables}
         activeTab={activeRequestTab}
         onTabChange={setActiveRequestTab}
-        isDesktop={isDesktop}
+        isDesktop={isDesktopLayout}
         requestDetailsRatio={requestResponseRatio}
         activeMobilePane={activeMobilePane}
         onMobilePaneChange={setActiveMobilePane}
         responseStatusCode={response?.statusCode}
         splitterSlot={
-          isDesktop ? (
+          isDesktopLayout ? (
             <PanelSplitter
               id="request-response-splitter"
               ariaLabel={t('request.resizeRequestResponse')}
