@@ -8,7 +8,7 @@ import { useRequestStore, getScratchpadKey } from '@/stores/useRequestStore';
 import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
 import { useDeviceStore } from '@/stores/useDeviceStore';
 import { WorkspaceTreeDto } from '@/lib/treeApi';
-import { clearSidecarInfoCache } from '@/lib/desktop/runtime';
+import { clearSidecarInfoCache, getCachedSidecarInfo } from '@/lib/desktop/runtime';
 
 const mockPush = vi.fn();
 const mockReplace = vi.fn();
@@ -927,6 +927,13 @@ describe('WorkspaceEditorPane', () => {
       const calledUrls = fetchSpy.mock.calls.map((call) => String(call[0]));
       expect(calledUrls).not.toContain('/api/requests/execute');
 
+      // Verify that dispatch payload does NOT contain target string (Finding 1: Native AOT compatibility)
+      const executeCall = fetchSpy.mock.calls.find((call) => String(call[0]) === 'http://127.0.0.1:54321/execute');
+      expect(executeCall).toBeDefined();
+      const postedDispatch = JSON.parse(executeCall[1].body);
+      expect(postedDispatch.target).toBeUndefined();
+      expect(typeof postedDispatch.bodyType).toBe('number');
+
       // Verify response was saved to store
       const scratchKey = getScratchpadKey('ws-1');
       const response = useRequestStore.getState().responsesByRequestId[scratchKey];
@@ -1122,6 +1129,179 @@ describe('WorkspaceEditorPane', () => {
 
       const calledUrls = fetchSpy.mock.calls.map((call) => String(call[0]));
       expect(calledUrls.some((u) => u.startsWith('http://127.0.0.1'))).toBe(false);
+    });
+
+    it('enables Send button in desktop mode with Agent target even if useDeviceStore has no registered devices (Finding 2)', async () => {
+      (window as any).__TAURI_INTERNALS__ = { invoke: vi.fn() };
+      useDeviceStore.getState().setDevices([]);
+      useDeviceStore.getState().setActiveDeviceId(null);
+
+      useRequestStore.getState().setCurrentEditorData({
+        method: 'GET',
+        url: 'http://localhost:3000/api/local',
+        target: 'Agent',
+        headers: '',
+        body: '',
+        auth: { type: 'none' },
+      });
+
+      await renderEditorPane('ws-1', null);
+
+      const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
+      expect(sendButton).not.toBeDisabled();
+    });
+
+    it('resolves target in nested folders respecting parentFolder.defaultTarget when subFolder is Inherit (Finding 3)', async () => {
+      const mockInvoke = vi.fn().mockResolvedValue({
+        port: 54321,
+        secret: 'nested-folder-secret',
+      });
+      (window as any).__TAURI_INTERNALS__ = { invoke: mockInvoke };
+
+      const treeWithNestedFolders: WorkspaceTreeDto = {
+        workspaceId: 'ws-nested',
+        workspaceName: 'Nested WS',
+        collections: [
+          {
+            id: 'col-nested',
+            name: 'API',
+            defaultTarget: 'Server', // Collection is explicitly Server
+            openApiSpecUrl: null,
+            folders: [
+              {
+                id: 'folder-parent',
+                name: 'Parent Folder',
+                defaultTarget: 'Agent', // Parent folder overrides collection with Agent!
+                collectionId: 'col-nested',
+                parentId: null,
+                requests: [],
+                subFolders: [
+                  {
+                    id: 'folder-sub',
+                    name: 'Sub Folder',
+                    defaultTarget: 'Inherit', // Sub folder inherits from parent folder!
+                    collectionId: 'col-nested',
+                    parentId: 'folder-parent',
+                    requests: [
+                      {
+                        id: 'req-nested',
+                        name: 'Nested Request',
+                        method: 'GET',
+                        url: 'http://localhost:3000/nested',
+                        target: 'Inherit', // Request inherits from sub folder!
+                        bodyType: 'None',
+                        bodyContent: null,
+                        headersJson: '',
+                        collectionId: 'col-nested',
+                        folderId: 'folder-sub',
+                      },
+                    ],
+                    subFolders: [],
+                  },
+                ],
+              },
+            ],
+            requests: [],
+          },
+        ],
+      };
+
+      const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+        const url = String(input);
+        if (url.includes('/api/workspaces/ws-nested/tree')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => treeWithNestedFolders,
+          } as any);
+        }
+        if (url === 'http://127.0.0.1:54321/execute') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({
+              statusCode: 200,
+              statusText: 'OK',
+              body: JSON.stringify({ nestedSuccess: true }),
+            }),
+          } as any);
+        }
+        return Promise.resolve({ ok: true } as any);
+      });
+
+      await renderEditorPane('ws-nested', 'req-nested', treeWithNestedFolders);
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('http://localhost:3000/nested')).toBeInTheDocument();
+      });
+
+      const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
+      await act(async () => {
+        fireEvent.click(sendButton);
+      });
+
+      // Because req-nested -> folder-sub (Inherit) -> folder-parent (Agent), resolved target is Agent!
+      // In desktop mode, Agent target dispatches to sidecar loopback:
+      await waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalledWith(
+          'http://127.0.0.1:54321/execute',
+          expect.objectContaining({
+            method: 'POST',
+            headers: expect.objectContaining({
+              'X-ApiDot-Sidecar-Secret': 'nested-folder-secret',
+            }),
+          })
+        );
+      });
+
+      const calledUrls = fetchSpy.mock.calls.map((call) => String(call[0]));
+      expect(calledUrls).not.toContain('/api/requests/execute');
+    });
+
+    it('invalidates sidecar info cache when desktop sidecar dispatch fails (Finding 4)', async () => {
+      const mockInvoke = vi.fn().mockResolvedValue({
+        port: 54321,
+        secret: 'stale-secret',
+      });
+      (window as any).__TAURI_INTERNALS__ = { invoke: mockInvoke };
+
+      vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+        const url = String(input);
+        if (url.includes('/api/workspaces/ws-1/tree')) {
+          return Promise.resolve({ ok: true, status: 200, json: async () => mockTree } as any);
+        }
+        if (url.startsWith('http://127.0.0.1')) {
+          return Promise.reject(new Error('Connection refused at 54321'));
+        }
+        return Promise.resolve({ ok: true } as any);
+      });
+
+      useRequestStore.getState().setCurrentEditorData({
+        method: 'GET',
+        url: 'http://localhost:3000/api/local',
+        target: 'Agent',
+        headers: '',
+        body: '',
+        auth: { type: 'none' },
+      });
+
+      await renderEditorPane('ws-1', null);
+
+      const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
+      await act(async () => {
+        fireEvent.click(sendButton);
+      });
+
+      await waitFor(() => {
+        const scratchKey = getScratchpadKey('ws-1');
+        const resp = useRequestStore.getState().responsesByRequestId[scratchKey];
+        expect(resp?.statusCode).toBe(0);
+        expect(resp?.errorMessage).toContain('Connection refused');
+      });
+
+      // Verify that getCachedSidecarInfo() is now null because clearSidecarInfoCache was called in catch block
+      expect(getCachedSidecarInfo()).toBeNull();
     });
   });
 });

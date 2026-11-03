@@ -114,6 +114,36 @@ describe('desktopExecutor & runtime', () => {
       expect(result.body).toBe('{"ok":true}');
     });
 
+    it('serializes dispatch with integer bodyType and without string target for Native AOT', async () => {
+      let sentBody = '';
+      const mockFetch = vi.fn().mockImplementation((_url: any, init: any) => {
+        sentBody = init.body;
+        return Promise.resolve({
+          status: 200,
+          ok: true,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => ({ statusCode: 200, statusText: 'OK', body: '' }),
+        });
+      });
+      globalThis.fetch = mockFetch;
+
+      await executeViaDesktopSidecar({
+        port: 54321,
+        secret: 'test-secret',
+        dispatch: {
+          method: 'POST',
+          url: 'http://localhost:3000/api/items',
+          headers: { 'Content-Type': 'application/json' },
+          bodyType: 1,
+          bodyContent: '{"test":true}',
+        },
+      });
+
+      const parsed = JSON.parse(sentBody);
+      expect(parsed.bodyType).toBe(1);
+      expect(parsed.target).toBeUndefined();
+    });
+
     it('decodes base64-encoded response body from sidecar byte payload', async () => {
       const rawText = JSON.stringify({ message: 'Hello from sidecar!' });
       const base64Body = btoa(rawText);

@@ -8,9 +8,9 @@ export interface HttpRequestDispatch {
   method: string;
   url: string;
   headers?: Record<string, string>;
-  bodyType?: number | string;
+  bodyType?: number;
   bodyContent?: string | null;
-  target?: string;
+  target?: number;
   timeoutSeconds?: number;
   ignoreSslErrors?: boolean;
 }

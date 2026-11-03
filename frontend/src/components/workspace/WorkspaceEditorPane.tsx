@@ -12,7 +12,7 @@ import { AutocompleteVariable } from '@/components/request/RequestAutocomplete';
 import { DependencyRequest, interpolateVariables } from '@/lib/variables';
 import { generateCurlCommand } from '@/lib/curl/curlGenerator';
 import { WorkspaceTreeDto } from '@/lib/treeApi';
-import { isDesktop, getSidecarInfo } from '@/lib/desktop/runtime';
+import { isDesktop, getSidecarInfo, clearSidecarInfoCache } from '@/lib/desktop/runtime';
 import { executeViaDesktopSidecar } from '@/lib/desktop/desktopExecutor';
 import { useLayoutStore } from '@/stores/useLayoutStore';
 import { useRequestStore, CLEAN_SCRATCHPAD, getScratchpadKey } from '@/stores/useRequestStore';
@@ -42,21 +42,29 @@ function resolveEffectiveTarget(
         }
         break;
       }
-      const findInFolders = (folders: typeof col.folders): ExecutionTarget | null => {
+      const findInFolders = (
+        folders: typeof col.folders,
+        inheritedTarget: ExecutionTarget | null
+      ): ExecutionTarget | null => {
         for (const f of folders) {
+          const currentTarget =
+            f.defaultTarget && f.defaultTarget !== 'Inherit'
+              ? f.defaultTarget
+              : inheritedTarget;
+
           if (f.requests?.some((r) => r.id === requestId)) {
-            if (f.defaultTarget && f.defaultTarget !== 'Inherit') return f.defaultTarget;
+            if (currentTarget) return currentTarget;
             if (col.defaultTarget && col.defaultTarget !== 'Inherit') return col.defaultTarget;
             return null;
           }
-          if (f.subFolders) {
-            const found = findInFolders(f.subFolders);
+          if (f.subFolders && f.subFolders.length > 0) {
+            const found = findInFolders(f.subFolders, currentTarget);
             if (found) return found;
           }
         }
         return null;
       };
-      const foundInFolder = findInFolders(col.folders);
+      const foundInFolder = findInFolders(col.folders, null);
       if (foundInFolder) return foundInFolder;
     }
   }
@@ -109,7 +117,7 @@ export function WorkspaceEditorPane({
   const isLoading = useRequestStore((s) => s.isLoading);
   const isDeviceAgentOnline = useDeviceStore((s) => s.isAgentOnline());
   const isRequestAgentOnline = useRequestStore((s) => s.isAgentOnline);
-  const isAgentOnline = isDeviceAgentOnline || isRequestAgentOnline;
+  const isAgentOnline = isDesktop() || isDeviceAgentOnline || isRequestAgentOnline;
   const requestHistory = useRequestStore((s) => s.requestHistory);
   const setCurrentEditorData = useRequestStore((s) => s.setCurrentEditorData);
   const setIsLoading = useRequestStore((s) => s.setIsLoading);
@@ -288,7 +296,6 @@ export function WorkspaceEditorPane({
               ? (interpolatedBody.trim().startsWith('{') || interpolatedBody.trim().startsWith('[') ? 1 : 4)
               : 0,
             bodyContent: interpolatedBody,
-            target: request.target,
             timeoutSeconds: 30,
             ignoreSslErrors: false,
           };
@@ -414,6 +421,9 @@ export function WorkspaceEditorPane({
 
         addRequestHistory(executedItem);
       } catch (err: unknown) {
+        if (isDesktop()) {
+          clearSidecarInfoCache();
+        }
         const durationMs = Date.now() - startTime;
         const msg = err instanceof Error ? err.message : 'Failed to dispatch request';
         setResponse(
