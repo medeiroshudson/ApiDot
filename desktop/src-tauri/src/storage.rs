@@ -40,7 +40,7 @@ pub fn sanitize_relative_path(rel_path: &str) -> Result<PathBuf, String> {
     }
 
     // Normaliza separadores de caminho estilo Windows para Unix antes de analisar componentes
-    let normalized = rel_path.replace('\\', '/');
+    let normalized = rel_path.replace('\\', "/");
     let trimmed = normalized.trim().trim_start_matches('/');
     if trimmed.is_empty() {
         return Err("Invalid empty path".to_string());
@@ -113,7 +113,7 @@ pub async fn fs_load_storage(rel_path: String) -> Result<String, String> {
 /// Comando IPC Tauri para listar entradas (arquivos/diretórios) sob `~/.apidot/storage/<rel_dir>`.
 #[tauri::command]
 pub async fn fs_list_storage(rel_dir: String) -> Result<Vec<String>, String> {
-    let normalized = rel_dir.replace('\\', '/');
+    let normalized = rel_dir.replace('\\', "/");
     let trimmed = normalized.trim().trim_matches('/');
     let dir_path = if trimmed.is_empty() || trimmed == "." {
         get_storage_root()

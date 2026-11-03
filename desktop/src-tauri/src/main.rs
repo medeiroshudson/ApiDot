@@ -2,10 +2,8 @@
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use apidot_desktop::sidecar::{get_sidecar_info, SidecarManager};
-use apidot_desktop::storage::{
-    fs_delete_storage, fs_list_storage, fs_load_storage, fs_save_storage,
-};
+use apidot_desktop::sidecar::*;
+use apidot_desktop::storage::*;
 
 fn main() {
     let sidecar_manager = Arc::new(Mutex::new(SidecarManager::new()));

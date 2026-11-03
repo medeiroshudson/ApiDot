@@ -54,7 +54,7 @@ function run() {
     'storage.rs missing check preventing root directory reference from sanitize_relative_path'
   );
   assert(
-    storageRs.includes("replace('\\\\', '/')"),
+    storageRs.includes('replace(\'\\\\\', "/")') || storageRs.includes("replace('\\\\', '/')"),
     'storage.rs missing backslash normalization for cross-platform traversal prevention'
   );
   assert(

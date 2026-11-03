@@ -2,10 +2,13 @@ use apidot_desktop::storage::{
     fs_delete_storage, fs_list_storage, fs_load_storage, fs_save_storage, get_storage_root,
     sanitize_relative_path,
 };
-use std::path::PathBuf;
+use std::sync::Mutex;
+
+static TEST_ENV_MUTEX: Mutex<()> = Mutex::new(());
 
 #[test]
 fn test_storage_root_resolution() {
+    let _guard = TEST_ENV_MUTEX.lock().unwrap();
     let root = get_storage_root();
     assert!(root.to_string_lossy().contains(".apidot"));
     assert!(root.to_string_lossy().contains("storage"));
@@ -14,6 +17,7 @@ fn test_storage_root_resolution() {
 
 #[test]
 fn test_storage_root_custom_env() {
+    let _guard = TEST_ENV_MUTEX.lock().unwrap();
     let temp_dir = std::env::temp_dir().join(format!("apidot_test_root_{}", uuid::Uuid::new_v4()));
     std::env::set_var("APIDOT_STORAGE_ROOT", &temp_dir);
 
@@ -88,6 +92,7 @@ fn test_path_traversal_prevention_empty_and_null() {
 
 #[test]
 fn test_sanitize_valid_relative_paths() {
+    let _guard = TEST_ENV_MUTEX.lock().unwrap();
     let root = get_storage_root();
 
     let valid_paths = [
@@ -105,6 +110,7 @@ fn test_sanitize_valid_relative_paths() {
 
 #[tokio::test]
 async fn test_save_load_delete_roundtrip() {
+    let _guard = TEST_ENV_MUTEX.lock().unwrap();
     let test_dir = std::env::temp_dir().join(format!("apidot_test_io_{}", uuid::Uuid::new_v4()));
     std::env::set_var("APIDOT_STORAGE_ROOT", &test_dir);
 
@@ -138,6 +144,7 @@ async fn test_save_load_delete_roundtrip() {
 
 #[tokio::test]
 async fn test_list_nonexistent_directory_returns_empty() {
+    let _guard = TEST_ENV_MUTEX.lock().unwrap();
     let test_dir = std::env::temp_dir().join(format!("apidot_test_list_{}", uuid::Uuid::new_v4()));
     std::env::set_var("APIDOT_STORAGE_ROOT", &test_dir);
 
@@ -151,6 +158,7 @@ async fn test_list_nonexistent_directory_returns_empty() {
 
 #[tokio::test]
 async fn test_delete_nonexistent_file_is_idempotent() {
+    let _guard = TEST_ENV_MUTEX.lock().unwrap();
     let test_dir = std::env::temp_dir().join(format!("apidot_test_del_{}", uuid::Uuid::new_v4()));
     std::env::set_var("APIDOT_STORAGE_ROOT", &test_dir);
 
@@ -163,6 +171,7 @@ async fn test_delete_nonexistent_file_is_idempotent() {
 
 #[tokio::test]
 async fn test_delete_root_directory_is_rejected() {
+    let _guard = TEST_ENV_MUTEX.lock().unwrap();
     let test_dir = std::env::temp_dir().join(format!("apidot_test_del_root_{}", uuid::Uuid::new_v4()));
     std::env::set_var("APIDOT_STORAGE_ROOT", &test_dir);
 
