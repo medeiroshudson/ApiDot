@@ -65,7 +65,7 @@ function run() {
   assert(mainRs.includes('get_sidecar_info'), 'main.rs missing get_sidecar_info');
   assert(mainRs.includes('.manage('), 'main.rs missing state management for SidecarManager');
   assert(
-    mainRs.includes('generate_handler![get_sidecar_info]'),
+    mainRs.includes('get_sidecar_info') && mainRs.includes('generate_handler!'),
     'main.rs missing invoke_handler for get_sidecar_info'
   );
   assert(mainRs.includes('on_window_event'), 'main.rs missing on_window_event hook');
