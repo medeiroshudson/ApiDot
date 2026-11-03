@@ -19,9 +19,18 @@ fn main() {
             fs_list_storage,
             fs_delete_storage,
         ])
+        .on_menu_event(|app, event| {
+            if event.id().as_ref() == "open_settings" {
+                let _ = tauri::Emitter::emit(app, "open-global-settings", ());
+            }
+        })
         .setup({
             let sidecar_manager = sidecar_manager.clone();
-            move |_app| {
+            move |app| {
+                // Attach application menu
+                let menu = apidot_desktop::menu::build_app_menu(app.handle())?;
+                app.set_menu(menu)?;
+
                 // Start sidecar in the background upon application startup
                 tauri::async_runtime::spawn(async move {
                     let mut mgr = sidecar_manager.lock().await;
