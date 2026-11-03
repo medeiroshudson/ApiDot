@@ -930,7 +930,7 @@ describe('WorkspaceEditorPane', () => {
       // Verify that dispatch payload does NOT contain target string (Finding 1: Native AOT compatibility)
       const executeCall = fetchSpy.mock.calls.find((call) => String(call[0]) === 'http://127.0.0.1:54321/execute');
       expect(executeCall).toBeDefined();
-      const postedDispatch = JSON.parse(executeCall[1].body);
+      const postedDispatch = JSON.parse(String(executeCall?.[1]?.body || '{}'));
       expect(postedDispatch.target).toBeUndefined();
       expect(typeof postedDispatch.bodyType).toBe('number');
 
@@ -1173,7 +1173,7 @@ describe('WorkspaceEditorPane', () => {
                 name: 'Parent Folder',
                 defaultTarget: 'Agent', // Parent folder overrides collection with Agent!
                 collectionId: 'col-nested',
-                parentId: null,
+                parentFolderId: null,
                 requests: [],
                 subFolders: [
                   {
@@ -1181,7 +1181,7 @@ describe('WorkspaceEditorPane', () => {
                     name: 'Sub Folder',
                     defaultTarget: 'Inherit', // Sub folder inherits from parent folder!
                     collectionId: 'col-nested',
-                    parentId: 'folder-parent',
+                    parentFolderId: 'folder-parent',
                     requests: [
                       {
                         id: 'req-nested',

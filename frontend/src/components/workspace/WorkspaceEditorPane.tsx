@@ -5,8 +5,8 @@ import { PanelSplitter } from '@/components/layout/PanelSplitter';
 import {
   RequestEditor,
   RequestData,
-  ExecutionTarget,
 } from '@/components/request/RequestEditor';
+import { ExecutionTarget } from '@/components/request/TargetSelector';
 import { ResponseViewer, ResponseData } from '@/components/response/ResponseViewer';
 import { AutocompleteVariable } from '@/components/request/RequestAutocomplete';
 import { DependencyRequest, interpolateVariables } from '@/lib/variables';

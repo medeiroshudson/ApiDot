@@ -1,6 +1,7 @@
 import {
   getPendingMutations,
   clearPendingMutations,
+  queuePendingMutation,
   PendingMutation,
   StorageAdapters,
 } from '@/lib/storage/offlineStorage';
