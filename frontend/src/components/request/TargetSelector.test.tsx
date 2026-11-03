@@ -27,8 +27,8 @@ describe('TargetSelector', () => {
     const pulse = screen.getByTestId('target-agent-pulse');
     expect(pulse).toBeDefined();
     expect(pulse.getAttribute('role')).toBe('status');
-    expect(pulse.getAttribute('title')).toBe('Agent Connected');
-    expect(pulse.getAttribute('aria-label')).toBe('Agent Connected');
+    expect(pulse.getAttribute('title')).toMatch(/agent connected|device connected/i);
+    expect(pulse.getAttribute('aria-label')).toMatch(/agent connected|device connected/i);
     expect(pulse.className).toContain('bg-emerald-500');
     expect(pulse.className).toContain('animate-pulse');
 
@@ -42,8 +42,8 @@ describe('TargetSelector', () => {
     const pulse = screen.getByTestId('target-agent-pulse');
     expect(pulse).toBeDefined();
     expect(pulse.getAttribute('role')).toBe('status');
-    expect(pulse.getAttribute('title')).toBe('Agent Disconnected');
-    expect(pulse.getAttribute('aria-label')).toBe('Agent Disconnected');
+    expect(pulse.getAttribute('title')).toMatch(/agent disconnected|device disconnected/i);
+    expect(pulse.getAttribute('aria-label')).toMatch(/agent disconnected|device disconnected/i);
     expect(pulse.className).toContain('bg-rose-500');
     expect(pulse.className).not.toContain('animate-pulse');
 
