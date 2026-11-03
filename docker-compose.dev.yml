@@ -61,3 +61,15 @@ services:
           path: ./frontend/package.json
         - action: rebuild
           path: ./frontend/package-lock.json
+
+  agent:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.agent
+    environment:
+      - APIDOT_SERVER_URL=http://server:5000
+      - APIDOT_AGENT_TOKEN=${APIDOT_AGENT_TOKEN:-}
+      - APIDOT_AGENT_NAME=${APIDOT_AGENT_NAME:-docker-agent-dev}
+      - APIDOT_IGNORE_SSL=${APIDOT_IGNORE_SSL:-true}
+    depends_on:
+      - server

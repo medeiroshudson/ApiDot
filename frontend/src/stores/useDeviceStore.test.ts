@@ -197,8 +197,25 @@ describe('useDeviceStore', () => {
       expect(deviceApi.createDevice).toHaveBeenCalledWith('New Node');
       expect(result).toEqual(createResponse);
       expect(useDeviceStore.getState().devices).toHaveLength(4);
+      expect(useDeviceStore.getState().activeDeviceId).toBe('new-dev-id');
       expect(useDeviceStore.getState().isLoading).toBe(false);
       expect(useDeviceStore.getState().error).toBeNull();
+    });
+
+    it('preserves existing activeDeviceId when createDevice succeeds', async () => {
+      useDeviceStore.getState().setActiveDeviceId('existing-dev-id');
+      const createResponse: CreateAgentDeviceResponse = {
+        id: 'new-dev-2',
+        name: 'Node 2',
+        rawToken: 'token',
+        tokenPrefix: 'prefix',
+        createdAtUtc: '2026-10-27T12:00:00Z',
+      };
+      vi.mocked(deviceApi.createDevice).mockResolvedValueOnce(createResponse);
+      vi.mocked(deviceApi.fetchDevices).mockResolvedValueOnce(mockDevices);
+
+      await useDeviceStore.getState().createDevice('Node 2');
+      expect(useDeviceStore.getState().activeDeviceId).toBe('existing-dev-id');
     });
 
     it('sets error and throws when createDevice fails', async () => {
@@ -355,6 +372,35 @@ describe('useDeviceStore', () => {
       // Null device
       useDeviceStore.getState().setActiveDeviceId(null);
       expect(useDeviceStore.getState().isCurrentDeviceOnline()).toBe(false);
+    });
+
+    it('isAgentOnline returns true for active online device and falls back to any online device when activeDeviceId is null', () => {
+      // 1. Explicit active device is online
+      useDeviceStore.getState().setActiveDeviceId('device-guid-123');
+      expect(useDeviceStore.getState().isAgentOnline()).toBe(true);
+
+      // 2. Explicit active device is offline
+      useDeviceStore.getState().setActiveDeviceId('device-guid-456');
+      expect(useDeviceStore.getState().isAgentOnline()).toBe(false);
+
+      // 3. Explicit active device is revoked
+      useDeviceStore.getState().setActiveDeviceId('device-guid-revoked');
+      expect(useDeviceStore.getState().isAgentOnline()).toBe(false);
+
+      // 4. Null activeDeviceId falls back to any online, non-revoked device
+      useDeviceStore.getState().setActiveDeviceId(null);
+      expect(useDeviceStore.getState().isAgentOnline()).toBe(true); // device-guid-123 is online and not revoked
+
+      // 5. When all devices are offline or revoked, returns false
+      useDeviceStore.getState().setDevices([
+        { ...mockDevices[1] }, // offline
+        { ...mockDevices[2] }, // revoked
+      ]);
+      expect(useDeviceStore.getState().isAgentOnline()).toBe(false);
+
+      // 6. When devices list is empty, returns false
+      useDeviceStore.getState().setDevices([]);
+      expect(useDeviceStore.getState().isAgentOnline()).toBe(false);
     });
   });
 

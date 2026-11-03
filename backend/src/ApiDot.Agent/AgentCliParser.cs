@@ -145,11 +145,15 @@ public static class AgentCliParser
             }
         }
 
-        // Fallback to configuration file if not provided via CLI
+        // Fallback to environment variables, then configuration file if not provided via CLI
+        serverUrl ??= Environment.GetEnvironmentVariable("APIDOT_SERVER_URL");
         serverUrl ??= fileConfig?.ServerUrl;
+        token ??= Environment.GetEnvironmentVariable("APIDOT_AGENT_TOKEN");
         token ??= fileConfig?.Token;
+        agentName ??= Environment.GetEnvironmentVariable("APIDOT_AGENT_NAME");
         agentName ??= fileConfig?.AgentName;
-        var effectiveIgnoreSsl = ignoreSsl ?? fileConfig?.IgnoreSsl ?? false;
+        var envIgnoreSsl = Environment.GetEnvironmentVariable("APIDOT_IGNORE_SSL") is string ssl && (ssl == "1" || ssl.Equals("true", StringComparison.OrdinalIgnoreCase));
+        var effectiveIgnoreSsl = ignoreSsl ?? (envIgnoreSsl ? true : fileConfig?.IgnoreSsl ?? false);
 
         if (string.IsNullOrWhiteSpace(serverUrl))
         {

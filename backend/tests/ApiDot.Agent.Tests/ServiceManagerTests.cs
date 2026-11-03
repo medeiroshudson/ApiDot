@@ -248,6 +248,65 @@ public class ServiceManagerTests : IDisposable
     }
 
     [Fact]
+    public void AgentCliParser_Parse_WhenEnvVarsProvided_ShouldUseEnvVars()
+    {
+        var prevServer = Environment.GetEnvironmentVariable("APIDOT_SERVER_URL");
+        var prevToken = Environment.GetEnvironmentVariable("APIDOT_AGENT_TOKEN");
+        var prevName = Environment.GetEnvironmentVariable("APIDOT_AGENT_NAME");
+        var prevSsl = Environment.GetEnvironmentVariable("APIDOT_IGNORE_SSL");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("APIDOT_SERVER_URL", "http://env-server:5000");
+            Environment.SetEnvironmentVariable("APIDOT_AGENT_TOKEN", "apidot_dev_envtoken123");
+            Environment.SetEnvironmentVariable("APIDOT_AGENT_NAME", "env-agent-node");
+            Environment.SetEnvironmentVariable("APIDOT_IGNORE_SSL", "true");
+
+            string[] args = ["connect"];
+            var options = AgentCliParser.Parse(args, fileConfig: null);
+
+            options.Command.Should().Be(AgentCommandType.Connect);
+            options.ServerUrl.Should().Be("http://env-server:5000");
+            options.Token.Should().Be("apidot_dev_envtoken123");
+            options.AgentName.Should().Be("env-agent-node");
+            options.IgnoreSsl.Should().BeTrue();
+            options.ErrorMessage.Should().BeNull();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("APIDOT_SERVER_URL", prevServer);
+            Environment.SetEnvironmentVariable("APIDOT_AGENT_TOKEN", prevToken);
+            Environment.SetEnvironmentVariable("APIDOT_AGENT_NAME", prevName);
+            Environment.SetEnvironmentVariable("APIDOT_IGNORE_SSL", prevSsl);
+        }
+    }
+
+    [Fact]
+    public void AgentCliParser_Parse_WhenCliOverridesEnvVars_ShouldPreferCliArgs()
+    {
+        var prevServer = Environment.GetEnvironmentVariable("APIDOT_SERVER_URL");
+        var prevToken = Environment.GetEnvironmentVariable("APIDOT_AGENT_TOKEN");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("APIDOT_SERVER_URL", "http://env-server:5000");
+            Environment.SetEnvironmentVariable("APIDOT_AGENT_TOKEN", "apidot_dev_envtoken123");
+
+            string[] args = ["connect", "--server", "https://cli-server.example.com", "--token", "apidot_dev_clitoken456"];
+            var options = AgentCliParser.Parse(args, fileConfig: null);
+
+            options.ServerUrl.Should().Be("https://cli-server.example.com");
+            options.Token.Should().Be("apidot_dev_clitoken456");
+            options.ErrorMessage.Should().BeNull();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("APIDOT_SERVER_URL", prevServer);
+            Environment.SetEnvironmentVariable("APIDOT_AGENT_TOKEN", prevToken);
+        }
+    }
+
+    [Fact]
     public void AgentCliParser_Parse_WhenNeitherCliNorConfigProvided_ShouldReturnError()
     {
         string[] args = ["connect"];
