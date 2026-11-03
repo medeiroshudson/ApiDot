@@ -45,6 +45,8 @@ import {
   useWorkspaceContext,
 } from '@/context/WorkspaceContext';
 import { useTranslation } from '@/hooks/useTranslation';
+import { isDesktop } from '@/lib/desktop/runtime';
+import { startSyncListener } from '@/lib/sync/syncManager';
 import { CheckCircle2, X, AlertCircle } from 'lucide-react';
 
 const STORAGE_KEY_ACTIVE_WORKSPACE = 'apidot_active_workspace_id';
@@ -246,6 +248,23 @@ function WorkspaceShellContent({
       stopDevicePolling();
     };
   }, [isSettingsOpen, startDevicePolling, stopDevicePolling]);
+
+  // Reconnection synchronization listener for Desktop environment
+  useEffect(() => {
+    if (!isDesktop()) {
+      return;
+    }
+    const cleanup = startSyncListener({
+      onSyncComplete: (result) => {
+        if (result.appliedCount > 0) {
+          void reloadTree();
+        }
+      },
+    });
+    return () => {
+      cleanup();
+    };
+  }, [reloadTree]);
 
   // cURL Import / Export States
   const [isImportCurlModalOpen, setIsImportCurlModalOpen] = useState(false);

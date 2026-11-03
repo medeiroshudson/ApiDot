@@ -347,4 +347,24 @@ describe('WorkspaceShell', () => {
     unmount();
     expect(stopPollingSpy).toHaveBeenCalled();
   });
+
+  it('starts sync listener when isDesktop() is true and cleans up on unmount', async () => {
+    (window as any).__TAURI__ = {};
+    const mockCleanup = vi.fn();
+    const syncManager = await import('@/lib/sync/syncManager');
+    const startSyncSpy = vi.spyOn(syncManager, 'startSyncListener').mockReturnValue(mockCleanup);
+
+    const { unmount } = render(
+      <WorkspaceShell workspaceId="ws-test">
+        <div>Child Area</div>
+      </WorkspaceShell>
+    );
+
+    expect(startSyncSpy).toHaveBeenCalled();
+
+    unmount();
+    expect(mockCleanup).toHaveBeenCalled();
+
+    delete (window as any).__TAURI__;
+  });
 });
