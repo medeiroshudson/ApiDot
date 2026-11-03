@@ -1,4 +1,5 @@
 ﻿using ApiDot.Agent;
+using ApiDot.Agent.Commands;
 using ApiDot.Agent.Configuration;
 using ApiDot.Agent.Services;
 
@@ -22,6 +23,9 @@ if (!string.IsNullOrEmpty(options.ErrorMessage))
 
 switch (options.Command)
 {
+    case AgentCommandType.Sidecar:
+        return await RunSidecarAsync(options);
+
     case AgentCommandType.Connect:
         return await RunConnectAsync(options);
 
@@ -103,6 +107,18 @@ switch (options.Command)
         return 1;
 }
 
+static async Task<int> RunSidecarAsync(AgentCliOptions options)
+{
+    using var cts = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) =>
+    {
+        e.Cancel = true;
+        cts.Cancel();
+    };
+
+    return await SidecarCommand.RunAsync(options, cts.Token);
+}
+
 static async Task<int> RunConnectAsync(AgentCliOptions options)
 {
     using var cts = new CancellationTokenSource();
@@ -122,10 +138,12 @@ static void PrintUsage()
     Console.WriteLine("""
     Usage:
       ApiDot.Agent connect [--server <url>] [--token <token>] [--name <name>] [--ignore-ssl]
+      ApiDot.Agent sidecar [--port <port>] [--secret <secret>] [--config <path>]
       ApiDot.Agent service <command> [options]
 
     Commands:
       connect           Connect to ApiDot hub server and listen for execution dispatches
+      sidecar           Run local loopback HTTP listener for Tauri desktop app
       service install   Install background service/daemon and save configuration
       service start     Start background service
       service stop      Stop background service

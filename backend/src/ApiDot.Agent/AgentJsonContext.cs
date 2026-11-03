@@ -17,6 +17,6 @@ namespace ApiDot.Agent;
 [JsonSerializable(typeof(ExecutionTarget))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(Dictionary<string, string[]>))]
-internal partial class AgentJsonContext : JsonSerializerContext
+public partial class AgentJsonContext : JsonSerializerContext
 {
 }
