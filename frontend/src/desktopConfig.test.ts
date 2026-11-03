@@ -79,8 +79,8 @@ describe('Tauri v2 Desktop Configuration', () => {
 
     expect(pkg.name).toBe('apidot-desktop');
     expect(pkg.version).toBe('0.5.1');
-    expect(pkg.scripts?.dev).toBe('tauri dev');
-    expect(pkg.scripts?.build).toBe('tauri build');
+    expect(pkg.scripts?.dev).toContain('tauri dev');
+    expect(pkg.scripts?.build).toContain('tauri build');
     expect(pkg.dependencies?.['@tauri-apps/api']).toBeDefined();
     expect(pkg.devDependencies?.['@tauri-apps/cli']).toBeDefined();
   });

@@ -1,2 +1,4 @@
 node_modules/
 target/
+src-tauri/binaries/
+!src-tauri/binaries/.gitkeep

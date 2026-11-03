@@ -3,8 +3,9 @@
   "version": "0.5.1",
   "private": true,
   "scripts": {
-    "dev": "tauri dev",
-    "build": "tauri build",
+    "prepare": "node prepare.js",
+    "dev": "node prepare.js && tauri dev",
+    "build": "node prepare.js && tauri build",
     "test": "node validate-config.js && node validate-sidecar.js && node validate-storage.js"
   },
   "dependencies": {

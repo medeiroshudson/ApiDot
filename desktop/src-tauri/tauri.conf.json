@@ -4,6 +4,7 @@
   "version": "0.5.1",
   "identifier": "dev.hmedeiros.apidot",
   "build": {
+    "beforeDevCommand": "npm --prefix ../frontend run dev",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../../frontend/out"
   },
