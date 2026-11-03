@@ -23,7 +23,27 @@ public static class SidecarCommand
 
     public static Func<AgentCliOptions, CancellationToken, Task>? WebSocketStarter { get; set; }
 
-    public static WebApplication BuildWebApplication(int port, string? secret, bool defaultIgnoreSsl = false, string[]? builderArgs = null)
+    private sealed class SidecarSessionState
+    {
+        private string? _pendingToken;
+
+        public void SetToken(string? token)
+        {
+            Interlocked.Exchange(ref _pendingToken, token);
+        }
+
+        public string? ConsumeToken()
+        {
+            return Interlocked.Exchange(ref _pendingToken, null);
+        }
+    }
+
+    public static WebApplication BuildWebApplication(
+        int port,
+        string? secret,
+        bool defaultIgnoreSsl = false,
+        string[]? builderArgs = null,
+        string? serverUrl = null)
     {
         var builder = WebApplication.CreateSlimBuilder(builderArgs ?? []);
 
@@ -35,6 +55,7 @@ public static class SidecarCommand
         });
 
         var app = builder.Build();
+        var sessionState = new SidecarSessionState();
 
         app.Use(async (context, next) =>
         {
@@ -53,7 +74,10 @@ public static class SidecarCommand
                 return;
             }
 
-            if (context.Request.Path.StartsWithSegments("/execute"))
+            var requiresSecret = context.Request.Path.StartsWithSegments("/execute")
+                || context.Request.Path.StartsWithSegments("/auth/session");
+
+            if (requiresSecret)
             {
                 if (!context.Request.Headers.TryGetValue(SecretHeaderName, out var providedSecret)
                     || string.IsNullOrEmpty(secret))
@@ -75,6 +99,47 @@ public static class SidecarCommand
         });
 
         app.MapGet("/health", () => Results.Ok("ok"));
+
+        app.MapGet("/auth/callback", (string? token, string? returnUrl) =>
+        {
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                sessionState.SetToken(token.Trim());
+            }
+
+            string destination;
+            if (!string.IsNullOrWhiteSpace(returnUrl))
+            {
+                if (Uri.TryCreate(returnUrl, UriKind.Absolute, out _))
+                {
+                    destination = returnUrl;
+                }
+                else if (!string.IsNullOrWhiteSpace(serverUrl))
+                {
+                    destination = $"{serverUrl.TrimEnd('/')}/{returnUrl.TrimStart('/')}";
+                }
+                else
+                {
+                    destination = returnUrl;
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(serverUrl))
+            {
+                destination = $"{serverUrl.TrimEnd('/')}/auth/desktop-success";
+            }
+            else
+            {
+                destination = "/auth/desktop-success";
+            }
+
+            return Results.Redirect(destination);
+        });
+
+        app.MapGet("/auth/session", () =>
+        {
+            var token = sessionState.ConsumeToken();
+            return Results.Ok(new DesktopSessionDto(token));
+        });
 
         app.MapPost("/execute", async (HttpRequestDispatch dispatch, CancellationToken cancellationToken) =>
         {
@@ -112,7 +177,7 @@ public static class SidecarCommand
                 secret = Guid.NewGuid().ToString("N");
             }
 
-            await using var app = BuildWebApplication(options.Port, secret, options.IgnoreSsl);
+            await using var app = BuildWebApplication(options.Port, secret, options.IgnoreSsl, serverUrl: options.ServerUrl);
             await app.StartAsync(cancellationToken);
 
             var actualPort = GetBoundPort(app);
