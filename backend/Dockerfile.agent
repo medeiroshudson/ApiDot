@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+COPY ApiDot.sln ./
+COPY Directory.Build.props* ./
+COPY src/ApiDot.Core/ApiDot.Core.csproj src/ApiDot.Core/
+COPY src/ApiDot.Agent/ApiDot.Agent.csproj src/ApiDot.Agent/
+
+RUN dotnet restore src/ApiDot.Agent/ApiDot.Agent.csproj
+
+COPY src/ src/
+RUN dotnet publish src/ApiDot.Agent/ApiDot.Agent.csproj \
+    --configuration Release \
+    --no-restore \
+    -p:PublishAot=false \
+    --output /app/publish
+
+FROM mcr.microsoft.com/dotnet/runtime:9.0-alpine AS runtime
+WORKDIR /app
+
+RUN addgroup -S apidot && adduser -S apidot -G apidot
+COPY --from=build --chown=apidot:apidot /app/publish/ ./
+
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \
+    APIDOT_SERVER_URL=http://server:5000 \
+    APIDOT_AGENT_NAME=docker-agent
+
+USER apidot
+ENTRYPOINT ["dotnet", "ApiDot.Agent.dll", "connect"]

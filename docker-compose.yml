@@ -31,3 +31,15 @@ services:
       - NEXT_PUBLIC_APP_VERSION=${APIDOT_VERSION:-dev}
     depends_on:
       - server
+
+  agent:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.agent
+    environment:
+      - APIDOT_SERVER_URL=http://server:5000
+      - APIDOT_AGENT_TOKEN=${APIDOT_AGENT_TOKEN:-}
+      - APIDOT_AGENT_NAME=${APIDOT_AGENT_NAME:-docker-agent}
+      - APIDOT_IGNORE_SSL=${APIDOT_IGNORE_SSL:-false}
+    depends_on:
+      - server
