@@ -4,7 +4,7 @@
   "version": "0.5.1",
   "identifier": "dev.hmedeiros.apidot",
   "build": {
-    "beforeDevCommand": "API_BASE_URL=https://apidot.hmedeiros.dev npm --prefix ../frontend run dev",
+    "beforeDevCommand": "node ../desktop/dev-server.js",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../../frontend/out"
   },
