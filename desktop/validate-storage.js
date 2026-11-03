@@ -50,6 +50,14 @@ function run() {
     'storage.rs missing Component::ParentDir check for traversal prevention'
   );
   assert(
+    storageRs.includes('full_path == root'),
+    'storage.rs missing check preventing root directory reference from sanitize_relative_path'
+  );
+  assert(
+    storageRs.includes("replace('\\\\', '/')"),
+    'storage.rs missing backslash normalization for cross-platform traversal prevention'
+  );
+  assert(
     storageRs.includes('APIDOT_STORAGE_ROOT'),
     'storage.rs missing APIDOT_STORAGE_ROOT environment variable support'
   );
@@ -85,6 +93,8 @@ function run() {
   assert(offlineStorageTs.includes('export interface PendingMutation'), 'offlineStorage.ts missing PendingMutation interface');
   assert(offlineStorageTs.includes('export async function saveWorkspaceOffline'), 'offlineStorage.ts missing saveWorkspaceOffline');
   assert(offlineStorageTs.includes('export async function loadWorkspacesOffline'), 'offlineStorage.ts missing loadWorkspacesOffline');
+  assert(offlineStorageTs.includes('export const saveWorkspaceLocally = saveWorkspaceOffline'), 'offlineStorage.ts missing saveWorkspaceLocally alias');
+  assert(offlineStorageTs.includes('export const loadWorkspacesLocally = loadWorkspacesOffline'), 'offlineStorage.ts missing loadWorkspacesLocally alias');
   assert(offlineStorageTs.includes('export async function saveCollectionOffline'), 'offlineStorage.ts missing saveCollectionOffline');
   assert(offlineStorageTs.includes('export async function loadCollectionsOffline'), 'offlineStorage.ts missing loadCollectionsOffline');
   assert(offlineStorageTs.includes('export async function queuePendingMutation'), 'offlineStorage.ts missing queuePendingMutation');
@@ -116,20 +126,30 @@ function run() {
   // 8. Logic simulation of path sanitization
   function sanitizeRelPath(rel) {
     if (rel.includes('\0')) throw new Error('null char');
-    const trimmed = rel.replace(/^[/\\]+/, '');
+    const normalized = rel.replace(/\\/g, '/');
+    const trimmed = normalized.replace(/^\/+/, '');
     if (!trimmed) throw new Error('empty path');
-    const parts = trimmed.split(/[/\\]/);
+    const parts = trimmed.split('/');
     for (const part of parts) {
       if (part === '..') throw new Error('ParentDir traversal detected');
       if (part.includes(':')) throw new Error('Prefix drive detected');
+    }
+    if (trimmed === '.' || trimmed === './') {
+      throw new Error('Path refers to storage root directory');
     }
     return trimmed;
   }
 
   assert.strictEqual(sanitizeRelPath('workspaces/ws-1.json'), 'workspaces/ws-1.json');
   assert.strictEqual(sanitizeRelPath('/workspaces/ws-1.json'), 'workspaces/ws-1.json');
+  assert.strictEqual(sanitizeRelPath('workspaces\\ws-1.json'), 'workspaces/ws-1.json');
   assert.throws(() => sanitizeRelPath('../secret.txt'), /ParentDir/);
+  assert.throws(() => sanitizeRelPath('..\\secret.txt'), /ParentDir/);
   assert.throws(() => sanitizeRelPath('workspaces/../../etc/passwd'), /ParentDir/);
+  assert.throws(() => sanitizeRelPath('workspaces\\..\\..\\etc\\passwd'), /ParentDir/);
+  assert.throws(() => sanitizeRelPath('.'), /root directory/);
+  assert.throws(() => sanitizeRelPath('./'), /root directory/);
+  assert.throws(() => sanitizeRelPath('.\\'), /root directory/);
   assert.throws(() => sanitizeRelPath(''), /empty path/);
   assert.throws(() => sanitizeRelPath('test/\0evil'), /null char/);
   console.log('✓ Path sanitization logic verified');

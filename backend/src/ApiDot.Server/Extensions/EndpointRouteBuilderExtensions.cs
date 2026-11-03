@@ -18,6 +18,7 @@ public static class EndpointRouteBuilderExtensions
         app.MapCollectionEndpoints();
         app.MapFolderEndpoints();
         app.MapRequestItemEndpoints();
+        app.MapSyncEndpoints();
         return app;
     }
 }
