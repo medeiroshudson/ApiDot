@@ -660,6 +660,9 @@ const ptBR = {
     fillAllFields: 'Por favor preencha todos os campos.',
     authFailed: 'Falha na autenticação',
     localSubmitButton: 'Entrar com credenciais locais',
+    desktopSuccessTitle: 'Autenticação Concluída com Sucesso',
+    desktopSuccessMessage: 'Você foi autenticado com sucesso. Você já pode fechar esta aba e voltar ao ApiDot Desktop.',
+    desktopSuccessButton: 'Abrir o ApiDot Desktop',
   },
   home: {
     loading: 'Carregando workspace...',

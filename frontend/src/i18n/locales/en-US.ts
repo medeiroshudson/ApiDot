@@ -658,6 +658,9 @@ const enUS = {
     fillAllFields: 'Please fill in all fields.',
     authFailed: 'Authentication failed',
     localSubmitButton: 'Sign in with local credentials',
+    desktopSuccessTitle: 'Authentication Successful',
+    desktopSuccessMessage: 'You have successfully signed in. You can now close this tab and return to ApiDot Desktop.',
+    desktopSuccessButton: 'Open ApiDot Desktop',
   },
   home: {
     loading: 'Loading workspace...',
