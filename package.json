@@ -3,6 +3,8 @@
   "private": true,
   "scripts": {
     "dev": "docker compose -f docker-compose.dev.yml up --build --watch",
-    "down": "docker compose -f docker-compose.dev.yml down"
+    "down": "docker compose -f docker-compose.dev.yml down",
+    "desktop:dev": "cargo tauri dev --config desktop/src-tauri/tauri.conf.json",
+    "desktop:build": "cargo tauri build --config desktop/src-tauri/tauri.conf.json"
   }
 }
