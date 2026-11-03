@@ -183,33 +183,6 @@ public class SidecarAuthEndpointsTests
     }
 
     [Fact]
-    public async Task Sidecar_AuthCallback_WithCustomReturnUrl_RedirectsToReturnUrl()
-    {
-        var app = SidecarCommand.BuildWebApplication(0, "secret-123", serverUrl: "https://hub.example.com");
-        await app.StartAsync();
-
-        try
-        {
-            var port = SidecarCommand.GetBoundPort(app);
-            using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
-            {
-                BaseAddress = new Uri($"http://127.0.0.1:{port}")
-            };
-
-            var customUrl = "https://custom.example.com/after-login";
-            var callbackRes = await client.GetAsync($"/auth/callback?token=tok-1&returnUrl={Uri.EscapeDataString(customUrl)}");
-            callbackRes.StatusCode.Should().Be(HttpStatusCode.Redirect);
-            callbackRes.Headers.Location.Should().NotBeNull();
-            callbackRes.Headers.Location!.ToString().Should().Be(customUrl);
-        }
-        finally
-        {
-            await app.StopAsync();
-            await app.DisposeAsync();
-        }
-    }
-
-    [Fact]
     public async Task Sidecar_AuthCallback_DoesNotRequireSecretHeader()
     {
         var app = SidecarCommand.BuildWebApplication(0, "secret-123");

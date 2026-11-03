@@ -100,37 +100,16 @@ public static class SidecarCommand
 
         app.MapGet("/health", () => Results.Ok("ok"));
 
-        app.MapGet("/auth/callback", (string? token, string? returnUrl) =>
+        app.MapGet("/auth/callback", (string? token) =>
         {
             if (!string.IsNullOrWhiteSpace(token))
             {
                 sessionState.SetToken(token.Trim());
             }
 
-            string destination;
-            if (!string.IsNullOrWhiteSpace(returnUrl))
-            {
-                if (Uri.TryCreate(returnUrl, UriKind.Absolute, out _))
-                {
-                    destination = returnUrl;
-                }
-                else if (!string.IsNullOrWhiteSpace(serverUrl))
-                {
-                    destination = $"{serverUrl.TrimEnd('/')}/{returnUrl.TrimStart('/')}";
-                }
-                else
-                {
-                    destination = returnUrl;
-                }
-            }
-            else if (!string.IsNullOrWhiteSpace(serverUrl))
-            {
-                destination = $"{serverUrl.TrimEnd('/')}/auth/desktop-success";
-            }
-            else
-            {
-                destination = "/auth/desktop-success";
-            }
+            var destination = !string.IsNullOrWhiteSpace(serverUrl)
+                ? $"{serverUrl.TrimEnd('/')}/auth/desktop-success"
+                : "/auth/desktop-success";
 
             return Results.Redirect(destination);
         });
