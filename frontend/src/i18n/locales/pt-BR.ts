@@ -336,7 +336,7 @@ const ptBR = {
     executionTimeout: 'Timeout de Execução',
     defaultTarget: 'Alvo de Execução Padrão',
     defaultTargetDesc: 'Alvo de execução padrão para requisições quando não especificado em coleções ou requisições',
-    targetActiveDevice: 'Dispositivo Local (Padrão)',
+    targetActiveDevice: 'Dispositivo Local',
     targetServer: 'Servidor em Nuvem',
     targetSpecificDevice: 'Dispositivo Específico',
     devices: 'Dispositivos',
