@@ -82,7 +82,7 @@ public class AgentClient : IDisposable
         {
             Scheme = wsScheme,
             Path = "/ws/agent",
-            Query = $"token={Uri.EscapeDataString(Token)}&name={Uri.EscapeDataString(AgentName)}"
+            Query = $"token={Uri.EscapeDataString(Token)}&name={Uri.EscapeDataString(AgentName)}&version={Uri.EscapeDataString(AgentVersion.GetNormalizedVersion())}"
         };
 
         return builder.Uri;

@@ -2,7 +2,8 @@
 using ApiDot.Agent.Commands;
 using ApiDot.Agent.Configuration;
 
-Console.WriteLine("ApiDot Local Agent v1.0");
+var appVersion = AgentVersion.GetNormalizedVersion();
+Console.WriteLine($"ApiDot Agent {appVersion}");
 
 var fileConfig = AgentConfigManager.Load();
 var options = AgentCliParser.Parse(args, fileConfig);
