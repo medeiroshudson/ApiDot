@@ -20,6 +20,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../src/ApiDot.Agent/ApiDot.Agent.csproj" />
     <ProjectReference Include="../../src/ApiDot.Core/ApiDot.Core.csproj" />
   </ItemGroup>

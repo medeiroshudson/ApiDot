@@ -45,6 +45,8 @@ import {
   useWorkspaceContext,
 } from '@/context/WorkspaceContext';
 import { useTranslation } from '@/hooks/useTranslation';
+import { isDesktop, listenDesktopEvent } from '@/lib/desktop/runtime';
+import { startSyncListener } from '@/lib/sync/syncManager';
 import { CheckCircle2, X, AlertCircle } from 'lucide-react';
 
 const STORAGE_KEY_ACTIVE_WORKSPACE = 'apidot_active_workspace_id';
@@ -246,6 +248,64 @@ function WorkspaceShellContent({
       stopDevicePolling();
     };
   }, [isSettingsOpen, startDevicePolling, stopDevicePolling]);
+
+  // Global settings keyboard shortcut (Cmd+, / Ctrl+,) and desktop IPC listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+        e.preventDefault();
+        setIsSettingsOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    let unlistenDesktop: (() => void) | undefined;
+    let isSubscribed = true;
+
+    if (isDesktop()) {
+      listenDesktopEvent('open-global-settings', () => {
+        setIsSettingsOpen(true);
+      })
+        .then((unlisten) => {
+          if (isSubscribed) {
+            unlistenDesktop = unlisten;
+          } else {
+            unlisten();
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to register open-global-settings desktop listener:', err);
+        });
+    }
+
+    return () => {
+      isSubscribed = false;
+      window.removeEventListener('keydown', handleKeyDown);
+      if (unlistenDesktop) {
+        unlistenDesktop();
+      }
+    };
+  }, []);
+
+  // Reconnection synchronization listener for Desktop environment
+  useEffect(() => {
+    if (!isDesktop()) {
+      return;
+    }
+    const cleanup = startSyncListener({
+      pollIntervalMs: 15000,
+      checkHealth: true,
+      onSyncComplete: (result) => {
+        if (result.appliedCount > 0) {
+          void reloadTree();
+        }
+      },
+    });
+    return () => {
+      cleanup();
+    };
+  }, [reloadTree]);
 
   // cURL Import / Export States
   const [isImportCurlModalOpen, setIsImportCurlModalOpen] = useState(false);
@@ -478,6 +538,7 @@ function WorkspaceShellContent({
   const handleSaveCollectionSettings = async (data: {
     name?: string;
     defaultTarget?: ExecutionTarget;
+    targetDeviceId?: string | null;
     specUrl?: string;
     specContent?: string;
   }) => {
@@ -485,11 +546,13 @@ function WorkspaceShellContent({
 
     if (
       (data.name && data.name !== editingCollection.name) ||
-      (data.defaultTarget && data.defaultTarget !== editingCollection.defaultTarget)
+      (data.defaultTarget && data.defaultTarget !== editingCollection.defaultTarget) ||
+      data.targetDeviceId !== editingCollection.targetDeviceId
     ) {
       await updateCollection(editingCollection.id, {
         name: data.name || editingCollection.name,
         defaultTarget: data.defaultTarget || editingCollection.defaultTarget,
+        targetDeviceId: data.targetDeviceId,
       });
     }
 

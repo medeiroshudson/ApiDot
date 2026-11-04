@@ -347,4 +347,116 @@ describe('WorkspaceShell', () => {
     unmount();
     expect(stopPollingSpy).toHaveBeenCalled();
   });
+
+  it('starts sync listener when isDesktop() is true and cleans up on unmount', async () => {
+    (window as any).__TAURI__ = {};
+    const mockCleanup = vi.fn();
+    const syncManager = await import('@/lib/sync/syncManager');
+    const startSyncSpy = vi.spyOn(syncManager, 'startSyncListener').mockReturnValue(mockCleanup);
+
+    const { unmount } = render(
+      <WorkspaceShell workspaceId="ws-test">
+        <div>Child Area</div>
+      </WorkspaceShell>
+    );
+
+    expect(startSyncSpy).toHaveBeenCalled();
+
+    unmount();
+    expect(mockCleanup).toHaveBeenCalled();
+
+    delete (window as any).__TAURI__;
+  });
+
+  it('opens GlobalSettingsModal when pressing Cmd+, shortcut', async () => {
+    render(
+      <WorkspaceShell workspaceId="ws-test">
+        <div>Child Area</div>
+      </WorkspaceShell>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Workspace')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('dialog', { name: /Global Settings|Configurações Globais/i })).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: ',', metaKey: true });
+
+    expect(screen.getByRole('dialog', { name: /Global Settings|Configurações Globais/i })).toBeInTheDocument();
+  });
+
+  it('opens GlobalSettingsModal when pressing Ctrl+, shortcut', async () => {
+    render(
+      <WorkspaceShell workspaceId="ws-test">
+        <div>Child Area</div>
+      </WorkspaceShell>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Workspace')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('dialog', { name: /Global Settings|Configurações Globais/i })).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: ',', ctrlKey: true });
+
+    expect(screen.getByRole('dialog', { name: /Global Settings|Configurações Globais/i })).toBeInTheDocument();
+  });
+
+  it('opens GlobalSettingsModal when Tauri IPC event open-global-settings is received in desktop mode', async () => {
+    let eventCallback: ((payload?: any) => void) | undefined;
+    const mockUnlisten = vi.fn();
+
+    (window as any).__TAURI__ = {
+      event: {
+        listen: vi.fn((eventName: string, cb: any) => {
+          if (eventName === 'open-global-settings') {
+            eventCallback = cb;
+          }
+          return Promise.resolve(mockUnlisten);
+        }),
+      },
+    };
+
+    const { unmount } = render(
+      <WorkspaceShell workspaceId="ws-test">
+        <div>Child Area</div>
+      </WorkspaceShell>
+    );
+
+    await waitFor(() => {
+      expect((window as any).__TAURI__.event.listen).toHaveBeenCalledWith(
+        'open-global-settings',
+        expect.any(Function)
+      );
+    });
+
+    expect(screen.queryByRole('dialog', { name: /Global Settings|Configurações Globais/i })).not.toBeInTheDocument();
+
+    act(() => {
+      eventCallback?.();
+    });
+
+    expect(screen.getByRole('dialog', { name: /Global Settings|Configurações Globais/i })).toBeInTheDocument();
+
+    unmount();
+    expect(mockUnlisten).toHaveBeenCalled();
+
+    delete (window as any).__TAURI__;
+  });
+
+  it('removes window keydown event listener on unmount', async () => {
+    const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
+
+    const { unmount } = render(
+      <WorkspaceShell workspaceId="ws-test">
+        <div>Child Area</div>
+      </WorkspaceShell>
+    );
+
+    unmount();
+
+    expect(removeEventListenerSpy).toHaveBeenCalledWith('keydown', expect.any(Function));
+  });
 });

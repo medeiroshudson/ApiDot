@@ -14,6 +14,7 @@ public class Collection
     public Workspace? Workspace { get; set; }
 
     public ExecutionTarget DefaultTarget { get; set; } = ExecutionTarget.Inherit;
+    public Guid? TargetDeviceId { get; set; }
 
     [MaxLength(2048)]
     public string? OpenApiSpecUrl { get; set; }

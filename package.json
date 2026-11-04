@@ -3,6 +3,9 @@
   "private": true,
   "scripts": {
     "dev": "docker compose -f docker-compose.dev.yml up --build --watch",
-    "down": "docker compose -f docker-compose.dev.yml down"
+    "down": "docker compose -f docker-compose.dev.yml down",
+    "desktop:prepare": "node desktop/prepare.js",
+    "desktop:dev": "npm --prefix desktop run dev",
+    "desktop:build": "npm --prefix desktop run build"
   }
 }

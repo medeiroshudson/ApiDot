@@ -62,7 +62,8 @@ public static class CollectionEndpoints
             {
                 Name = trimmedName,
                 WorkspaceId = request.WorkspaceId,
-                DefaultTarget = request.DefaultTarget
+                DefaultTarget = request.DefaultTarget,
+                TargetDeviceId = request.TargetDeviceId
             };
 
             db.Collections.Add(collection);
@@ -74,7 +75,8 @@ public static class CollectionEndpoints
                 collection.DefaultTarget,
                 collection.OpenApiSpecUrl,
                 [],
-                []);
+                [],
+                collection.TargetDeviceId);
 
             return Results.Created($"/api/collections/{collection.Id}", dto);
         });
@@ -125,6 +127,7 @@ public static class CollectionEndpoints
 
             collection.Name = trimmedName;
             collection.DefaultTarget = request.DefaultTarget;
+            collection.TargetDeviceId = request.TargetDeviceId;
 
             await db.SaveChangesAsync(cancellationToken);
 

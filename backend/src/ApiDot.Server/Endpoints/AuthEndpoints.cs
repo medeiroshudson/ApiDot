@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using ApiDot.Server.Models;
 using ApiDot.Server.Security;
 using ApiDot.Server.Services;
@@ -28,13 +29,51 @@ public static class AuthEndpoints
 
         group.MapGet("/login", async (
             string? returnUrl,
+            string? desktop_callback,
+            HttpContext httpContext,
             IAuthService authService,
             CancellationToken ct) =>
         {
+            var effectiveDesktopCallback = desktop_callback
+                ?? httpContext.Request.Query["desktop_callback"].FirstOrDefault()
+                ?? httpContext.Request.Query["desktopCallback"].FirstOrDefault();
+
+            if (!string.IsNullOrWhiteSpace(effectiveDesktopCallback))
+            {
+                if (!IsValidDesktopCallback(effectiveDesktopCallback))
+                {
+                    return Results.Problem(
+                        statusCode: StatusCodes.Status400BadRequest,
+                        title: "Bad Request",
+                        detail: "Invalid desktop_callback URL. Must be an absolute loopback URL (127.0.0.1 or localhost) with path /auth/callback.",
+                        extensions: new Dictionary<string, object?> { ["message"] = "Invalid desktop_callback URL." });
+                }
+
+                if (httpContext.User.Identity?.IsAuthenticated == true)
+                {
+                    var userIdClaim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                    var emailClaim = httpContext.User.FindFirst(ClaimTypes.Email)?.Value;
+                    var nameClaim = httpContext.User.FindFirst(ClaimTypes.Name)?.Value;
+
+                    if (Guid.TryParse(userIdClaim, out var userId) && !string.IsNullOrWhiteSpace(emailClaim))
+                    {
+                        var exchangeToken = authService.CreateDesktopExchangeToken(userId, emailClaim, nameClaim ?? emailClaim);
+                        var delimiter = effectiveDesktopCallback.Contains('?') ? "&" : "?";
+                        var currentHost = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+                        return Results.Redirect($"{effectiveDesktopCallback}{delimiter}token={Uri.EscapeDataString(exchangeToken)}&origin={Uri.EscapeDataString(currentHost)}");
+                    }
+                }
+            }
+
             var config = await authService.GetAuthConfigAsync(ct);
             if (!config.OidcEnabled)
             {
                 var redirectTarget = IsLocalUrl(returnUrl) ? returnUrl! : "/login";
+                if (!string.IsNullOrWhiteSpace(effectiveDesktopCallback))
+                {
+                    var delimiter = redirectTarget.Contains('?') ? "&" : "?";
+                    redirectTarget = $"{redirectTarget}{delimiter}desktop_callback={Uri.EscapeDataString(effectiveDesktopCallback)}";
+                }
                 return Results.Redirect(redirectTarget);
             }
 
@@ -44,7 +83,44 @@ public static class AuthEndpoints
                 RedirectUri = safeReturnUrl
             };
 
+            if (!string.IsNullOrWhiteSpace(effectiveDesktopCallback))
+            {
+                properties.Items["desktop_callback"] = effectiveDesktopCallback;
+            }
+
             return Results.Challenge(properties, [OpenIdConnectDefaults.AuthenticationScheme]);
+        });
+
+        group.MapPost("/desktop-exchange", async (
+            DesktopExchangeRequest? request,
+            IAuthService authService,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.Token))
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status401Unauthorized,
+                    title: "Unauthorized",
+                    detail: "Desktop exchange token is required.",
+                    extensions: new Dictionary<string, object?> { ["message"] = "Desktop exchange token is required." });
+            }
+
+            var (success, user, errorMessage) = await authService.ValidateAndConsumeDesktopTokenAsync(
+                request.Token,
+                httpContext,
+                ct);
+
+            if (!success || user == null)
+            {
+                return Results.Problem(
+                    statusCode: StatusCodes.Status401Unauthorized,
+                    title: "Unauthorized",
+                    detail: errorMessage ?? "Invalid or expired exchange token.",
+                    extensions: new Dictionary<string, object?> { ["message"] = errorMessage ?? "Invalid or expired exchange token." });
+            }
+
+            return Results.Ok(user);
         });
 
         group.MapPost("/local", async (
@@ -164,4 +240,34 @@ public static class AuthEndpoints
         && url.StartsWith('/')
         && !url.StartsWith("//", StringComparison.Ordinal)
         && !url.StartsWith("/\\", StringComparison.Ordinal);
+
+    public static bool IsValidDesktopCallback(string? callbackUrl)
+    {
+        if (string.IsNullOrWhiteSpace(callbackUrl))
+        {
+            return false;
+        }
+
+        if (!Uri.TryCreate(callbackUrl, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+        {
+            return false;
+        }
+
+        var host = uri.Host;
+        bool isLoopback = string.Equals(host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase);
+
+        if (!isLoopback)
+        {
+            return false;
+        }
+
+        var path = uri.AbsolutePath.TrimEnd('/');
+        return string.Equals(path, "/auth/callback", StringComparison.OrdinalIgnoreCase);
+    }
 }

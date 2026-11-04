@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/ApiDot.Server/ApiDot.Server.csproj" />
     <ProjectReference Include="../../src/ApiDot.Core/ApiDot.Core.csproj" />
+    <ProjectReference Include="../../src/ApiDot.Agent/ApiDot.Agent.csproj" />
   </ItemGroup>
 
 </Project>

@@ -253,4 +253,179 @@ public class TargetResolverTests
         // Assert
         result.Should().Be(ExecutionTarget.Agent);
     }
+
+    [Fact]
+    public void ResolveTarget_WhenCollectionHasSpecificDevice_ReturnsAgentWithDeviceId()
+    {
+        // Arrange
+        var deviceId = Guid.NewGuid();
+        var collection = new Collection { Name = "Col", DefaultTarget = ExecutionTarget.Agent, TargetDeviceId = deviceId };
+        var request = new RequestItem { Name = "Req", Url = "http://test", Collection = collection };
+
+        var resolver = new TargetResolver();
+        var result = resolver.ResolveTargetWithDevice(request, activeDeviceId: null);
+
+        Assert.Equal(ExecutionTarget.Agent, result.Target);
+        Assert.Equal(deviceId, result.DeviceId);
+    }
+
+    [Fact]
+    public void ResolveTargetWithDevice_WhenCollectionHasAgentWithoutDevice_FallsBackToActiveDevice()
+    {
+        // Arrange
+        var activeId = Guid.NewGuid();
+        var collection = new Collection { Name = "Col", DefaultTarget = ExecutionTarget.Agent, TargetDeviceId = null };
+        var request = new RequestItem { Name = "Req", Url = "http://test", Collection = collection };
+
+        // Act
+        var result = _resolver.ResolveTargetWithDevice(request, activeDeviceId: activeId);
+
+        // Assert
+        result.Target.Should().Be(ExecutionTarget.Agent);
+        result.DeviceId.Should().Be(activeId);
+    }
+
+    [Fact]
+    public void ResolveTargetWithDevice_WhenRequestExplicitServer_OverridesCollectionWithDevice()
+    {
+        // Arrange
+        var deviceId = Guid.NewGuid();
+        var collection = new Collection { Name = "Col", DefaultTarget = ExecutionTarget.Agent, TargetDeviceId = deviceId };
+        var request = new RequestItem
+        {
+            Name = "Req",
+            Url = "http://test",
+            Collection = collection,
+            Target = ExecutionTarget.Server
+        };
+
+        // Act
+        var result = _resolver.ResolveTargetWithDevice(request, activeDeviceId: Guid.NewGuid());
+
+        // Assert
+        result.Target.Should().Be(ExecutionTarget.Server);
+        result.DeviceId.Should().BeNull();
+    }
+
+    [Fact]
+    public void ResolveTargetWithDevice_WhenRequestExplicitAgent_InheritsCollectionDevice()
+    {
+        // Arrange
+        var deviceId = Guid.NewGuid();
+        var collection = new Collection { Name = "Col", DefaultTarget = ExecutionTarget.Inherit, TargetDeviceId = deviceId };
+        var request = new RequestItem
+        {
+            Name = "Req",
+            Url = "http://test",
+            Collection = collection,
+            Target = ExecutionTarget.Agent
+        };
+
+        // Act
+        var result = _resolver.ResolveTargetWithDevice(request, activeDeviceId: null);
+
+        // Assert
+        result.Target.Should().Be(ExecutionTarget.Agent);
+        result.DeviceId.Should().Be(deviceId);
+    }
+
+    [Fact]
+    public void ResolveTargetWithDevice_WhenFolderExplicitServer_OverridesCollectionWithDevice()
+    {
+        // Arrange
+        var deviceId = Guid.NewGuid();
+        var collection = new Collection { Name = "Col", DefaultTarget = ExecutionTarget.Agent, TargetDeviceId = deviceId };
+        var folder = new Folder { Name = "Folder", Collection = collection, DefaultTarget = ExecutionTarget.Server };
+        var request = new RequestItem
+        {
+            Name = "Req",
+            Url = "http://test",
+            Folder = folder,
+            Target = ExecutionTarget.Inherit
+        };
+
+        // Act
+        var result = _resolver.ResolveTargetWithDevice(request, activeDeviceId: Guid.NewGuid());
+
+        // Assert
+        result.Target.Should().Be(ExecutionTarget.Server);
+        result.DeviceId.Should().BeNull();
+    }
+
+    [Fact]
+    public void ResolveTargetWithDevice_WhenCollectionInherits_FallsBackToGlobalTargetServer()
+    {
+        // Arrange
+        var activeId = Guid.NewGuid();
+        var collection = new Collection { Name = "Col", DefaultTarget = ExecutionTarget.Inherit };
+        var request = new RequestItem { Name = "Req", Url = "http://test", Collection = collection };
+
+        // Act
+        var result = _resolver.ResolveTargetWithDevice(
+            request,
+            activeDeviceId: activeId,
+            globalTarget: ExecutionTarget.Server);
+
+        // Assert
+        result.Target.Should().Be(ExecutionTarget.Server);
+        result.DeviceId.Should().BeNull();
+    }
+
+    [Fact]
+    public void ResolveTargetWithDevice_WhenCollectionInherits_FallsBackToGlobalTargetAgentWithSpecificDevice()
+    {
+        // Arrange
+        var globalDevId = Guid.NewGuid();
+        var activeId = Guid.NewGuid();
+        var collection = new Collection { Name = "Col", DefaultTarget = ExecutionTarget.Inherit };
+        var request = new RequestItem { Name = "Req", Url = "http://test", Collection = collection };
+
+        // Act
+        var result = _resolver.ResolveTargetWithDevice(
+            request,
+            activeDeviceId: activeId,
+            globalTarget: ExecutionTarget.Agent,
+            globalDeviceId: globalDevId);
+
+        // Assert
+        result.Target.Should().Be(ExecutionTarget.Agent);
+        result.DeviceId.Should().Be(globalDevId);
+    }
+
+    [Fact]
+    public void ResolveTargetWithDevice_WhenAllInherit_FallsBackToActiveDeviceId()
+    {
+        // Arrange
+        var activeId = Guid.NewGuid();
+        var collection = new Collection { Name = "Col", DefaultTarget = ExecutionTarget.Inherit };
+        var request = new RequestItem { Name = "Req", Url = "http://test", Collection = collection };
+
+        // Act
+        var result = _resolver.ResolveTargetWithDevice(
+            request,
+            activeDeviceId: activeId,
+            globalTarget: ExecutionTarget.Inherit);
+
+        // Assert
+        result.Target.Should().Be(ExecutionTarget.Agent);
+        result.DeviceId.Should().Be(activeId);
+    }
+
+    [Fact]
+    public void ResolveTargetWithDevice_WhenAllInheritAndNoActiveDevice_FallsBackToServer()
+    {
+        // Arrange
+        var collection = new Collection { Name = "Col", DefaultTarget = ExecutionTarget.Inherit };
+        var request = new RequestItem { Name = "Req", Url = "http://test", Collection = collection };
+
+        // Act
+        var result = _resolver.ResolveTargetWithDevice(
+            request,
+            activeDeviceId: null,
+            globalTarget: ExecutionTarget.Inherit);
+
+        // Assert
+        result.Target.Should().Be(ExecutionTarget.Server);
+        result.DeviceId.Should().BeNull();
+    }
 }

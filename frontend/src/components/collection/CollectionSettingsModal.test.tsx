@@ -8,17 +8,48 @@ import {
 import { CollectionNodeDto } from '@/lib/treeApi';
 import { useI18nStore } from '@/stores/useI18nStore';
 import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
+import { useDeviceStore } from '@/stores/useDeviceStore';
+import { AgentDeviceDto } from '@/lib/deviceApi';
 import { VariableItem } from '../environment/VariableGrid';
+
+const mockDevices: AgentDeviceDto[] = [
+  {
+    id: 'device-1',
+    name: 'MacBook Pro Hudson',
+    tokenPrefix: 'apidot_dev_12345678',
+    createdAtUtc: '2026-10-27T10:00:00Z',
+    lastConnectedAtUtc: '2026-10-27T10:05:00Z',
+    lastConnectedHostname: 'macbook.local',
+    lastConnectedOs: 'macOS',
+    agentVersion: '0.4.0',
+    isRevoked: false,
+    isOnline: true,
+  },
+  {
+    id: 'device-2',
+    name: 'Home Server Linux',
+    tokenPrefix: 'apidot_dev_87654321',
+    createdAtUtc: '2026-10-27T09:00:00Z',
+    lastConnectedAtUtc: null,
+    lastConnectedHostname: null,
+    lastConnectedOs: null,
+    agentVersion: null,
+    isRevoked: false,
+    isOnline: false,
+  },
+];
 
 describe('CollectionSettingsModal', () => {
   beforeEach(() => {
     useI18nStore.setState({ locale: 'en-US' });
     useEnvironmentStore.getState().reset();
+    useDeviceStore.getState().reset();
   });
 
   afterEach(() => {
     useI18nStore.setState({ locale: 'en-US' });
     useEnvironmentStore.getState().reset();
+    useDeviceStore.getState().reset();
   });
   const mockCollection: CollectionNodeDto = {
     id: 'coll-123',
@@ -277,7 +308,7 @@ describe('CollectionSettingsModal', () => {
       fireEvent.change(nameInput, { target: { value: 'Nova Coleção Renomeada' } });
 
       const targetSelect = screen.getByRole('combobox', { name: /Execution Target/i });
-      fireEvent.change(targetSelect, { target: { value: 'Agent' } });
+      fireEvent.change(targetSelect, { target: { value: 'active_device' } });
 
       const saveBtn = screen.getByRole('button', { name: /Save Changes/i });
       fireEvent.click(saveBtn);
@@ -290,6 +321,135 @@ describe('CollectionSettingsModal', () => {
           })
         );
       });
+    });
+
+    it('allows selecting inherit from global settings', async () => {
+      const onSave = vi.fn();
+      render(
+        <CollectionSettingsModal
+          isOpen={true}
+          onClose={() => {}}
+          collection={{ ...mockCollection, defaultTarget: 'Server' }}
+          onSave={onSave}
+        />
+      );
+
+      const targetSelect = screen.getByRole('combobox', { name: /Execution Target/i });
+      fireEvent.change(targetSelect, { target: { value: 'inherit' } });
+
+      const saveBtn = screen.getByRole('button', { name: /Save Changes/i });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(onSave).toHaveBeenCalledWith(
+          expect.objectContaining({
+            defaultTarget: 'Inherit',
+            targetDeviceId: null,
+          })
+        );
+      });
+    });
+
+    it('allows selecting cloud / server', async () => {
+      const onSave = vi.fn();
+      render(
+        <CollectionSettingsModal
+          isOpen={true}
+          onClose={() => {}}
+          collection={mockCollection}
+          onSave={onSave}
+        />
+      );
+
+      const targetSelect = screen.getByRole('combobox', { name: /Execution Target/i });
+      fireEvent.change(targetSelect, { target: { value: 'server' } });
+
+      const saveBtn = screen.getByRole('button', { name: /Save Changes/i });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(onSave).toHaveBeenCalledWith(
+          expect.objectContaining({
+            defaultTarget: 'Server',
+            targetDeviceId: null,
+          })
+        );
+      });
+    });
+
+    it('allows selecting active local device', async () => {
+      const onSave = vi.fn();
+      render(
+        <CollectionSettingsModal
+          isOpen={true}
+          onClose={() => {}}
+          collection={mockCollection}
+          onSave={onSave}
+        />
+      );
+
+      const targetSelect = screen.getByRole('combobox', { name: /Execution Target/i });
+      fireEvent.change(targetSelect, { target: { value: 'active_device' } });
+
+      const saveBtn = screen.getByRole('button', { name: /Save Changes/i });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(onSave).toHaveBeenCalledWith(
+          expect.objectContaining({
+            defaultTarget: 'Agent',
+            targetDeviceId: null,
+          })
+        );
+      });
+    });
+
+    it('allows selecting a specific registered device and saving targetDeviceId', async () => {
+      useDeviceStore.setState({ devices: mockDevices });
+      const onSave = vi.fn();
+      render(
+        <CollectionSettingsModal
+          isOpen={true}
+          onClose={() => {}}
+          collection={mockCollection}
+          onSave={onSave}
+        />
+      );
+
+      const targetSelect = screen.getByRole('combobox', { name: /Execution Target/i });
+      expect(screen.getByText(/Home Server Linux/i)).toBeInTheDocument();
+
+      fireEvent.change(targetSelect, { target: { value: 'device:device-2' } });
+
+      const saveBtn = screen.getByRole('button', { name: /Save Changes/i });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(onSave).toHaveBeenCalledWith(
+          expect.objectContaining({
+            defaultTarget: 'Agent',
+            targetDeviceId: 'device-2',
+          })
+        );
+      });
+    });
+
+    it('prepopulates specific device target when collection has targetDeviceId', () => {
+      useDeviceStore.setState({ devices: mockDevices });
+      render(
+        <CollectionSettingsModal
+          isOpen={true}
+          onClose={() => {}}
+          collection={{
+            ...mockCollection,
+            defaultTarget: 'Agent',
+            targetDeviceId: 'device-2',
+          }}
+        />
+      );
+
+      const targetSelect = screen.getByRole('combobox', { name: /Execution Target/i });
+      expect(targetSelect).toHaveValue('device:device-2');
     });
   });
 

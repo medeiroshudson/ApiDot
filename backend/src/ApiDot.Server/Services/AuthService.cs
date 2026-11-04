@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using ApiDot.Server.Data;
 using ApiDot.Server.Data.Entities;
 using ApiDot.Server.Enums;
@@ -355,5 +357,111 @@ public class AuthService(
     {
         ArgumentNullException.ThrowIfNull(httpContext);
         await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    }
+
+    private sealed record DesktopExchangeTokenData(
+        Guid UserId,
+        string Email,
+        string DisplayName,
+        DateTimeOffset ExpiresAt);
+
+    private static readonly ConcurrentDictionary<string, DesktopExchangeTokenData> DesktopTokens = new();
+
+    public string CreateDesktopExchangeToken(
+        Guid userId,
+        string email,
+        string name,
+        TimeSpan? lifetime = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(email);
+
+        PruneExpiredDesktopTokens();
+
+        Span<byte> randomBytes = stackalloc byte[32];
+        RandomNumberGenerator.Fill(randomBytes);
+        var token = Convert.ToHexStringLower(randomBytes);
+
+        var effectiveLifetime = lifetime ?? TimeSpan.FromMinutes(5);
+        var expiresAt = DateTimeOffset.UtcNow.Add(effectiveLifetime);
+
+        var data = new DesktopExchangeTokenData(
+            userId,
+            email.Trim().ToLowerInvariant(),
+            !string.IsNullOrWhiteSpace(name) ? name.Trim() : email.Trim(),
+            expiresAt);
+
+        DesktopTokens[token] = data;
+        return token;
+    }
+
+    private static void PruneExpiredDesktopTokens()
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var (token, data) in DesktopTokens)
+        {
+            if (data.ExpiresAt <= now)
+            {
+                DesktopTokens.TryRemove(token, out _);
+            }
+        }
+    }
+
+    public async Task<(bool Success, UserDto? User, string? ErrorMessage)> ValidateAndConsumeDesktopTokenAsync(
+        string token,
+        HttpContext httpContext,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return (false, null, "Desktop exchange token is required.");
+        }
+
+        if (!DesktopTokens.TryRemove(token, out var data))
+        {
+            return (false, null, "Invalid or expired exchange token.");
+        }
+
+        if (data.ExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            return (false, null, "Exchange token has expired.");
+        }
+
+        var user = await dbContext.Users
+            .TagWith(ScopeMarker)
+            .FirstOrDefaultAsync(u => u.Id == data.UserId, cancellationToken);
+
+        if (user == null)
+        {
+            user = await dbContext.Users
+                .TagWith(ScopeMarker)
+                .FirstOrDefaultAsync(u => u.Email == data.Email, cancellationToken);
+        }
+
+        if (user == null)
+        {
+            user = new User
+            {
+                Id = data.UserId != Guid.Empty ? data.UserId : Guid.NewGuid(),
+                Email = data.Email,
+                DisplayName = data.DisplayName,
+                IsRoot = false,
+                Locale = "en-US",
+                CreatedAtUtc = DateTime.UtcNow,
+                LastLoginAtUtc = DateTime.UtcNow
+            };
+            dbContext.Users.Add(user);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            user.LastLoginAtUtc = DateTime.UtcNow;
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        await SignInAsync(httpContext, user);
+        var userDto = await BuildUserDtoAsync(user, cancellationToken);
+        return (true, userDto, null);
     }
 }

@@ -22,7 +22,8 @@ public record CollectionNodeDto(
     [property: JsonConverter(typeof(JsonStringEnumConverter))] ExecutionTarget DefaultTarget,
     string? OpenApiSpecUrl,
     List<FolderNodeDto> Folders,
-    List<RequestItemNodeDto> Requests);
+    List<RequestItemNodeDto> Requests,
+    Guid? TargetDeviceId = null);
 
 public record FolderNodeDto(
     Guid Id,

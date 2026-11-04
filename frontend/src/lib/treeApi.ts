@@ -31,6 +31,7 @@ export interface CollectionNodeDto {
   id: string;
   name: string;
   defaultTarget: ExecutionTarget;
+  targetDeviceId?: string | null;
   openApiSpecUrl?: string | null;
   folders: FolderNodeDto[];
   requests: RequestItemNodeDto[];
@@ -72,11 +73,13 @@ export interface CreateCollectionRequest {
   name: string;
   workspaceId: string;
   defaultTarget?: ExecutionTarget;
+  targetDeviceId?: string | null;
 }
 
 export interface UpdateCollectionRequest {
   name: string;
   defaultTarget?: ExecutionTarget;
+  targetDeviceId?: string | null;
 }
 
 export interface CreateFolderRequest {

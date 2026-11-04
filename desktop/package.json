@@ -1,0 +1,17 @@
+{
+  "name": "apidot-desktop",
+  "version": "0.5.1",
+  "private": true,
+  "scripts": {
+    "prepare": "node prepare.js",
+    "dev": "node prepare.js && tauri dev",
+    "build": "node prepare.js && tauri build",
+    "test": "node validate-config.js && node validate-sidecar.js && node validate-storage.js && node validate-menu.js"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

@@ -65,6 +65,9 @@ export function GlobalSettingsModal({
   // Device Store
   const devices = useDeviceStore((s) => s.devices);
   const activeDeviceId = useDeviceStore((s) => s.activeDeviceId);
+  const globalDefaultTarget = useDeviceStore((s) => s.globalDefaultTarget);
+  const globalDefaultDeviceId = useDeviceStore((s) => s.globalDefaultDeviceId);
+  const setGlobalTargetAndDevice = useDeviceStore((s) => s.setGlobalTargetAndDevice);
   const isLoading = useDeviceStore((s) => s.isLoading);
   const storeError = useDeviceStore((s) => s.error);
   const fetchDevices = useDeviceStore((s) => s.fetchDevices);
@@ -292,6 +295,25 @@ export function GlobalSettingsModal({
     }
   };
 
+  const currentGlobalTargetValue = useMemo(() => {
+    if (globalDefaultTarget === 'Server') return 'server';
+    if (globalDefaultTarget === 'Agent' && globalDefaultDeviceId) {
+      return `device:${globalDefaultDeviceId}`;
+    }
+    return 'active_device';
+  }, [globalDefaultTarget, globalDefaultDeviceId]);
+
+  const handleGlobalTargetChange = (val: string) => {
+    if (val === 'server') {
+      setGlobalTargetAndDevice('Server', null);
+    } else if (val === 'active_device') {
+      setGlobalTargetAndDevice('Agent', null);
+    } else if (val.startsWith('device:')) {
+      const devId = val.replace('device:', '');
+      setGlobalTargetAndDevice('Agent', devId);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -441,6 +463,31 @@ export function GlobalSettingsModal({
                     >
                       <option value="en-US">{t('settings.english')}</option>
                       <option value="pt-BR">{t('settings.portuguese')}</option>
+                    </select>
+                  </div>
+
+                  {/* Alvo Padrão Global / Default Execution Target */}
+                  <div className="flex items-center justify-between p-3.5 sm:p-4">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-semibold text-white">{t('settings.defaultTarget')}</span>
+                      <span className="text-neutral-400">{t('settings.defaultTargetDesc')}</span>
+                    </div>
+                    <select
+                      id="global-default-target-select"
+                      aria-label={t('settings.defaultTarget')}
+                      value={currentGlobalTargetValue}
+                      onChange={(e) => handleGlobalTargetChange(e.target.value)}
+                      className="bg-neutral-900 border border-neutral-800 text-xs text-neutral-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer hover:border-neutral-700 transition-colors max-w-[220px] truncate"
+                    >
+                      <option value="active_device">{t('settings.targetActiveDevice')}</option>
+                      <option value="server">{t('settings.targetServer')}</option>
+                      {devices
+                        .filter((d) => !d.isRevoked)
+                        .map((d) => (
+                          <option key={d.id} value={`device:${d.id}`}>
+                            {d.name} {d.isOnline ? '(Online)' : '(Offline)'}
+                          </option>
+                        ))}
                     </select>
                   </div>
 

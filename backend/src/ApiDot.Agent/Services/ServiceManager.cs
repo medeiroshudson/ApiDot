@@ -330,7 +330,7 @@ WantedBy=default.target
                 {
                     sb.AppendLine(output.Trim());
                 }
-                return new ServiceOperationResult(true, sb.ToString().TrimEnd(), output);
+                return new ServiceOperationResult(isRunning, sb.ToString().TrimEnd(), output);
             }
 
             if (OperatingSystem.IsLinux())
@@ -347,7 +347,7 @@ WantedBy=default.target
                 {
                     sb.AppendLine(output.Trim());
                 }
-                return new ServiceOperationResult(true, sb.ToString().TrimEnd(), output);
+                return new ServiceOperationResult(isRunning, sb.ToString().TrimEnd(), output);
             }
 
             if (OperatingSystem.IsWindows())
@@ -361,7 +361,7 @@ WantedBy=default.target
                 {
                     sb.AppendLine(output.Trim());
                 }
-                return new ServiceOperationResult(true, sb.ToString().TrimEnd(), output);
+                return new ServiceOperationResult(exists, sb.ToString().TrimEnd(), output);
             }
 
             return new ServiceOperationResult(false, $"Unsupported operating system: {Environment.OSVersion.Platform}");

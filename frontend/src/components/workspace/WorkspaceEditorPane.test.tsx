@@ -8,6 +8,7 @@ import { useRequestStore, getScratchpadKey } from '@/stores/useRequestStore';
 import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
 import { useDeviceStore } from '@/stores/useDeviceStore';
 import { WorkspaceTreeDto } from '@/lib/treeApi';
+import { clearSidecarInfoCache, getCachedSidecarInfo } from '@/lib/desktop/runtime';
 
 const mockPush = vi.fn();
 const mockReplace = vi.fn();
@@ -81,6 +82,9 @@ async function renderEditorPane(
 describe('WorkspaceEditorPane', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearSidecarInfoCache();
+    delete (window as any).__TAURI_INTERNALS__;
+    delete (window as any).__TAURI__;
     window.innerWidth = 1024;
     useLayoutStore.setState(INITIAL_LAYOUT_STATE);
     useRequestStore.getState().reset();
@@ -113,6 +117,9 @@ describe('WorkspaceEditorPane', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    clearSidecarInfoCache();
+    delete (window as any).__TAURI_INTERNALS__;
+    delete (window as any).__TAURI__;
     window.innerWidth = 1024;
   });
 
@@ -839,5 +846,462 @@ describe('WorkspaceEditorPane', () => {
 
     const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
     expect(sendButton).toBeDisabled();
+  });
+
+  describe('Desktop Sidecar Routing', () => {
+    it('dispatches to sidecar loopback endpoint when running in desktop mode with Agent target', async () => {
+      const mockInvoke = vi.fn().mockResolvedValue({
+        port: 54321,
+        secret: 'tauri-sidecar-secret-123',
+      });
+      (window as any).__TAURI_INTERNALS__ = { invoke: mockInvoke };
+
+      // Set agent online so Send is enabled
+      useDeviceStore.getState().setDevices([
+        {
+          id: 'dev-1',
+          name: 'Local Agent',
+          tokenPrefix: 'dev_123',
+          createdAtUtc: '2026-11-01T00:00:00Z',
+          isRevoked: false,
+          isOnline: true,
+        },
+      ]);
+
+      const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((input: any, init?: any) => {
+        const url = String(input);
+        if (url.includes('/api/workspaces/ws-1/tree')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => mockTree,
+          } as any);
+        }
+        if (url === 'http://127.0.0.1:54321/execute') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({
+              statusCode: 200,
+              statusText: 'OK',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ via: 'desktop-sidecar' }),
+            }),
+          } as any);
+        }
+        return Promise.resolve({ ok: true } as any);
+      });
+
+      useRequestStore.getState().setCurrentEditorData({
+        method: 'GET',
+        url: 'http://localhost:3000/api/local',
+        target: 'Agent',
+        headers: '',
+        body: '',
+        auth: { type: 'none' },
+      });
+
+      await renderEditorPane('ws-1', null);
+
+      const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
+      await act(async () => {
+        fireEvent.click(sendButton);
+      });
+
+      await waitFor(() => {
+        expect(mockInvoke).toHaveBeenCalledWith('get_sidecar_info');
+        expect(fetchSpy).toHaveBeenCalledWith(
+          'http://127.0.0.1:54321/execute',
+          expect.objectContaining({
+            method: 'POST',
+            headers: expect.objectContaining({
+              'X-ApiDot-Sidecar-Secret': 'tauri-sidecar-secret-123',
+              'Content-Type': 'application/json',
+            }),
+          })
+        );
+      });
+
+      // Verify server execute endpoint was never called
+      const calledUrls = fetchSpy.mock.calls.map((call) => String(call[0]));
+      expect(calledUrls).not.toContain('/api/requests/execute');
+
+      // Verify that dispatch payload does NOT contain target string (Finding 1: Native AOT compatibility)
+      const executeCall = fetchSpy.mock.calls.find((call) => String(call[0]) === 'http://127.0.0.1:54321/execute');
+      expect(executeCall).toBeDefined();
+      const postedDispatch = JSON.parse(String(executeCall?.[1]?.body || '{}'));
+      expect(postedDispatch.target).toBeUndefined();
+      expect(typeof postedDispatch.bodyType).toBe('number');
+
+      // Verify response was saved to store
+      const scratchKey = getScratchpadKey('ws-1');
+      const response = useRequestStore.getState().responsesByRequestId[scratchKey];
+      expect(response).toBeDefined();
+      expect(response?.statusCode).toBe(200);
+      expect(response?.body).toContain('desktop-sidecar');
+    });
+
+    it('dispatches to sidecar loopback when running in desktop mode and browser is offline', async () => {
+      const mockInvoke = vi.fn().mockResolvedValue({
+        port: 49152,
+        secret: 'offline-secret-456',
+      });
+      (window as any).__TAURI_INTERNALS__ = { invoke: mockInvoke };
+
+      const originalOnLine = navigator.onLine;
+      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+
+      try {
+        const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+          const url = String(input);
+          if (url.includes('/api/workspaces/ws-1/tree')) {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => mockTree,
+            } as any);
+          }
+          if (url === 'http://127.0.0.1:49152/execute') {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              headers: new Headers({ 'content-type': 'application/json' }),
+              json: async () => ({
+                statusCode: 200,
+                statusText: 'OK',
+                body: JSON.stringify({ offline: true }),
+              }),
+            } as any);
+          }
+          return Promise.resolve({ ok: true } as any);
+        });
+
+        // Request has target Server, but we are offline on desktop
+        useRequestStore.getState().setCurrentEditorData({
+          method: 'GET',
+          url: 'http://localhost:8080/data',
+          target: 'Server',
+          headers: '',
+          body: '',
+          auth: { type: 'none' },
+        });
+
+        await renderEditorPane('ws-1', null);
+
+        const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
+        await act(async () => {
+          fireEvent.click(sendButton);
+        });
+
+        await waitFor(() => {
+          expect(fetchSpy).toHaveBeenCalledWith(
+            'http://127.0.0.1:49152/execute',
+            expect.objectContaining({
+              method: 'POST',
+              headers: expect.objectContaining({
+                'X-ApiDot-Sidecar-Secret': 'offline-secret-456',
+              }),
+            })
+          );
+        });
+      } finally {
+        Object.defineProperty(navigator, 'onLine', { value: originalOnLine, configurable: true });
+      }
+    });
+
+    it('dispatches to /api/requests/execute when in desktop mode with Server target and online', async () => {
+      (window as any).__TAURI_INTERNALS__ = { invoke: vi.fn() };
+
+      const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+        const url = String(input);
+        if (url.includes('/api/workspaces/ws-1/tree')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => mockTree,
+          } as any);
+        }
+        if (url === '/api/requests/execute') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({
+              statusCode: 200,
+              statusText: 'OK',
+              body: JSON.stringify({ via: 'cloud-server' }),
+            }),
+          } as any);
+        }
+        return Promise.resolve({ ok: true } as any);
+      });
+
+      useRequestStore.getState().setCurrentEditorData({
+        method: 'GET',
+        url: 'https://api.cloud.com/items',
+        target: 'Server',
+        headers: '',
+        body: '',
+        auth: { type: 'none' },
+      });
+
+      await renderEditorPane('ws-1', null);
+
+      const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
+      await act(async () => {
+        fireEvent.click(sendButton);
+      });
+
+      await waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalledWith(
+          '/api/requests/execute',
+          expect.objectContaining({ method: 'POST' })
+        );
+      });
+
+      const calledUrls = fetchSpy.mock.calls.map((call) => String(call[0]));
+      expect(calledUrls.some((u) => u.startsWith('http://127.0.0.1'))).toBe(false);
+    });
+
+    it('dispatches to /api/requests/execute when running in web browser mode even if target is Agent', async () => {
+      // Ensure web environment (not desktop)
+      delete (window as any).__TAURI_INTERNALS__;
+      delete (window as any).__TAURI__;
+
+      useDeviceStore.getState().setDevices([
+        {
+          id: 'dev-1',
+          name: 'Hub Connected Device',
+          tokenPrefix: 'hub_dev',
+          createdAtUtc: '2026-11-01T00:00:00Z',
+          isRevoked: false,
+          isOnline: true,
+        },
+      ]);
+
+      const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+        const url = String(input);
+        if (url.includes('/api/workspaces/ws-1/tree')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => mockTree,
+          } as any);
+        }
+        if (url === '/api/requests/execute') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({
+              statusCode: 200,
+              statusText: 'OK',
+              body: JSON.stringify({ routedVia: 'hub-server' }),
+            }),
+          } as any);
+        }
+        return Promise.resolve({ ok: true } as any);
+      });
+
+      useRequestStore.getState().setCurrentEditorData({
+        method: 'GET',
+        url: 'http://my-agent-host/status',
+        target: 'Agent',
+        headers: '',
+        body: '',
+        auth: { type: 'none' },
+      });
+
+      await renderEditorPane('ws-1', null);
+
+      const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
+      await act(async () => {
+        fireEvent.click(sendButton);
+      });
+
+      await waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalledWith(
+          '/api/requests/execute',
+          expect.objectContaining({ method: 'POST' })
+        );
+      });
+
+      const calledUrls = fetchSpy.mock.calls.map((call) => String(call[0]));
+      expect(calledUrls.some((u) => u.startsWith('http://127.0.0.1'))).toBe(false);
+    });
+
+    it('enables Send button in desktop mode with Agent target even if useDeviceStore has no registered devices (Finding 2)', async () => {
+      (window as any).__TAURI_INTERNALS__ = { invoke: vi.fn() };
+      useDeviceStore.getState().setDevices([]);
+      useDeviceStore.getState().setActiveDeviceId(null);
+
+      useRequestStore.getState().setCurrentEditorData({
+        method: 'GET',
+        url: 'http://localhost:3000/api/local',
+        target: 'Agent',
+        headers: '',
+        body: '',
+        auth: { type: 'none' },
+      });
+
+      await renderEditorPane('ws-1', null);
+
+      const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
+      expect(sendButton).not.toBeDisabled();
+    });
+
+    it('resolves target in nested folders respecting parentFolder.defaultTarget when subFolder is Inherit (Finding 3)', async () => {
+      const mockInvoke = vi.fn().mockResolvedValue({
+        port: 54321,
+        secret: 'nested-folder-secret',
+      });
+      (window as any).__TAURI_INTERNALS__ = { invoke: mockInvoke };
+
+      const treeWithNestedFolders: WorkspaceTreeDto = {
+        workspaceId: 'ws-nested',
+        workspaceName: 'Nested WS',
+        collections: [
+          {
+            id: 'col-nested',
+            name: 'API',
+            defaultTarget: 'Server', // Collection is explicitly Server
+            openApiSpecUrl: null,
+            folders: [
+              {
+                id: 'folder-parent',
+                name: 'Parent Folder',
+                defaultTarget: 'Agent', // Parent folder overrides collection with Agent!
+                collectionId: 'col-nested',
+                parentFolderId: null,
+                requests: [],
+                subFolders: [
+                  {
+                    id: 'folder-sub',
+                    name: 'Sub Folder',
+                    defaultTarget: 'Inherit', // Sub folder inherits from parent folder!
+                    collectionId: 'col-nested',
+                    parentFolderId: 'folder-parent',
+                    requests: [
+                      {
+                        id: 'req-nested',
+                        name: 'Nested Request',
+                        method: 'GET',
+                        url: 'http://localhost:3000/nested',
+                        target: 'Inherit', // Request inherits from sub folder!
+                        bodyType: 'None',
+                        bodyContent: null,
+                        headersJson: '',
+                        collectionId: 'col-nested',
+                        folderId: 'folder-sub',
+                      },
+                    ],
+                    subFolders: [],
+                  },
+                ],
+              },
+            ],
+            requests: [],
+          },
+        ],
+      };
+
+      const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+        const url = String(input);
+        if (url.includes('/api/workspaces/ws-nested/tree')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => treeWithNestedFolders,
+          } as any);
+        }
+        if (url === 'http://127.0.0.1:54321/execute') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({
+              statusCode: 200,
+              statusText: 'OK',
+              body: JSON.stringify({ nestedSuccess: true }),
+            }),
+          } as any);
+        }
+        return Promise.resolve({ ok: true } as any);
+      });
+
+      await renderEditorPane('ws-nested', 'req-nested', treeWithNestedFolders);
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('http://localhost:3000/nested')).toBeInTheDocument();
+      });
+
+      const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
+      await act(async () => {
+        fireEvent.click(sendButton);
+      });
+
+      // Because req-nested -> folder-sub (Inherit) -> folder-parent (Agent), resolved target is Agent!
+      // In desktop mode, Agent target dispatches to sidecar loopback:
+      await waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalledWith(
+          'http://127.0.0.1:54321/execute',
+          expect.objectContaining({
+            method: 'POST',
+            headers: expect.objectContaining({
+              'X-ApiDot-Sidecar-Secret': 'nested-folder-secret',
+            }),
+          })
+        );
+      });
+
+      const calledUrls = fetchSpy.mock.calls.map((call) => String(call[0]));
+      expect(calledUrls).not.toContain('/api/requests/execute');
+    });
+
+    it('invalidates sidecar info cache when desktop sidecar dispatch fails (Finding 4)', async () => {
+      const mockInvoke = vi.fn().mockResolvedValue({
+        port: 54321,
+        secret: 'stale-secret',
+      });
+      (window as any).__TAURI_INTERNALS__ = { invoke: mockInvoke };
+
+      vi.spyOn(global, 'fetch').mockImplementation((input: any) => {
+        const url = String(input);
+        if (url.includes('/api/workspaces/ws-1/tree')) {
+          return Promise.resolve({ ok: true, status: 200, json: async () => mockTree } as any);
+        }
+        if (url.startsWith('http://127.0.0.1')) {
+          return Promise.reject(new Error('Connection refused at 54321'));
+        }
+        return Promise.resolve({ ok: true } as any);
+      });
+
+      useRequestStore.getState().setCurrentEditorData({
+        method: 'GET',
+        url: 'http://localhost:3000/api/local',
+        target: 'Agent',
+        headers: '',
+        body: '',
+        auth: { type: 'none' },
+      });
+
+      await renderEditorPane('ws-1', null);
+
+      const sendButton = screen.getByRole('button', { name: /send request|enviar requisição/i });
+      await act(async () => {
+        fireEvent.click(sendButton);
+      });
+
+      await waitFor(() => {
+        const scratchKey = getScratchpadKey('ws-1');
+        const resp = useRequestStore.getState().responsesByRequestId[scratchKey];
+        expect(resp?.statusCode).toBe(0);
+        expect(resp?.errorMessage).toContain('Connection refused');
+      });
+
+      // Verify that getCachedSidecarInfo() is now null because clearSidecarInfoCache was called in catch block
+      expect(getCachedSidecarInfo()).toBeNull();
+    });
   });
 });

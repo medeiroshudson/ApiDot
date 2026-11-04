@@ -5,6 +5,11 @@ import LoginPage from './page';
 import { useAuthStore, INITIAL_AUTH_STATE } from '@/stores/useAuthStore';
 import { AuthConfig, AuthUser } from '@/lib/authApi';
 import * as authApi from '@/lib/authApi';
+import * as desktopAuth from '@/lib/desktop/desktopAuth';
+
+vi.mock('@/lib/desktop/desktopAuth', () => ({
+  startDesktopSsoFlow: vi.fn(),
+}));
 
 vi.mock('@/lib/authApi', async () => {
   return {
@@ -50,6 +55,8 @@ const mockConfigDisabled: AuthConfig = {
 describe('LoginPage (/login)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete (window as any).__TAURI__;
+    delete (window as any).__TAURI_INTERNALS__;
     vi.mocked(authApi.getAuthConfig).mockResolvedValue(mockConfigEnabled);
     useAuthStore.setState({
       ...INITIAL_AUTH_STATE,
@@ -306,6 +313,115 @@ describe('LoginPage (/login)', () => {
 
       await waitFor(() => {
         expect(fetchConfigSpy).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('Desktop SSO Flow', () => {
+    beforeEach(() => {
+      (window as any).__TAURI__ = { core: { invoke: vi.fn() } };
+    });
+
+    it('renders SSO button as standard button without href in desktop environment', () => {
+      render(<LoginPage />);
+
+      const ssoButton = screen.getByRole('button', { name: /sign in with sso/i });
+      expect(ssoButton).toBeInTheDocument();
+      expect(ssoButton).not.toHaveAttribute('href');
+    });
+
+    it('triggers startDesktopSsoFlow, displays waiting state with spinner and cancel button', async () => {
+      let resolveFlow: (val: any) => void = () => {};
+      const pendingPromise = new Promise((resolve) => {
+        resolveFlow = resolve;
+      });
+      vi.mocked(desktopAuth.startDesktopSsoFlow).mockReturnValue(pendingPromise as any);
+
+      render(<LoginPage />);
+
+      const ssoButton = screen.getByRole('button', { name: /sign in with sso/i });
+      fireEvent.click(ssoButton);
+
+      expect(desktopAuth.startDesktopSsoFlow).toHaveBeenCalledWith({
+        returnUrl: '/',
+        signal: expect.any(AbortSignal),
+      });
+
+      // Waiting state should be rendered
+      expect(screen.getByText(/waiting for authentication in your browser\.\.\./i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
+
+      // Resolve successfully
+      resolveFlow({ success: true, user: mockUser });
+
+      await waitFor(() => {
+        expect(mockReplace).toHaveBeenCalledWith('/');
+      });
+    });
+
+    it('calls loginDesktopSso and redirects to returnUrl on successful desktop SSO authentication', async () => {
+      window.history.pushState({}, '', '/login?returnUrl=/workspace/ws-target');
+      const loginDesktopSsoSpy = vi.fn();
+      useAuthStore.setState({ loginDesktopSso: loginDesktopSsoSpy });
+
+      vi.mocked(desktopAuth.startDesktopSsoFlow).mockResolvedValue({
+        success: true,
+        user: mockUser,
+      });
+
+      render(<LoginPage />);
+
+      const ssoButton = screen.getByRole('button', { name: /sign in with sso/i });
+      fireEvent.click(ssoButton);
+
+      await waitFor(() => {
+        expect(loginDesktopSsoSpy).toHaveBeenCalledWith(mockUser);
+        expect(mockReplace).toHaveBeenCalledWith('/workspace/ws-target');
+      });
+
+      window.history.pushState({}, '', '/login');
+    });
+
+    it('allows cancelling waiting state and restores SSO button', async () => {
+      let capturedSignal: AbortSignal | undefined;
+      vi.mocked(desktopAuth.startDesktopSsoFlow).mockImplementation(async (opts) => {
+        capturedSignal = opts?.signal;
+        return new Promise(() => {});
+      });
+
+      render(<LoginPage />);
+
+      const ssoButton = screen.getByRole('button', { name: /sign in with sso/i });
+      fireEvent.click(ssoButton);
+
+      expect(screen.getByText(/waiting for authentication in your browser\.\.\./i)).toBeInTheDocument();
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      fireEvent.click(cancelButton);
+
+      await waitFor(() => {
+        expect(screen.queryByText(/waiting for authentication in your browser\.\.\./i)).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /sign in with sso/i })).toBeInTheDocument();
+      });
+
+      expect(capturedSignal?.aborted).toBe(true);
+    });
+
+    it('displays error banner when desktop SSO flow fails and resets waiting state', async () => {
+      vi.mocked(desktopAuth.startDesktopSsoFlow).mockResolvedValue({
+        success: false,
+        error: 'Authentication timed out. Please try again.',
+      });
+
+      render(<LoginPage />);
+
+      const ssoButton = screen.getByRole('button', { name: /sign in with sso/i });
+      fireEvent.click(ssoButton);
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toBeInTheDocument();
+        expect(screen.getByText('Authentication timed out. Please try again.')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /sign in with sso/i })).toBeInTheDocument();
       });
     });
   });
