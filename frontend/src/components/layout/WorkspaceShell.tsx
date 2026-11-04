@@ -47,6 +47,7 @@ import {
 import { useTranslation } from '@/hooks/useTranslation';
 import { isDesktop } from '@/lib/desktop/runtime';
 import { startSyncListener } from '@/lib/sync/syncManager';
+import { useUpdateStore } from '@/stores/useUpdateStore';
 import { CheckCircle2, X, AlertCircle } from 'lucide-react';
 
 const STORAGE_KEY_ACTIVE_WORKSPACE = 'apidot_active_workspace_id';
@@ -267,6 +268,20 @@ function WorkspaceShellContent({
       cleanup();
     };
   }, [reloadTree]);
+
+  // Delayed background update check for Desktop environment on startup
+  useEffect(() => {
+    if (!isDesktop()) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      void useUpdateStore.getState().checkForUpdates(false);
+    }, 5000);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, []);
 
   // cURL Import / Export States
   const [isImportCurlModalOpen, setIsImportCurlModalOpen] = useState(false);
