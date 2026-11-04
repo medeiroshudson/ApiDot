@@ -276,7 +276,7 @@ describe('WorkspaceShell', () => {
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText(/global settings|configurações globais/i)).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /local agents/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /devices|dispositivos|local agents/i })).toBeInTheDocument();
   });
 
   it('calls fetchWorkspaces with current workspaceId on mount', async () => {

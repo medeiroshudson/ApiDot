@@ -60,7 +60,7 @@ public static class ServiceManager
     {
         return $"""
 [Unit]
-Description=ApiDot Local Agent
+Description=ApiDot Agent
 After=network.target
 
 [Service]

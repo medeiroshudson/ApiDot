@@ -254,7 +254,7 @@ describe('RequestEditor', () => {
     const chevronBtn = screen.getByRole('button', { name: /send and target options/i });
     fireEvent.click(chevronBtn);
 
-    const agentOption = screen.getByRole('menuitem', { name: /execute on local agent/i });
+    const agentOption = screen.getByRole('menuitem', { name: /execute on (device|local agent)/i });
     expect(agentOption).toBeDisabled();
   });
 
