@@ -1,8 +1,9 @@
 ﻿using ApiDot.Agent;
 using ApiDot.Agent.Commands;
 using ApiDot.Agent.Configuration;
+using ApiDot.Core.Versioning;
 
-var appVersion = AgentVersion.GetNormalizedVersion();
+var appVersion = ApiDotVersion.Resolve();
 Console.WriteLine($"ApiDot Agent {appVersion}");
 
 var fileConfig = AgentConfigManager.Load();

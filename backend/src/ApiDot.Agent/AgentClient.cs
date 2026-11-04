@@ -6,6 +6,8 @@ using System.Text.Json;
 using ApiDot.Core.Enums;
 using ApiDot.Core.Models;
 
+using ApiDot.Core.Versioning;
+
 namespace ApiDot.Agent;
 
 public class AgentClient : IDisposable
@@ -82,7 +84,7 @@ public class AgentClient : IDisposable
         {
             Scheme = wsScheme,
             Path = "/ws/agent",
-            Query = $"token={Uri.EscapeDataString(Token)}&name={Uri.EscapeDataString(AgentName)}&version={Uri.EscapeDataString(AgentVersion.GetNormalizedVersion())}"
+            Query = $"token={Uri.EscapeDataString(Token)}&name={Uri.EscapeDataString(AgentName)}&version={Uri.EscapeDataString(ApiDotVersion.Resolve())}"
         };
 
         return builder.Uri;
