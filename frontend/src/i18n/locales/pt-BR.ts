@@ -673,6 +673,25 @@ const ptBR = {
     errorFallback: 'Ocorreu um erro ao carregar o workspace.',
     retry: 'Tentar novamente',
   },
+  updater: {
+    checkNow: 'Verificar agora',
+    checking: 'Verificando atualizações...',
+    upToDate: 'Atualizado',
+    upToDateDesc: 'Você está utilizando a versão mais recente do ApiDot.',
+    updateAvailable: 'Nova versão disponível',
+    updateAvailableAria: 'Atualização disponível',
+    releaseNotesSummary: 'Lançada no GitHub • Inclui melhorias de performance e estabilidade.',
+    downloadAndInstall: 'Baixar e Atualizar',
+    downloading: 'Baixando atualização ({version})...',
+    verifyingSignature: 'Validando assinatura ed25519...',
+    downloadComplete: 'Download Concluído',
+    readyToRestartDesc: 'Reinicie a aplicação para finalizar a instalação.',
+    restartNow: 'Reiniciar Agora',
+    updateFailed: 'Falha ao atualizar',
+    updatePill: 'Atualização disponível: {version}',
+    cancel: 'Cancelar',
+    errorCheck: 'Não foi possível consultar o servidor de atualizações.',
+  },
 } satisfies TranslationSchema;
 
 export default ptBR;
