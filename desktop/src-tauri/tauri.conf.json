@@ -27,8 +27,17 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "externalBin": [
       "binaries/apidot-agent"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "REPLACE_WITH_GENERATED_ED25519_PUBLIC_KEY",
+      "endpoints": [
+        "https://github.com/medeiroshudson/ApiDot/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

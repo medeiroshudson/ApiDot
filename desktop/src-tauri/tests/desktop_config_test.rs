@@ -35,6 +35,10 @@ fn test_tauri_config_validation() {
 
     assert_eq!(config["bundle"]["active"], true);
     assert_eq!(config["bundle"]["targets"], "all");
+    assert_eq!(
+        config["bundle"]["createUpdaterArtifacts"], true,
+        "bundle.createUpdaterArtifacts must be true"
+    );
 
     let external_bins = config["bundle"]["externalBin"]
         .as_array()
@@ -42,6 +46,16 @@ fn test_tauri_config_validation() {
     assert!(
         external_bins.iter().any(|b| b == "binaries/apidot-agent"),
         "bundle.externalBin should contain 'binaries/apidot-agent'"
+    );
+
+    let endpoints = config["plugins"]["updater"]["endpoints"]
+        .as_array()
+        .expect("plugins.updater.endpoints should be an array");
+    assert!(!endpoints.is_empty(), "updater endpoints should not be empty");
+    let endpoint_str = endpoints[0].as_str().expect("endpoint should be string");
+    assert!(
+        endpoint_str.contains("github.com/medeiroshudson/ApiDot/releases"),
+        "updater endpoint must point to GitHub releases"
     );
 }
 
@@ -70,5 +84,13 @@ fn test_default_capability_validation() {
     assert!(
         perm_strs.contains(&"fs:default"),
         "capabilities should include fs:default"
+    );
+    assert!(
+        perm_strs.contains(&"updater:default"),
+        "capabilities should include updater:default"
+    );
+    assert!(
+        perm_strs.contains(&"process:default"),
+        "capabilities should include process:default"
     );
 }

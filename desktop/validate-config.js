@@ -33,7 +33,10 @@ function run() {
   assert(tauriConf.app.security?.capabilities?.includes('default'), 'capabilities must include default');
   assert.strictEqual(tauriConf.bundle?.active, true);
   assert.strictEqual(tauriConf.bundle?.targets, 'all');
+  assert.strictEqual(tauriConf.bundle?.createUpdaterArtifacts, true, 'bundle.createUpdaterArtifacts must be true');
   assert(tauriConf.bundle?.externalBin?.includes('binaries/apidot-agent'), 'externalBin must include binaries/apidot-agent');
+  assert(Array.isArray(tauriConf.plugins?.updater?.endpoints) && tauriConf.plugins.updater.endpoints.length > 0, 'updater endpoints must be configured');
+  assert(tauriConf.plugins.updater.endpoints[0].includes('github.com/medeiroshudson/ApiDot/releases'), 'updater endpoint must point to GitHub releases');
   console.log('✓ tauri.conf.json verified');
 
   // 2. capabilities/default.json
@@ -44,6 +47,8 @@ function run() {
   assert(capability.permissions.includes('core:default'), 'permissions must include core:default');
   assert(capability.permissions.includes('shell:default'), 'permissions must include shell:default');
   assert(capability.permissions.includes('fs:default'), 'permissions must include fs:default');
+  assert(capability.permissions.includes('updater:default'), 'permissions must include updater:default');
+  assert(capability.permissions.includes('process:default'), 'permissions must include process:default');
   console.log('✓ capabilities/default.json verified');
 
   // 3. Cargo.toml
@@ -56,6 +61,8 @@ function run() {
   assert(cargoContent.includes('tauri ='), 'Cargo.toml missing tauri dependency');
   assert(cargoContent.includes('tauri-plugin-shell = "2"'), 'Cargo.toml missing tauri-plugin-shell');
   assert(cargoContent.includes('tauri-plugin-fs = "2"'), 'Cargo.toml missing tauri-plugin-fs');
+  assert(cargoContent.includes('tauri-plugin-updater = "2"'), 'Cargo.toml missing tauri-plugin-updater');
+  assert(cargoContent.includes('tauri-plugin-process = "2"'), 'Cargo.toml missing tauri-plugin-process');
   assert(cargoContent.includes('serde ='), 'Cargo.toml missing serde');
   assert(cargoContent.includes('serde_json = "1"'), 'Cargo.toml missing serde_json');
   assert(cargoContent.includes('uuid ='), 'Cargo.toml missing uuid');
@@ -72,6 +79,9 @@ function run() {
   const mainRs = fs.readFileSync(mainRsPath, 'utf-8');
   assert(mainRs.includes('tauri_plugin_shell::init()'), 'main.rs missing tauri_plugin_shell');
   assert(mainRs.includes('tauri_plugin_fs::init()'), 'main.rs missing tauri_plugin_fs');
+  assert(mainRs.includes('tauri_plugin_process::init()'), 'main.rs missing tauri_plugin_process');
+  assert(mainRs.includes('tauri_plugin_updater::Builder::new().build()'), 'main.rs missing tauri_plugin_updater');
+  assert(mainRs.includes('restart_app_cleanly'), 'main.rs missing restart_app_cleanly');
   assert(mainRs.includes('tauri::generate_context!()'), 'main.rs missing generate_context');
   console.log('✓ src/main.rs verified');
 
