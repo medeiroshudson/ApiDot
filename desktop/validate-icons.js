@@ -22,3 +22,32 @@ assert(svgContent.includes('#86BC25'), 'app-icon.svg must use official green #86
 assert(svgContent.includes('#1c1d21') || svgContent.includes('#0b0c0e'), 'app-icon.svg must use Dark Obsidian palette');
 
 console.log('✓ Master icon SVG structure validation passed.');
+
+// Platform icon artifacts assertions
+const requiredFiles = [
+  'icon.icns',
+  'icon.ico',
+  'icon.png',
+  '32x32.png',
+  '64x64.png',
+  '128x128.png',
+  '128x128@2x.png',
+  'Square30x30Logo.png',
+  'Square44x44Logo.png',
+  'Square71x71Logo.png',
+  'Square89x89Logo.png',
+  'Square107x107Logo.png',
+  'Square142x142Logo.png',
+  'Square150x150Logo.png',
+  'Square284x284Logo.png',
+  'Square310x310Logo.png',
+  'StoreLogo.png'
+];
+
+requiredFiles.forEach((file) => {
+  const filePath = path.join(iconsDir, file);
+  assert(fs.existsSync(filePath), `Icon artifact must exist: ${file}`);
+  const stat = fs.statSync(filePath);
+  assert(stat.size > 0, `Icon artifact must not be empty: ${file}`);
+});
+console.log('✓ All platform icon artifacts validated successfully.');
