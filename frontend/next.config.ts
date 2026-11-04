@@ -42,6 +42,7 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   reactCompiler: true,
   turbopack: {
+    root: path.resolve(__dirname, '..'),
     rules: {
       '*.svg': {
         loaders: [path.resolve(__dirname, 'loaders/svg-react-loader.cjs')],

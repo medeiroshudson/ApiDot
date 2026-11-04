@@ -3,9 +3,6 @@
   "version": "0.5.1",
   "private": true,
   "scripts": {
-    "sync:assets": "node -e \"const fs=require('fs'),path=require('path'); const src=path.resolve(__dirname,'../assets'); const dst=path.resolve(__dirname,'assets'); if(fs.existsSync(src)){fs.mkdirSync(dst,{recursive:true}); for(const f of fs.readdirSync(src)){if(f.endsWith('.svg')) fs.copyFileSync(path.join(src,f),path.join(dst,f));}}\"",
-    "predev": "npm run sync:assets",
-    "prebuild": "npm run sync:assets",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

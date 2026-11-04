@@ -27,8 +27,7 @@
         "./src/*"
       ],
       "@assets/*": [
-        "../assets/*",
-        "./assets/*"
+        "../assets/*"
       ]
     }
   },
