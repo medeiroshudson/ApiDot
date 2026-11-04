@@ -18,13 +18,14 @@ module.exports = function (content) {
   return `
 import React from 'react';
 
-export default function SvgComponent({ className = 'h-5 w-auto', fill = 'currentColor', ...props }) {
+export default function SvgComponent({ className = 'h-6 w-auto', fill = 'currentColor', style, ...props }) {
   return React.createElement('svg', {
     viewBox: '${viewBox}',
     className,
     fill,
     role: 'img',
     'aria-label': props['aria-label'] || 'ApiDot',
+    style: { display: 'inline-block', verticalAlign: 'middle', height: '1.5rem', width: 'auto', ...style },
     ...props,
     dangerouslySetInnerHTML: { __html: \`${inner}\` }
   });

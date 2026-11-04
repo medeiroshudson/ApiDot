@@ -139,7 +139,7 @@ export function AppHeader({
         <div className="flex items-center gap-2">
           {title === 'ApiDot' ? (
             <div className="flex items-center gap-2">
-              <ApiDotLogo className="h-5.5 w-auto text-white" aria-label="ApiDot" />
+              <ApiDotLogo className="h-6 w-auto shrink-0 text-white" aria-label="ApiDot" />
               <span className="sr-only">ApiDot</span>
             </div>
           ) : (
