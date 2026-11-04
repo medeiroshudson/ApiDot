@@ -1,10 +1,11 @@
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AppHeader } from './AppHeader';
 import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useRequestStore } from '@/stores/useRequestStore';
+import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useI18nStore } from '@/stores/useI18nStore';
 
 const mockReplace = vi.fn();
@@ -27,9 +28,19 @@ describe('AppHeader', () => {
         text: async () => '',
       })
     );
+    delete (window as any).__TAURI__;
+    delete (window as any).__TAURI_INTERNALS__;
+    useUpdateStore.getState().reset();
     useAuthStore.getState().reset();
     useWorkspaceStore.getState().reset();
     useI18nStore.setState({ locale: 'en-US' });
+  });
+
+  afterEach(() => {
+    cleanup();
+    delete (window as any).__TAURI__;
+    delete (window as any).__TAURI_INTERNALS__;
+    useUpdateStore.getState().reset();
   });
   it('renders workspace title and default fallback', () => {
     const { rerender } = render(<AppHeader title="My Custom Workspace" />);
@@ -365,6 +376,97 @@ describe('AppHeader', () => {
       expect(screen.getByRole('button', { name: 'Global Settings' })).toBeInTheDocument();
       expect(screen.getByText('Language')).toBeInTheDocument();
       expect(toggleBtn).toHaveTextContent(/english/i);
+    });
+  });
+
+  describe('Desktop Auto-Update Pill', () => {
+    it('renders update pill when isDesktop is true and update status is available', () => {
+      (window as any).__TAURI__ = {};
+      useUpdateStore.setState({ status: 'available', availableVersion: '0.6.0' });
+      const onOpenSettings = vi.fn();
+
+      act(() => {
+        render(<AppHeader onOpenSettings={onOpenSettings} />);
+      });
+      expect(screen.getByText(/v0.6.0/i)).toBeInTheDocument();
+
+      act(() => {
+        fireEvent.click(screen.getByRole('button', { name: /update available/i }));
+      });
+      expect(onOpenSettings).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not render update pill when isDesktop is false even if update is available', () => {
+      delete (window as any).__TAURI__;
+      delete (window as any).__TAURI_INTERNALS__;
+      useUpdateStore.setState({ status: 'available', availableVersion: '0.6.0' });
+
+      act(() => {
+        render(<AppHeader onOpenSettings={vi.fn()} />);
+      });
+      expect(screen.queryByRole('button', { name: /update available/i })).toBeNull();
+      expect(screen.queryByText(/v0.6.0/i)).toBeNull();
+    });
+
+    it('does not render update pill when isDesktop is true but status is not available', () => {
+      (window as any).__TAURI__ = {};
+      const nonAvailableStatuses = [
+        'idle',
+        'checking',
+        'up-to-date',
+        'downloading',
+        'ready-to-restart',
+        'error',
+      ] as const;
+
+      for (const status of nonAvailableStatuses) {
+        useUpdateStore.setState({ status, availableVersion: '0.6.0' });
+        let unmountFn: () => void = () => {};
+        act(() => {
+          const { unmount } = render(<AppHeader onOpenSettings={vi.fn()} />);
+          unmountFn = unmount;
+        });
+        expect(screen.queryByRole('button', { name: /update available/i })).toBeNull();
+        act(() => {
+          unmountFn();
+        });
+      }
+    });
+
+    it('renders update pill dynamically when status transitions to available while mounted', () => {
+      (window as any).__TAURI__ = {};
+      useUpdateStore.setState({ status: 'idle', availableVersion: null });
+
+      act(() => {
+        render(<AppHeader onOpenSettings={vi.fn()} />);
+      });
+      expect(screen.queryByRole('button', { name: /update available/i })).toBeNull();
+
+      act(() => {
+        useUpdateStore.setState({ status: 'available', availableVersion: '0.6.0' });
+      });
+
+      expect(screen.getByRole('button', { name: /update available/i })).toBeInTheDocument();
+      expect(screen.getByText(/v0.6.0/i)).toBeInTheDocument();
+    });
+
+    it('renders localized update pill in pt-BR', () => {
+      useI18nStore.setState({ locale: 'pt-BR' });
+      (window as any).__TAURI__ = {};
+      useUpdateStore.setState({ status: 'available', availableVersion: '0.6.0' });
+      const onOpenSettings = vi.fn();
+
+      act(() => {
+        render(<AppHeader onOpenSettings={onOpenSettings} />);
+      });
+      const pill = screen.getByRole('button', { name: /atualização disponível/i });
+      expect(pill).toBeInTheDocument();
+      expect(screen.getByText(/atualização disponível: v0.6.0/i)).toBeInTheDocument();
+
+      act(() => {
+        fireEvent.click(pill);
+      });
+      expect(onOpenSettings).toHaveBeenCalledTimes(1);
     });
   });
 });
