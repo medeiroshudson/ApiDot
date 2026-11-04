@@ -1,6 +1,14 @@
-# ⚡ ApiDot
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/api-dot-white.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/api-dot-black.svg">
+    <img alt="ApiDot" src="assets/api-dot-white.svg" width="260">
+  </picture>
+</p>
 
-> Test and debug any API, anywhere — from localhost to production.
+<p align="center">
+  <strong>Test and debug any API, anywhere — from localhost to production.</strong>
+</p>
 
 [![GitHub Release](https://img.shields.io/github/v/release/medeiroshudson/ApiDot?color=blue&label=release&style=flat-square)](https://github.com/medeiroshudson/ApiDot/releases)
 [![Live Demo](https://img.shields.io/badge/Live_Demo-apidot.hmedeiros.dev-00E599?style=flat-square&logo=googlechrome&logoColor=white)](https://apidot.hmedeiros.dev)

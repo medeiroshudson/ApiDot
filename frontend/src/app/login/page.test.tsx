@@ -75,7 +75,8 @@ describe('LoginPage (/login)', () => {
     it('renders ApiDot branding and motto', () => {
       render(<LoginPage />);
 
-      expect(screen.getByText(/⚡ ApiDot/i)).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: /ApiDot/i })).toBeInTheDocument();
+      expect(screen.getByText('ApiDot')).toBeInTheDocument();
       expect(screen.getByText(/Test and debug any API, anywhere/i)).toBeInTheDocument();
     });
   });

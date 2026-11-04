@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useRequestStore } from '@/stores/useRequestStore';
 import { useTranslation } from '@/hooks/useTranslation';
+import ApiDotLogo from '@assets/api-dot-white.svg';
 
 export interface AppHeaderProps {
   title?: string;
@@ -136,7 +137,14 @@ export function AppHeader({
           <Menu className="w-5 h-5" aria-hidden="true" />
         </button>
         <div className="flex items-center gap-2">
-          <span className="font-bold text-base tracking-tight text-white">{title}</span>
+          {title === 'ApiDot' ? (
+            <div className="flex items-center gap-2">
+              <ApiDotLogo className="h-6 w-auto shrink-0 text-white" aria-label="ApiDot" />
+              <span className="sr-only">ApiDot</span>
+            </div>
+          ) : (
+            <span className="font-bold text-base tracking-tight text-white">{title}</span>
+          )}
           <span className="hidden sm:inline-block text-xs px-2 py-0.5 rounded bg-neutral-800 text-neutral-400">
             {formatDisplayVersion(APP_VERSION)}
           </span>
