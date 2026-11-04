@@ -51,7 +51,7 @@ export const useUpdateStore = create<UpdateStoreState>()((set, get) => ({
   ...INITIAL_UPDATE_STATE,
 
   checkForUpdates: async (_manual = false): Promise<void> => {
-    if (get().status === 'downloading') {
+    if (get().status === 'downloading' || get().status === 'checking') {
       return;
     }
 
@@ -89,7 +89,7 @@ export const useUpdateStore = create<UpdateStoreState>()((set, get) => ({
   },
 
   downloadAndInstall: async (): Promise<void> => {
-    if (get().status === 'downloading') {
+    if (get().status === 'downloading' || get().status === 'ready-to-restart') {
       return;
     }
 
