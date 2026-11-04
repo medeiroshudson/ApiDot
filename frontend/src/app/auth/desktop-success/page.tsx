@@ -3,6 +3,7 @@
 import React from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { CheckCircle2 } from 'lucide-react';
+import ApiDotLogo from '@assets/api-dot-white.svg';
 
 export default function DesktopSuccessPage() {
   const { t } = useTranslation();
@@ -19,9 +20,8 @@ export default function DesktopSuccessPage() {
         {/* Header with ApiDot branding */}
         <div className="flex flex-col items-center text-center gap-1.5">
           <div className="inline-flex items-center justify-center gap-2 mb-1">
-            <span className="text-2xl font-bold tracking-tight text-white select-none">
-              ⚡ ApiDot
-            </span>
+            <ApiDotLogo className="h-8 w-auto text-white" aria-label="ApiDot" />
+            <span className="sr-only">ApiDot</span>
           </div>
         </div>
 
