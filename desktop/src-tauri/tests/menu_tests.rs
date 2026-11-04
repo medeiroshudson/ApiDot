@@ -46,6 +46,10 @@ fn test_about_metadata_configuration() {
         Some("© 2026 Hudson Medeiros")
     );
     assert_eq!(metadata.license.as_deref(), Some("MIT License"));
+    assert!(
+        metadata.icon.is_some(),
+        "About metadata must include the application icon"
+    );
 }
 
 #[test]

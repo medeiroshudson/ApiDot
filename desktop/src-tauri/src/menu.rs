@@ -15,6 +15,11 @@ pub const ABOUT_WEBSITE: &str = "https://apidot.hmedeiros.dev";
 pub const ABOUT_COPYRIGHT: &str = "© 2026 Hudson Medeiros";
 pub const ABOUT_LICENSE: &str = "MIT License";
 
+/// Loads the official ApiDot icon image for the About dialog.
+pub fn load_about_icon() -> Option<tauri::image::Image<'static>> {
+    tauri::image::Image::from_bytes(include_bytes!("../icons/128x128@2x.png")).ok()
+}
+
 /// Creates the About dialog metadata populated with ApiDot application details.
 pub fn create_about_metadata(version: &str) -> AboutMetadata<'static> {
     AboutMetadata {
@@ -25,6 +30,7 @@ pub fn create_about_metadata(version: &str) -> AboutMetadata<'static> {
         website: Some(ABOUT_WEBSITE.to_string()),
         copyright: Some(ABOUT_COPYRIGHT.to_string()),
         license: Some(ABOUT_LICENSE.to_string()),
+        icon: load_about_icon(),
         ..Default::default()
     }
 }

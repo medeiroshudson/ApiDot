@@ -26,6 +26,10 @@ function run() {
     'menu.rs missing create_about_metadata function'
   );
   assert(
+    menuRs.includes('pub fn load_about_icon'),
+    'menu.rs missing load_about_icon function'
+  );
+  assert(
     menuRs.includes('pub fn create_settings_item'),
     'menu.rs missing create_settings_item function'
   );
