@@ -46,22 +46,26 @@ pub fn build_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>
     let about_metadata = create_about_metadata(&pkg_info.version.to_string());
     let settings_item = create_settings_item(app)?;
 
+    let about_label = format!("About {}", ABOUT_NAME);
+    let hide_label = format!("Hide {}", ABOUT_NAME);
+    let quit_label = format!("Quit {}", ABOUT_NAME);
+
     let app_menu = Submenu::with_items(
         app,
         ABOUT_NAME,
         true,
         &[
-            &PredefinedMenuItem::about(app, None, Some(about_metadata))?,
+            &PredefinedMenuItem::about(app, Some(&about_label), Some(about_metadata))?,
             &PredefinedMenuItem::separator(app)?,
             &settings_item,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::services(app, None)?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::hide(app, None)?,
+            &PredefinedMenuItem::hide(app, Some(&hide_label))?,
             &PredefinedMenuItem::hide_others(app, None)?,
             &PredefinedMenuItem::show_all(app, None)?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::quit(app, None)?,
+            &PredefinedMenuItem::quit(app, Some(&quit_label))?,
         ],
     )?;
 
@@ -113,6 +117,9 @@ pub fn build_non_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Men
     let about_metadata = create_about_metadata(&pkg_info.version.to_string());
     let settings_item = create_settings_item(app)?;
 
+    let about_label = format!("About {}", ABOUT_NAME);
+    let quit_label = format!("Quit {}", ABOUT_NAME);
+
     let file_menu = Submenu::with_items(
         app,
         "File",
@@ -120,7 +127,7 @@ pub fn build_non_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Men
         &[
             &settings_item,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::quit(app, None)?,
+            &PredefinedMenuItem::quit(app, Some(&quit_label))?,
         ],
     )?;
 
@@ -150,7 +157,7 @@ pub fn build_non_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Men
         app,
         "Help",
         true,
-        &[&PredefinedMenuItem::about(app, None, Some(about_metadata))?],
+        &[&PredefinedMenuItem::about(app, Some(&about_label), Some(about_metadata))?],
     )?;
 
     Menu::with_items(app, &[&file_menu, &edit_menu, &view_menu, &help_menu])

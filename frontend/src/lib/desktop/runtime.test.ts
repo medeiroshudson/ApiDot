@@ -154,6 +154,50 @@ describe('runtime', () => {
       expect(mockUnlisten).toHaveBeenCalledTimes(1);
     });
 
+    it('subscribes via __TAURI_INTERNALS__.invoke plugin:event|listen when listen is not present on internals', async () => {
+      let registeredHandler: ((e: any) => void) | undefined;
+      const mockTransformCallback = vi.fn((cb: any) => {
+        registeredHandler = cb;
+        return 42;
+      });
+      const mockUnregisterCallback = vi.fn();
+      const mockInvoke = vi.fn((cmd: string, args: any) => {
+        if (cmd === 'plugin:event|listen') {
+          return Promise.resolve(101); // eventId
+        }
+        if (cmd === 'plugin:event|unlisten') {
+          return Promise.resolve();
+        }
+        return Promise.resolve();
+      });
+
+      (window as any).__TAURI_INTERNALS__ = {
+        invoke: mockInvoke,
+        transformCallback: mockTransformCallback,
+        unregisterCallback: mockUnregisterCallback,
+      };
+
+      const handler = vi.fn();
+      const unlisten = await listenDesktopEvent('ipc-fallback-event', handler);
+
+      expect(mockTransformCallback).toHaveBeenCalled();
+      expect(mockInvoke).toHaveBeenCalledWith('plugin:event|listen', {
+        event: 'ipc-fallback-event',
+        target: { kind: 'Any' },
+        handler: 42,
+      });
+
+      registeredHandler?.({ payload: { fromIpc: true } });
+      expect(handler).toHaveBeenCalledWith({ fromIpc: true });
+
+      await unlisten();
+      expect(mockUnregisterCallback).toHaveBeenCalledWith(42);
+      expect(mockInvoke).toHaveBeenCalledWith('plugin:event|unlisten', {
+        event: 'ipc-fallback-event',
+        eventId: 101,
+      });
+    });
+
     it('supports window CustomEvent fallback in desktop environment', async () => {
       (window as any).__TAURI__ = {}; // isDesktop() is true, but no listenFn
 

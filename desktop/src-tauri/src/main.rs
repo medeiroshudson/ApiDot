@@ -4,6 +4,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use apidot_desktop::sidecar::*;
 use apidot_desktop::storage::*;
+use tauri::Manager;
 
 fn main() {
     let sidecar_manager = Arc::new(Mutex::new(SidecarManager::new()));
@@ -22,6 +23,10 @@ fn main() {
         .on_menu_event(|app, event| {
             if event.id().as_ref() == "open_settings" {
                 let _ = tauri::Emitter::emit(app, "open-global-settings", ());
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = tauri::Emitter::emit(&window, "open-global-settings", ());
+                    let _ = window.eval("window.dispatchEvent(new CustomEvent('open-global-settings'))");
+                }
             }
         })
         .setup({

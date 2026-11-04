@@ -87,3 +87,23 @@ fn test_menu_module_registered_in_lib_rs() {
         "lib.rs must register pub mod menu;"
     );
 }
+
+#[test]
+fn test_menu_labels_explicitly_use_apidot() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let menu_rs_path = manifest_dir.join("src").join("menu.rs");
+    let menu_rs_content = fs::read_to_string(&menu_rs_path).expect("menu.rs should exist");
+
+    assert!(
+        menu_rs_content.contains("format!(\"About {}\", ABOUT_NAME)"),
+        "menu.rs must explicitly format About label with ApiDot"
+    );
+    assert!(
+        menu_rs_content.contains("format!(\"Hide {}\", ABOUT_NAME)"),
+        "menu.rs must explicitly format Hide label with ApiDot"
+    );
+    assert!(
+        menu_rs_content.contains("format!(\"Quit {}\", ABOUT_NAME)"),
+        "menu.rs must explicitly format Quit label with ApiDot"
+    );
+}

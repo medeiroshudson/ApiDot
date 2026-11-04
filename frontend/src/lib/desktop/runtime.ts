@@ -107,6 +107,30 @@ export async function listenDesktopEvent<T = unknown>(
     listenFn = tauriInternals.event.listen.bind(tauriInternals.event);
   } else if (typeof tauriInternals?.listen === 'function') {
     listenFn = tauriInternals.listen.bind(tauriInternals);
+  } else if (
+    typeof tauriInternals?.invoke === 'function' &&
+    typeof tauriInternals?.transformCallback === 'function'
+  ) {
+    listenFn = (eventName: string, cb: (e: any) => void) => {
+      const handlerId = tauriInternals.transformCallback(cb);
+      return tauriInternals
+        .invoke('plugin:event|listen', {
+          event: eventName,
+          target: { kind: 'Any' },
+          handler: handlerId,
+        })
+        .then((eventId: number) => {
+          return () => {
+            if (typeof tauriInternals.unregisterCallback === 'function') {
+              tauriInternals.unregisterCallback(handlerId);
+            }
+            return tauriInternals.invoke('plugin:event|unlisten', {
+              event: eventName,
+              eventId,
+            });
+          };
+        });
+    };
   }
 
   let unlistenTauri: (() => void) | undefined;
