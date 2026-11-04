@@ -5,6 +5,7 @@ import {
   relaunchAppCleanly,
   type UpdateProgress,
 } from '@/lib/desktop/updater';
+import { isDesktop } from '@/lib/desktop/runtime';
 
 export type UpdateStatus =
   | 'idle'
@@ -51,6 +52,10 @@ export const useUpdateStore = create<UpdateStoreState>()((set, get) => ({
   ...INITIAL_UPDATE_STATE,
 
   checkForUpdates: async (_manual = false): Promise<void> => {
+    if (!isDesktop()) {
+      return;
+    }
+
     if (get().status === 'downloading' || get().status === 'checking') {
       return;
     }
@@ -103,6 +108,9 @@ export const useUpdateStore = create<UpdateStoreState>()((set, get) => ({
 
     try {
       await downloadAndInstallUpdate((progress: UpdateProgress) => {
+        if (get().status !== 'downloading') {
+          return;
+        }
         set({
           progressPercent: progress.percent,
           downloadedBytes: progress.downloadedBytes,
@@ -110,11 +118,18 @@ export const useUpdateStore = create<UpdateStoreState>()((set, get) => ({
         });
       });
 
+      if (get().status !== 'downloading') {
+        return;
+      }
+
       set({
         status: 'ready-to-restart',
         progressPercent: 100,
       });
     } catch (err: unknown) {
+      if (get().status !== 'downloading') {
+        return;
+      }
       const message = err instanceof Error ? err.message : String(err);
       set({
         status: 'error',

@@ -15,10 +15,13 @@ vi.mock('@/lib/desktop/updater', () => ({
 describe('useUpdateStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (window as any).__TAURI__ = {};
     useUpdateStore.setState({ ...INITIAL_UPDATE_STATE });
   });
 
   afterEach(() => {
+    delete (window as any).__TAURI__;
+    delete (window as any).__TAURI_INTERNALS__;
     vi.restoreAllMocks();
   });
 
@@ -161,6 +164,16 @@ describe('useUpdateStore', () => {
       expect(updaterModule.checkDesktopUpdate).not.toHaveBeenCalled();
       expect(useUpdateStore.getState().status).toBe('downloading');
     });
+
+    it('bypasses check and remains in idle state when isDesktop is false', async () => {
+      delete (window as any).__TAURI__;
+      delete (window as any).__TAURI_INTERNALS__;
+
+      await useUpdateStore.getState().checkForUpdates();
+
+      expect(updaterModule.checkDesktopUpdate).not.toHaveBeenCalled();
+      expect(useUpdateStore.getState().status).toBe('idle');
+    });
   });
 
   describe('3. downloadAndInstall', () => {
@@ -237,6 +250,45 @@ describe('useUpdateStore', () => {
       const state = useUpdateStore.getState();
       expect(state.status).toBe('error');
       expect(state.errorMessage).toBe('Socket aborted');
+    });
+
+    it('ignores progress and completion events if download was cancelled via reset', async () => {
+      let progressCb: ((progress: updaterModule.UpdateProgress) => void) | undefined;
+      let resolveDownload: () => void = () => {};
+
+      vi.mocked(updaterModule.downloadAndInstallUpdate).mockImplementationOnce(
+        (onProgress) =>
+          new Promise((resolve) => {
+            progressCb = onProgress;
+            resolveDownload = resolve;
+          })
+      );
+
+      useUpdateStore.setState({ status: 'available', availableVersion: '0.6.0' });
+
+      const downloadPromise = useUpdateStore.getState().downloadAndInstall();
+      expect(useUpdateStore.getState().status).toBe('downloading');
+
+      // User cancels via reset
+      useUpdateStore.getState().reset();
+      expect(useUpdateStore.getState().status).toBe('idle');
+
+      // Trailing progress event arrives after cancellation
+      progressCb?.({
+        chunkLength: 1024,
+        contentLength: 4096,
+        downloadedBytes: 1024,
+        percent: 25,
+      });
+      expect(useUpdateStore.getState().status).toBe('idle');
+      expect(useUpdateStore.getState().progressPercent).toBe(0);
+
+      // Trailing completion arrives after cancellation
+      resolveDownload();
+      await downloadPromise;
+
+      expect(useUpdateStore.getState().status).toBe('idle');
+      expect(useUpdateStore.getState().progressPercent).toBe(0);
     });
   });
 
