@@ -689,6 +689,7 @@ const enUS = {
     updatePill: 'Update available: {version}',
     cancel: 'Cancel',
     errorCheck: 'Could not connect to update server.',
+    retry: 'Retry',
   },
   test: {
     fallbackOnlyInEnglish: 'English Only',

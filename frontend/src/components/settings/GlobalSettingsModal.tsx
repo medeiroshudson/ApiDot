@@ -17,9 +17,12 @@ import {
   EyeOff,
   Loader2,
   ShieldAlert,
+  Download,
 } from 'lucide-react';
 import { useDeviceStore } from '@/stores/useDeviceStore';
 import { useLayoutStore } from '@/stores/useLayoutStore';
+import { useUpdateStore } from '@/stores/useUpdateStore';
+import { isDesktop } from '@/lib/desktop/runtime';
 import { useTranslation } from '@/hooks/useTranslation';
 import type { Locale } from '@/i18n';
 import { AgentDeviceDto } from '@/lib/deviceApi';
@@ -84,6 +87,19 @@ export function GlobalSettingsModal({
   const requestResponseRatio = useLayoutStore((s) => s.requestResponseRatio);
   const resetRequestResponseRatio = useLayoutStore((s) => s.resetRequestResponseRatio);
 
+  // Update Store
+  const updateStatus = useUpdateStore((s) => s.status);
+  const availableVersion = useUpdateStore((s) => s.availableVersion);
+  const progressPercent = useUpdateStore((s) => s.progressPercent);
+  const downloadedBytes = useUpdateStore((s) => s.downloadedBytes);
+  const totalBytes = useUpdateStore((s) => s.totalBytes);
+  const updateErrorMessage = useUpdateStore((s) => s.errorMessage);
+  const releaseNotes = useUpdateStore((s) => s.releaseNotes);
+  const checkForUpdates = useUpdateStore((s) => s.checkForUpdates);
+  const downloadAndInstall = useUpdateStore((s) => s.downloadAndInstall);
+  const restartAndApply = useUpdateStore((s) => s.restartAndApply);
+  const resetUpdate = useUpdateStore((s) => s.reset);
+
   // Refs for accessibility & focus trapping
   const modalContentRef = useRef<HTMLDivElement>(null);
   const previousActiveElementRef = useRef<HTMLElement | null>(null);
@@ -104,7 +120,7 @@ export function GlobalSettingsModal({
     if (isOpen) {
       previousActiveElementRef.current = (document.activeElement as HTMLElement) || null;
       if (defaultTab) {
-        setActiveTab(defaultTab);
+        setActiveTab((prev) => (prev !== defaultTab ? defaultTab : prev));
       }
     } else {
       setIsCreateDialogOpen(false);
@@ -491,20 +507,188 @@ export function GlobalSettingsModal({
                     </select>
                   </div>
 
-                  {/* Versão da Aplicação */}
-                  <div className="flex items-center justify-between p-3.5 sm:p-4">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-semibold text-white">
-                        {t('settings.appVersion')}
-                      </span>
-                      <span className="text-neutral-400">
-                        {t('settings.appVersionDesc')}
+                  {/* Versão da Aplicação e Atualizações Automáticas (Desktop) */}
+                  {!isDesktop() ? (
+                    <div className="flex items-center justify-between p-3.5 sm:p-4">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-semibold text-white">
+                          {t('settings.appVersion')}
+                        </span>
+                        <span className="text-neutral-400">
+                          {t('settings.appVersionDesc')}
+                        </span>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-neutral-900 border border-neutral-800 text-blue-400">
+                        ApiDot {formatDisplayVersion(APP_VERSION)} • {t('settings.stable')}
                       </span>
                     </div>
-                    <span className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-neutral-900 border border-neutral-800 text-blue-400">
-                      ApiDot {formatDisplayVersion(APP_VERSION)} • {t('settings.stable')}
-                    </span>
-                  </div>
+                  ) : updateStatus === 'available' ? (
+                    /* State B: Atualização Disponível */
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 bg-blue-950/20 border-l-2 border-blue-500">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white">
+                            {t('updater.updateAvailable')}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-500/20 border border-blue-500/30 text-blue-300">
+                            {formatDisplayVersion(availableVersion || '')}
+                          </span>
+                        </div>
+                        <span className="text-neutral-400">
+                          {releaseNotes || t('updater.releaseNotesSummary')}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void downloadAndInstall()}
+                        className="h-8 px-3.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm self-start sm:self-auto"
+                      >
+                        <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>{t('updater.downloadAndInstall')}</span>
+                      </button>
+                    </div>
+                  ) : updateStatus === 'downloading' ? (
+                    /* State C: Baixando */
+                    <div className="flex flex-col gap-2.5 p-3.5 sm:p-4 bg-neutral-950/50">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 text-blue-400 animate-spin" aria-hidden="true" />
+                          <span className="font-semibold text-white">
+                            {t('updater.downloading', { version: formatDisplayVersion(availableVersion || '') })}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono text-xs font-semibold text-blue-400" data-testid="download-progress-percent">
+                            {Math.round(progressPercent)}%
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => resetUpdate()}
+                            className="h-6 px-2 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white text-[11px] transition-colors cursor-pointer"
+                          >
+                            {t('updater.cancel')}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Barra de Progresso */}
+                      <div
+                        role="progressbar"
+                        aria-valuenow={Math.round(progressPercent)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={t('updater.downloading', { version: formatDisplayVersion(availableVersion || '') })}
+                        className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden"
+                      >
+                        <div
+                          className="bg-blue-500 h-full rounded-full transition-all duration-300"
+                          style={{ width: `${Math.max(0, Math.min(100, progressPercent))}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-neutral-400">
+                        <span>{t('updater.verifyingSignature')}</span>
+                        {totalBytes && totalBytes > 0 && (
+                          <span>
+                            {(downloadedBytes / (1024 * 1024)).toFixed(1)} / {(totalBytes / (1024 * 1024)).toFixed(1)} MB
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ) : updateStatus === 'ready-to-restart' ? (
+                    /* State D: Pronto para Reiniciar */
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 bg-emerald-950/20 border-l-2 border-emerald-500">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" aria-hidden="true" />
+                          <span className="font-semibold text-white">
+                            {t('updater.downloadComplete')}
+                          </span>
+                        </div>
+                        <span className="text-neutral-400">
+                          {t('updater.readyToRestartDesc')}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void restartAndApply()}
+                        className="h-8 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm self-start sm:self-auto"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>{t('updater.restartNow')}</span>
+                      </button>
+                    </div>
+                  ) : updateStatus === 'error' ? (
+                    /* State Error: Falha */
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 bg-red-950/20 border-l-2 border-red-500">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2 text-red-400">
+                          <AlertCircle className="w-4 h-4 text-red-400 shrink-0" aria-hidden="true" />
+                          <span className="font-semibold">
+                            {t('updater.updateFailed')}
+                          </span>
+                        </div>
+                        <span className="text-neutral-400">
+                          {updateErrorMessage === 'errorCheck' ? t('updater.errorCheck') : (updateErrorMessage || t('updater.errorCheck'))}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 self-start sm:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => void checkForUpdates(true)}
+                          className="h-8 px-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white transition-colors text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>{t('updater.retry')}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* State A: Up to date / Idle / Checking */
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white">
+                            {t('settings.appVersion')}
+                          </span>
+                          <span className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-neutral-900 border border-neutral-800 text-blue-400">
+                            ApiDot {formatDisplayVersion(APP_VERSION)} • {t('settings.stable')}
+                          </span>
+                        </div>
+                        <span className="text-neutral-400">
+                          {updateStatus === 'checking'
+                            ? t('updater.checking')
+                            : updateStatus === 'up-to-date'
+                              ? t('updater.upToDateDesc')
+                              : t('settings.appVersionDesc')}
+                        </span>
+                        {updateStatus === 'up-to-date' && (
+                          <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 mt-0.5">
+                            <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+                            <span>{t('updater.upToDate')}</span>
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void checkForUpdates(true)}
+                        disabled={updateStatus === 'checking'}
+                        className="h-8 px-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed text-neutral-200 hover:text-white transition-colors text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap self-start sm:self-auto"
+                      >
+                        {updateStatus === 'checking' ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                            <span>{t('updater.checking')}</span>
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                            <span>{t('updater.checkNow')}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
 
                   {/* Tema Visual */}
                   <div className="flex items-center justify-between p-3.5 sm:p-4">

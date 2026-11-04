@@ -24,6 +24,7 @@ describe('locales updater translation keys', () => {
       'updater.updatePill',
       'updater.cancel',
       'updater.errorCheck',
+      'updater.retry',
     ];
     for (const key of requiredKeys) {
       expect(tEn(key)).not.toBe(key);

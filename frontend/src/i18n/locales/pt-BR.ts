@@ -691,6 +691,7 @@ const ptBR = {
     updatePill: 'Atualização disponível: {version}',
     cancel: 'Cancelar',
     errorCheck: 'Não foi possível consultar o servidor de atualizações.',
+    retry: 'Tentar novamente',
   },
 } satisfies TranslationSchema;
 
