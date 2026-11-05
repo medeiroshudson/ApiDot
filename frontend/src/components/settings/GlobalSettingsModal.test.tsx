@@ -54,7 +54,7 @@ describe('GlobalSettingsModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useDeviceStore.getState().reset();
-    vi.spyOn(useDeviceStore.getState(), 'fetchDevices').mockResolvedValue();
+    vi.spyOn(useDeviceStore.getState(), 'fetchDevices').mockResolvedValue([]);
     useLayoutStore.setState(INITIAL_LAYOUT_STATE);
     useI18nStore.setState({ locale: 'en-US' });
     useUpdateStore.getState().reset();
