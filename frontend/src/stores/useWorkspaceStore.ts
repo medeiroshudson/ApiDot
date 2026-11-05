@@ -59,7 +59,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       fetchWorkspaces: async (preferredId?: string): Promise<WorkspaceDto[]> => {
         set({ isLoading: true, error: null });
 
-        // Se estiver no Desktop e sem conexão de rede, carrega diretamente do armazenamento offline
         const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
         if (isDesktop() && isOffline) {
           const offlineList = await loadWorkspacesOffline();
@@ -97,7 +96,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           const list = await fetchWorkspacesApi();
           const validList = Array.isArray(list) ? list : [];
 
-          // Se estiver no Desktop, persiste localmente para acesso offline futuro sem enfileirar mutações
           if (isDesktop() && validList.length > 0) {
             Promise.all(
               validList.map((ws) =>
@@ -173,12 +171,12 @@ export const useWorkspaceStore = create<WorkspaceState>()(
                 return offlineList;
               }
             } catch {
-              // Segue para tratamento de erro padrão
+              // Fall through to standard error handling
             }
           }
 
           const errorMessage =
-            err instanceof Error ? err.message : 'Falha ao listar workspaces';
+            err instanceof Error ? err.message : 'Failed to load workspaces';
           set({
             error: errorMessage,
             isLoading: false,
@@ -190,7 +188,6 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       createWorkspace: async (name: string): Promise<WorkspaceDto> => {
         set({ isLoading: true, error: null });
 
-        // Criação offline em modo Desktop quando desconectado
         const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
         if (isDesktop() && isOffline) {
           const localId =
@@ -248,12 +245,12 @@ export const useWorkspaceStore = create<WorkspaceState>()(
               }));
               return localWs;
             } catch {
-              // Segue para erro padrão
+              // Fall through to standard error handling
             }
           }
 
           const errorMessage =
-            err instanceof Error ? err.message : 'Falha ao criar workspace';
+            err instanceof Error ? err.message : 'Failed to create workspace';
           set({
             error: errorMessage,
             isLoading: false,

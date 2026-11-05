@@ -19,23 +19,14 @@ export interface UpdateProgress {
 
 let activeUpdate: Update | null = null;
 
-/**
- * Returns the currently cached active update object, or null.
- */
 export function getActiveUpdate(): Update | null {
   return activeUpdate;
 }
 
-/**
- * Manually sets the active update object (useful for testing or manual injection).
- */
 export function setActiveUpdate(update: Update | null): void {
   activeUpdate = update;
 }
 
-/**
- * Clears the active update reference.
- */
 export function clearActiveUpdate(): void {
   activeUpdate = null;
 }

@@ -29,14 +29,14 @@ fn test_parse_sidecar_boundary_ports() {
 
 #[test]
 fn test_parse_sidecar_invalid_lines() {
-    assert_eq!(parse_sidecar_port("[APIDOT_SIDECAR_READY:0]"), None); // Porta 0 não é válida para escuta
-    assert_eq!(parse_sidecar_port("[APIDOT_SIDECAR_READY:65536]"), None); // Overflow de u16
-    assert_eq!(parse_sidecar_port("[APIDOT_SIDECAR_READY:-1]"), None); // Negativo
-    assert_eq!(parse_sidecar_port("[APIDOT_SIDECAR_READY:not_a_number]"), None); // Texto
-    assert_eq!(parse_sidecar_port("[APIDOT_SIDECAR_READY:]"), None); // Vazio
-    assert_eq!(parse_sidecar_port("[APIDOT_SIDECAR_READY:54321"), None); // Sem colchete de fechamento
-    assert_eq!(parse_sidecar_port(""), None); // Linha vazia
-    assert_eq!(parse_sidecar_port("info: Starting Kestrel server..."), None); // Linha de log comum
+    assert_eq!(parse_sidecar_port("[APIDOT_SIDECAR_READY:0]"), None);
+    assert_eq!(parse_sidecar_port("[APIDOT_SIDECAR_READY:65536]"), None);
+    assert_eq!(parse_sidecar_port("[APIDOT_SIDECAR_READY:-1]"), None);
+    assert_eq!(parse_sidecar_port("[APIDOT_SIDECAR_READY:not_a_number]"), None);
+    assert_eq!(parse_sidecar_port("[APIDOT_SIDECAR_READY:]"), None);
+    assert_eq!(parse_sidecar_port("[APIDOT_SIDECAR_READY:54321"), None);
+    assert_eq!(parse_sidecar_port(""), None);
+    assert_eq!(parse_sidecar_port("info: Starting Kestrel server..."), None);
 }
 
 #[test]
@@ -46,12 +46,12 @@ fn test_sidecar_info_serialization_roundtrip() {
         secret: "f47ac10b-58cc-4372-a567-0e02b2c3d479".to_string(),
     };
 
-    let json = serde_json::to_string(&info).expect("Deveria serializar SidecarInfo");
+    let json = serde_json::to_string(&info).expect("failed to serialize SidecarInfo");
     assert!(json.contains("\"port\":54321"));
     assert!(json.contains("\"secret\":\"f47ac10b-58cc-4372-a567-0e02b2c3d479\""));
 
     let deserialized: SidecarInfo =
-        serde_json::from_str(&json).expect("Deveria desserializar SidecarInfo");
+        serde_json::from_str(&json).expect("failed to deserialize SidecarInfo");
     assert_eq!(deserialized, info);
 }
 
@@ -61,7 +61,6 @@ async fn test_sidecar_manager_lifecycle_state() {
     assert!(!manager.is_running());
     assert_eq!(manager.get_info(), None);
 
-    // Parar um sidecar não iniciado deve ser uma operação segura e retornar Ok
     let stop_result = manager.stop_sidecar().await;
     assert!(stop_result.is_ok());
 

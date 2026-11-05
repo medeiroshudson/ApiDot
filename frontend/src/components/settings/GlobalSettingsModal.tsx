@@ -482,7 +482,7 @@ export function GlobalSettingsModal({
                     </select>
                   </div>
 
-                  {/* Alvo Padrão Global / Default Execution Target */}
+                  {/* Default Execution Target */}
                   <div className="flex items-center justify-between p-3.5 sm:p-4">
                     <div className="flex flex-col gap-0.5">
                       <span className="font-semibold text-white">{t('settings.defaultTarget')}</span>
@@ -507,7 +507,6 @@ export function GlobalSettingsModal({
                     </select>
                   </div>
 
-                  {/* Versão da Aplicação e Atualizações Automáticas (Desktop) */}
                   {!isDesktop() ? (
                     <div className="flex items-center justify-between p-3.5 sm:p-4">
                       <div className="flex flex-col gap-0.5">
@@ -523,7 +522,6 @@ export function GlobalSettingsModal({
                       </span>
                     </div>
                   ) : updateStatus === 'available' ? (
-                    /* State B: Atualização Disponível */
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 bg-blue-950/20 border-l-2 border-blue-500">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
@@ -548,7 +546,6 @@ export function GlobalSettingsModal({
                       </button>
                     </div>
                   ) : updateStatus === 'downloading' ? (
-                    /* State C: Baixando */
                     <div className="flex flex-col gap-2.5 p-3.5 sm:p-4 bg-neutral-950/50">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
@@ -571,7 +568,6 @@ export function GlobalSettingsModal({
                         </div>
                       </div>
 
-                      {/* Barra de Progresso */}
                       <div
                         role="progressbar"
                         aria-valuenow={Math.round(progressPercent)}
@@ -596,7 +592,6 @@ export function GlobalSettingsModal({
                       </div>
                     </div>
                   ) : updateStatus === 'ready-to-restart' ? (
-                    /* State D: Pronto para Reiniciar */
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 bg-emerald-950/20 border-l-2 border-emerald-500">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
@@ -619,7 +614,6 @@ export function GlobalSettingsModal({
                       </button>
                     </div>
                   ) : updateStatus === 'error' ? (
-                    /* State Error: Falha */
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 bg-red-950/20 border-l-2 border-red-500">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2 text-red-400">
@@ -644,7 +638,6 @@ export function GlobalSettingsModal({
                       </div>
                     </div>
                   ) : (
-                    /* State A: Up to date / Idle / Checking */
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
@@ -727,7 +720,7 @@ export function GlobalSettingsModal({
                     </div>
                   </div>
 
-                  {/* Divisão Requisição / Resposta */}
+                  {/* Request / Response Split */}
                   <div className="flex items-center justify-between p-3.5 sm:p-4">
                     <div className="flex flex-col gap-0.5">
                       <span className="font-semibold text-white">{t('settings.requestResponseRatio')}</span>
@@ -749,7 +742,7 @@ export function GlobalSettingsModal({
                     </div>
                   </div>
 
-                  {/* Timeout de Execução */}
+                  {/* Execution Timeout */}
                   <div className="flex items-center justify-between p-3.5 sm:p-4">
                     <div className="flex flex-col gap-0.5">
                       <span className="font-semibold text-white">{t('settings.executionTimeout')}</span>

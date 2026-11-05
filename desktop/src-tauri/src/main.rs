@@ -6,8 +6,6 @@ use apidot_desktop::sidecar::*;
 use apidot_desktop::storage::*;
 use tauri::Manager;
 
-/// Comando IPC Tauri para reiniciar o aplicativo de forma limpa, garantindo a
-/// interrupção prévia do processo filho do sidecar (ApiDot.Agent) antes do restart.
 #[tauri::command]
 async fn restart_app_cleanly(
     app_handle: tauri::AppHandle,

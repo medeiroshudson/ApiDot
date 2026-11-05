@@ -93,17 +93,17 @@ describe('GlobalSettingsModal', () => {
 
     render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="agents" />);
 
-    // 1. Valida abas laterais "Devices" e "General & Interface"
+    // Verify sidebar tabs
     expect(screen.getByRole('tab', { name: /devices|dispositivos/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /general & interface/i })).toBeInTheDocument();
 
-    // 2. Valida listagem de dispositivos (sem exibição de token)
+    // Verify device listing without token disclosure
     expect(screen.getByText('MacBook Pro Hudson')).toBeInTheDocument();
     expect(screen.getByText('Home Server Linux')).toBeInTheDocument();
     expect(screen.getByText('Old Workstation')).toBeInTheDocument();
     expect(screen.queryByText('apidot_dev_12345678')).toBeNull();
 
-    // 3. Cadastra novo dispositivo
+    // Register new device
     const registerBtn = screen.getByRole('button', { name: /register device|cadastrar dispositivo/i });
     fireEvent.click(registerBtn);
 
@@ -117,7 +117,7 @@ describe('GlobalSettingsModal', () => {
 
     expect(createDeviceSpy).toHaveBeenCalledWith('Novo Mini PC');
 
-    // 4. Valida exibição do diálogo de RawToken único e comando curl
+    // Verify one-time raw token dialog and curl install command
     await waitFor(() => {
       expect(screen.getByTestId('one-time-token-dialog')).toBeInTheDocument();
     });

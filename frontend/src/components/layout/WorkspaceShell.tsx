@@ -912,7 +912,6 @@ function WorkspaceShellContent({
           {renderSidebarContent()}
         </aside>
 
-        {/* Divisor Sidebar <-> Workspace */}
         <PanelSplitter
           id="sidebar-splitter"
           ariaLabel={t('sidebar.resizeSidebar')}

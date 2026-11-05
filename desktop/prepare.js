@@ -42,7 +42,6 @@ function prepareAgentBinary() {
     fs.mkdirSync(binariesDir, { recursive: true });
   }
 
-  // Se APIDOT_AGENT_BINARY_PATH estiver definido e existir, copia diretamente sem compilar via dotnet publish
   const customBinaryEnv = process.env.APIDOT_AGENT_BINARY_PATH;
   if (customBinaryEnv) {
     let resolvedCustomPath = customBinaryEnv;
