@@ -12,6 +12,10 @@ const frontendOutDir = path.join(frontendDir, 'out');
 
 // 1. Determine target triple for host platform
 function getTargetTriple() {
+  if (process.env.APIDOT_TARGET_TRIPLE) {
+    return process.env.APIDOT_TARGET_TRIPLE;
+  }
+
   const platform = process.platform;
   const arch = process.arch;
 
@@ -28,7 +32,7 @@ function getTargetTriple() {
 // 2. Ensure ApiDot.Agent Native AOT binary is built and placed in binaries/
 function prepareAgentBinary() {
   const targetTriple = getTargetTriple();
-  const isWindows = process.platform === 'win32';
+  const isWindows = process.platform === 'win32' || targetTriple.includes('windows');
   const binaryFileName = isWindows
     ? `apidot-agent-${targetTriple}.exe`
     : `apidot-agent-${targetTriple}`;
@@ -36,6 +40,29 @@ function prepareAgentBinary() {
 
   if (!fs.existsSync(binariesDir)) {
     fs.mkdirSync(binariesDir, { recursive: true });
+  }
+
+  const customBinaryEnv = process.env.APIDOT_AGENT_BINARY_PATH;
+  if (customBinaryEnv) {
+    let resolvedCustomPath = customBinaryEnv;
+    if (!path.isAbsolute(resolvedCustomPath) && !fs.existsSync(resolvedCustomPath)) {
+      const candidatePath = path.resolve(repoRoot, resolvedCustomPath);
+      if (fs.existsSync(candidatePath)) {
+        resolvedCustomPath = candidatePath;
+      }
+    }
+
+    if (fs.existsSync(resolvedCustomPath)) {
+      console.log(`Using custom agent binary from ${resolvedCustomPath}...`);
+      fs.copyFileSync(resolvedCustomPath, targetBinaryPath);
+      if (!isWindows) {
+        fs.chmodSync(targetBinaryPath, 0o755);
+      }
+      console.log(`✓ Copied custom binary ${resolvedCustomPath} -> ${targetBinaryPath}`);
+      return;
+    } else {
+      console.warn(`Warning: APIDOT_AGENT_BINARY_PATH was set to ${customBinaryEnv} but file was not found.`);
+    }
   }
 
   if (fs.existsSync(targetBinaryPath)) {
@@ -121,6 +148,14 @@ function prepareFrontendOut() {
   }
 }
 
-prepareAgentBinary();
-prepareFrontendOut();
-console.log('✓ Desktop environment preparation completed successfully.');
+if (require.main === module) {
+  prepareAgentBinary();
+  prepareFrontendOut();
+  console.log('✓ Desktop environment preparation completed successfully.');
+}
+
+module.exports = {
+  getTargetTriple,
+  prepareAgentBinary,
+  prepareFrontendOut,
+};

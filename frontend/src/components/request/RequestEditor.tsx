@@ -1138,7 +1138,7 @@ export function RequestEditor({
           </div>
         ) : (
           <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
-            {/* Mobile Tab Switcher (Requisição vs Resposta) */}
+            {/* Mobile Tab Switcher (Request vs Response) */}
             <div className="flex border-b border-neutral-800 bg-neutral-900/90 px-3 py-1.5 gap-2 shrink-0">
               <button
                 type="button"

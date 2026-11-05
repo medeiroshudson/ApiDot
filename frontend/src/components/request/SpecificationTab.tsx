@@ -837,7 +837,7 @@ export function SpecificationTab({
                       </Select>
                     </td>
 
-                    {/* Obrigatório */}
+                    {/* Required */}
                     <td className="py-1.5 px-2 text-center">
                       <input
                         type="checkbox"
@@ -853,7 +853,7 @@ export function SpecificationTab({
                       />
                     </td>
 
-                    {/* Descrição */}
+                    {/* Description */}
                     <td className="py-1.5 px-2">
                       <input
                         type="text"
@@ -887,7 +887,7 @@ export function SpecificationTab({
                       />
                     </td>
 
-                    {/* Ações */}
+                    {/* Actions */}
                     <td className="py-1.5 px-2 text-right">
                       <div className="flex items-center justify-end gap-1">
                         {row.type === 'object' && (
@@ -995,7 +995,7 @@ export function SpecificationTab({
                       </div>
                     </td>
 
-                    {/* Descrição */}
+                    {/* Description */}
                     <td className="py-1.5 px-2">
                       <input
                         type="text"
@@ -1029,7 +1029,7 @@ export function SpecificationTab({
                       />
                     </td>
 
-                    {/* Ações */}
+                    {/* Actions */}
                     <td className="py-1.5 px-2 text-right">
                       <button
                         type="button"

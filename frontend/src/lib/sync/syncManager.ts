@@ -100,7 +100,7 @@ export async function processSyncQueue(
           const errorText = await response.text();
           if (errorText) errorMessage = errorText;
         } catch {
-          // Manter mensagem padrão
+          // Keep default error message
         }
       }
 

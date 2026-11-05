@@ -6,15 +6,31 @@ use apidot_desktop::sidecar::*;
 use apidot_desktop::storage::*;
 use tauri::Manager;
 
+#[tauri::command]
+async fn restart_app_cleanly(
+    app_handle: tauri::AppHandle,
+    sidecar_manager: tauri::State<'_, Arc<Mutex<SidecarManager>>>,
+) -> Result<(), String> {
+    let mut mgr = sidecar_manager.lock().await;
+    let _ = mgr.stop_sidecar().await;
+    drop(mgr);
+    app_handle.restart();
+    #[allow(unreachable_code)]
+    Ok(())
+}
+
 fn main() {
     let sidecar_manager = Arc::new(Mutex::new(SidecarManager::new()));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(sidecar_manager.clone())
         .invoke_handler(tauri::generate_handler![
             get_sidecar_info,
+            restart_app_cleanly,
             fs_save_storage,
             fs_load_storage,
             fs_list_storage,

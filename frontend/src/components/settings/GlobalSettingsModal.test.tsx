@@ -1,10 +1,11 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GlobalSettingsModal } from './GlobalSettingsModal';
 import { useDeviceStore } from '@/stores/useDeviceStore';
 import { useLayoutStore, INITIAL_LAYOUT_STATE } from '@/stores/useLayoutStore';
 import { useI18nStore } from '@/stores/useI18nStore';
+import { useUpdateStore } from '@/stores/useUpdateStore';
 import { AgentDeviceDto } from '@/lib/deviceApi';
 import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
 
@@ -53,8 +54,12 @@ describe('GlobalSettingsModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useDeviceStore.getState().reset();
+    vi.spyOn(useDeviceStore.getState(), 'fetchDevices').mockResolvedValue();
     useLayoutStore.setState(INITIAL_LAYOUT_STATE);
     useI18nStore.setState({ locale: 'en-US' });
+    useUpdateStore.getState().reset();
+    delete (window as any).__TAURI__;
+    delete (window as any).__TAURI_INTERNALS__;
     localStorage.clear();
 
     Object.assign(navigator, {
@@ -65,6 +70,10 @@ describe('GlobalSettingsModal', () => {
   });
 
   afterEach(() => {
+    cleanup();
+    delete (window as any).__TAURI__;
+    delete (window as any).__TAURI_INTERNALS__;
+    useUpdateStore.getState().reset();
     vi.restoreAllMocks();
   });
 
@@ -84,17 +93,17 @@ describe('GlobalSettingsModal', () => {
 
     render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="agents" />);
 
-    // 1. Valida abas laterais "Devices" e "General & Interface"
+    // Verify sidebar tabs
     expect(screen.getByRole('tab', { name: /devices|dispositivos/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /general & interface/i })).toBeInTheDocument();
 
-    // 2. Valida listagem de dispositivos (sem exibição de token)
+    // Verify device listing without token disclosure
     expect(screen.getByText('MacBook Pro Hudson')).toBeInTheDocument();
     expect(screen.getByText('Home Server Linux')).toBeInTheDocument();
     expect(screen.getByText('Old Workstation')).toBeInTheDocument();
     expect(screen.queryByText('apidot_dev_12345678')).toBeNull();
 
-    // 3. Cadastra novo dispositivo
+    // Register new device
     const registerBtn = screen.getByRole('button', { name: /register device|cadastrar dispositivo/i });
     fireEvent.click(registerBtn);
 
@@ -108,7 +117,7 @@ describe('GlobalSettingsModal', () => {
 
     expect(createDeviceSpy).toHaveBeenCalledWith('Novo Mini PC');
 
-    // 4. Valida exibição do diálogo de RawToken único e comando curl
+    // Verify one-time raw token dialog and curl install command
     await waitFor(() => {
       expect(screen.getByTestId('one-time-token-dialog')).toBeInTheDocument();
     });
@@ -447,5 +456,186 @@ describe('GlobalSettingsModal', () => {
     expect(useDeviceStore.getState().globalDefaultTarget).toBe('Agent');
     expect(useDeviceStore.getState().globalDefaultDeviceId).toBeNull();
     expect(localStorage.getItem('apidot_global_device_id')).toBeNull();
+  });
+
+  describe('Desktop Auto-Update Section in General Tab', () => {
+    it('renders simple static version row without auto-update controls in web environment (isDesktop === false)', () => {
+      delete (window as any).__TAURI__;
+      delete (window as any).__TAURI_INTERNALS__;
+      useUpdateStore.setState({ status: 'available', availableVersion: '0.6.0' });
+
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
+
+      expect(
+        screen.getByText(new RegExp(`ApiDot ${formatDisplayVersion(APP_VERSION)} • (Stable|Estável)`, 'i'))
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /check for updates|verificar agora/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /download & update|baixar e atualizar/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /restart now|reiniciar agora/i })).toBeNull();
+      expect(screen.queryByRole('progressbar')).toBeNull();
+    });
+
+    it('renders State A with current version badge and "Check now" button invoking checkForUpdates(true)', async () => {
+      (window as any).__TAURI__ = {};
+      const checkSpy = vi.fn().mockResolvedValue(undefined);
+      useUpdateStore.setState({
+        status: 'idle',
+        checkForUpdates: checkSpy,
+      });
+
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
+
+      // Current version badge
+      expect(
+        screen.getByText(new RegExp(`ApiDot ${formatDisplayVersion(APP_VERSION)} • (Stable|Estável)`, 'i'))
+      ).toBeInTheDocument();
+
+      // Check now button
+      const checkBtn = screen.getByRole('button', { name: /check for updates|verificar agora/i });
+      expect(checkBtn).toBeInTheDocument();
+      expect(checkBtn).toBeEnabled();
+
+      await act(async () => {
+        fireEvent.click(checkBtn);
+      });
+
+      expect(checkSpy).toHaveBeenCalledWith(true);
+    });
+
+    it('renders State A up-to-date indicator and checking loading state', () => {
+      (window as any).__TAURI__ = {};
+      useUpdateStore.setState({ status: 'up-to-date' });
+
+      const { rerender } = render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
+
+      expect(screen.getByText(/you are on the latest version of apidot|você está utilizando a versão mais recente/i)).toBeInTheDocument();
+      expect(screen.getByText(/^up to date$|^atualizado$/i)).toBeInTheDocument();
+
+      // Checking state
+      act(() => {
+        useUpdateStore.setState({ status: 'checking' });
+      });
+
+      rerender(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
+      const checkingButtons = screen.getAllByRole('button', { name: /checking for updates\.\.\.|verificando atualizações\.\.\./i });
+      expect(checkingButtons.length).toBeGreaterThan(0);
+      expect(checkingButtons[0]).toBeDisabled();
+    });
+
+    it('renders State B with available version badge, summary and "Download & Update" button invoking downloadAndInstall', async () => {
+      (window as any).__TAURI__ = {};
+      const downloadSpy = vi.fn().mockResolvedValue(undefined);
+      useUpdateStore.setState({
+        status: 'available',
+        availableVersion: '0.6.0',
+        releaseNotes: 'Performance improvements and bug fixes',
+        downloadAndInstall: downloadSpy,
+      });
+
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
+
+      expect(screen.getByText(/new version available|nova versão disponível/i)).toBeInTheDocument();
+      expect(screen.getByText('v0.6.0')).toBeInTheDocument();
+      expect(screen.getByText('Performance improvements and bug fixes')).toBeInTheDocument();
+
+      const downloadBtn = screen.getByRole('button', { name: /download & update|baixar e atualizar/i });
+      expect(downloadBtn).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(downloadBtn);
+      });
+
+      expect(downloadSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('renders State C with animated progress bar, percentage and cancel button', async () => {
+      (window as any).__TAURI__ = {};
+      useUpdateStore.setState({
+        status: 'downloading',
+        availableVersion: '0.6.0',
+        progressPercent: 45,
+        downloadedBytes: 45 * 1024 * 1024,
+        totalBytes: 100 * 1024 * 1024,
+      });
+
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
+
+      expect(screen.getByText(/downloading update \(v0\.6\.0\)\.\.\.|baixando atualização \(v0\.6\.0\)\.\.\./i)).toBeInTheDocument();
+      expect(screen.getByTestId('download-progress-percent')).toHaveTextContent('45%');
+
+      const progressBar = screen.getByRole('progressbar');
+      expect(progressBar).toHaveAttribute('aria-valuenow', '45');
+
+      const cancelBtn = screen.getByRole('button', { name: /cancel|cancelar/i });
+      expect(cancelBtn).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(cancelBtn);
+      });
+
+      expect(useUpdateStore.getState().status).toBe('idle');
+    });
+
+    it('renders State D with download complete, description and highlighted "Restart Now" button invoking restartAndApply', async () => {
+      (window as any).__TAURI__ = {};
+      const restartSpy = vi.fn().mockResolvedValue(undefined);
+      useUpdateStore.setState({
+        status: 'ready-to-restart',
+        availableVersion: '0.6.0',
+        restartAndApply: restartSpy,
+      });
+
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
+
+      expect(screen.getByText(/download complete|download concluído/i)).toBeInTheDocument();
+      expect(screen.getByText(/restart the application to complete the update|reinicie a aplicação para finalizar a instalação/i)).toBeInTheDocument();
+
+      const restartBtn = screen.getByRole('button', { name: /restart now|reiniciar agora/i });
+      expect(restartBtn).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(restartBtn);
+      });
+
+      expect(restartSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('renders Error state with message and retry button that triggers checkForUpdates', async () => {
+      (window as any).__TAURI__ = {};
+      const checkSpy = vi.fn().mockResolvedValue(undefined);
+      useUpdateStore.setState({
+        status: 'error',
+        errorMessage: 'Network timeout connecting to server',
+        checkForUpdates: checkSpy,
+      });
+
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
+
+      expect(screen.getByText(/failed to update|falha ao atualizar/i)).toBeInTheDocument();
+      expect(screen.getByText('Network timeout connecting to server')).toBeInTheDocument();
+
+      const retryBtn = screen.getByRole('button', { name: /retry|tentar novamente/i });
+      expect(retryBtn).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(retryBtn);
+      });
+
+      expect(checkSpy).toHaveBeenCalledWith(true);
+    });
+
+    it('renders localized updater elements in pt-BR', () => {
+      (window as any).__TAURI__ = {};
+      useI18nStore.setState({ locale: 'pt-BR' });
+      useUpdateStore.setState({
+        status: 'available',
+        availableVersion: '0.6.0',
+      });
+
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
+
+      expect(screen.getByText('Nova versão disponível')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Baixar e Atualizar' })).toBeInTheDocument();
+    });
   });
 });

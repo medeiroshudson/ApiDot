@@ -7,6 +7,8 @@ import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useRequestStore } from '@/stores/useRequestStore';
+import { useUpdateStore } from '@/stores/useUpdateStore';
+import { isDesktop } from '@/lib/desktop/runtime';
 import { useTranslation } from '@/hooks/useTranslation';
 import ApiDotLogo from '@assets/api-dot-white.svg';
 
@@ -66,6 +68,11 @@ export function AppHeader({
   const { user, isAuthenticated, isLoading, logout } = useAuthStore();
   const storeActiveWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const currentWorkspaceId = activeWorkspaceId ?? storeActiveWorkspaceId;
+
+  const updateStatus = useUpdateStore((s) => s.status);
+  const availableVersion = useUpdateStore((s) => s.availableVersion);
+  const isDesktopEnv = isDesktop();
+  const showUpdatePill = isDesktopEnv && updateStatus === 'available';
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -148,6 +155,17 @@ export function AppHeader({
           <span className="hidden sm:inline-block text-xs px-2 py-0.5 rounded bg-neutral-800 text-neutral-400">
             {formatDisplayVersion(APP_VERSION)}
           </span>
+          {showUpdatePill && (
+            <button
+              type="button"
+              onClick={() => onOpenSettings?.()}
+              aria-label={t('updater.updateAvailableAria')}
+              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 text-xs transition-colors cursor-pointer"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" aria-hidden="true" />
+              <span>{t('updater.updatePill', { version: formatDisplayVersion(availableVersion || '') })}</span>
+            </button>
+          )}
         </div>
       </div>
 

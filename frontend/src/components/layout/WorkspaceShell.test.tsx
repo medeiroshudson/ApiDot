@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { WorkspaceShell } from './WorkspaceShell';
 import { WorkspaceTreeDto, WorkspaceDto } from '@/lib/treeApi';
@@ -8,6 +8,7 @@ import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
 import { useRequestStore } from '@/stores/useRequestStore';
 import { useDeviceStore } from '@/stores/useDeviceStore';
+import { useUpdateStore } from '@/stores/useUpdateStore';
 
 const mockPush = vi.fn();
 const mockReplace = vi.fn();
@@ -54,6 +55,8 @@ const mockWorkspaces: WorkspaceDto[] = [
   { id: 'ws-other', name: 'Other Workspace', createdAtUtc: '2026-10-27T00:00:00Z' },
 ];
 
+const originalCheckForUpdates = useUpdateStore.getState().checkForUpdates;
+
 describe('WorkspaceShell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -62,6 +65,8 @@ describe('WorkspaceShell', () => {
     useEnvironmentStore.getState().reset();
     useRequestStore.getState().reset();
     useDeviceStore.getState().reset();
+    useUpdateStore.getState().reset();
+    useUpdateStore.setState({ checkForUpdates: originalCheckForUpdates });
 
     useWorkspaceStore.setState({
       workspaces: mockWorkspaces,
@@ -94,6 +99,11 @@ describe('WorkspaceShell', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
+    cleanup();
+    delete (window as any).__TAURI__;
+    delete (window as any).__TAURI_INTERNALS__;
+    useUpdateStore.setState({ checkForUpdates: originalCheckForUpdates });
   });
 
   it('renders AppHeader, CollectionTree sidebar, PanelSplitter and children', async () => {
@@ -272,7 +282,9 @@ describe('WorkspaceShell', () => {
     });
 
     const settingsBtn = screen.getByRole('button', { name: /global settings|configurações globais/i });
-    fireEvent.click(settingsBtn);
+    await act(async () => {
+      fireEvent.click(settingsBtn);
+    });
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText(/global settings|configurações globais/i)).toBeInTheDocument();
@@ -366,6 +378,89 @@ describe('WorkspaceShell', () => {
     expect(mockCleanup).toHaveBeenCalled();
 
     delete (window as any).__TAURI__;
+  });
+
+  describe('Background auto-update check on startup', () => {
+    it('schedules background update check on desktop after 5000ms delay', () => {
+      vi.useFakeTimers();
+      (window as any).__TAURI__ = {};
+      const checkSpy = vi.fn().mockResolvedValue(undefined);
+      useUpdateStore.setState({ checkForUpdates: checkSpy });
+
+      const { unmount } = render(
+        <WorkspaceShell workspaceId="ws-test">
+          <div>Child Area</div>
+        </WorkspaceShell>
+      );
+
+      expect(checkSpy).not.toHaveBeenCalled();
+
+      act(() => {
+        vi.advanceTimersByTime(4999);
+      });
+      expect(checkSpy).not.toHaveBeenCalled();
+
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(checkSpy).toHaveBeenCalledTimes(1);
+      expect(checkSpy).toHaveBeenCalledWith(false);
+
+      unmount();
+      vi.useRealTimers();
+      cleanup();
+    });
+
+    it('does not schedule update check when not in desktop environment (standard web browser)', () => {
+      vi.useFakeTimers();
+      delete (window as any).__TAURI__;
+      delete (window as any).__TAURI_INTERNALS__;
+      const checkSpy = vi.fn().mockResolvedValue(undefined);
+      useUpdateStore.setState({ checkForUpdates: checkSpy });
+
+      const { unmount } = render(
+        <WorkspaceShell workspaceId="ws-test">
+          <div>Child Area</div>
+        </WorkspaceShell>
+      );
+
+      act(() => {
+        vi.advanceTimersByTime(10000);
+      });
+      expect(checkSpy).not.toHaveBeenCalled();
+
+      unmount();
+      vi.useRealTimers();
+      cleanup();
+    });
+
+    it('clears update check timer when unmounted before 5000ms', () => {
+      vi.useFakeTimers();
+      (window as any).__TAURI__ = {};
+      const checkSpy = vi.fn().mockResolvedValue(undefined);
+      useUpdateStore.setState({ checkForUpdates: checkSpy });
+
+      const { unmount } = render(
+        <WorkspaceShell workspaceId="ws-test">
+          <div>Child Area</div>
+        </WorkspaceShell>
+      );
+
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
+      expect(checkSpy).not.toHaveBeenCalled();
+
+      unmount();
+
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(checkSpy).not.toHaveBeenCalled();
+
+      vi.useRealTimers();
+      cleanup();
+    });
   });
 
   it('opens GlobalSettingsModal when pressing Cmd+, shortcut', async () => {

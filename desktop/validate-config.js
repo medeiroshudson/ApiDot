@@ -33,7 +33,10 @@ function run() {
   assert(tauriConf.app.security?.capabilities?.includes('default'), 'capabilities must include default');
   assert.strictEqual(tauriConf.bundle?.active, true);
   assert.strictEqual(tauriConf.bundle?.targets, 'all');
+  assert.strictEqual(tauriConf.bundle?.createUpdaterArtifacts, true, 'bundle.createUpdaterArtifacts must be true');
   assert(tauriConf.bundle?.externalBin?.includes('binaries/apidot-agent'), 'externalBin must include binaries/apidot-agent');
+  assert(Array.isArray(tauriConf.plugins?.updater?.endpoints) && tauriConf.plugins.updater.endpoints.length > 0, 'updater endpoints must be configured');
+  assert(tauriConf.plugins.updater.endpoints[0].includes('github.com/medeiroshudson/ApiDot/releases'), 'updater endpoint must point to GitHub releases');
   console.log('✓ tauri.conf.json verified');
 
   // 2. capabilities/default.json
@@ -44,6 +47,8 @@ function run() {
   assert(capability.permissions.includes('core:default'), 'permissions must include core:default');
   assert(capability.permissions.includes('shell:default'), 'permissions must include shell:default');
   assert(capability.permissions.includes('fs:default'), 'permissions must include fs:default');
+  assert(capability.permissions.includes('updater:default'), 'permissions must include updater:default');
+  assert(capability.permissions.includes('process:default'), 'permissions must include process:default');
   console.log('✓ capabilities/default.json verified');
 
   // 3. Cargo.toml
@@ -56,6 +61,8 @@ function run() {
   assert(cargoContent.includes('tauri ='), 'Cargo.toml missing tauri dependency');
   assert(cargoContent.includes('tauri-plugin-shell = "2"'), 'Cargo.toml missing tauri-plugin-shell');
   assert(cargoContent.includes('tauri-plugin-fs = "2"'), 'Cargo.toml missing tauri-plugin-fs');
+  assert(cargoContent.includes('tauri-plugin-updater = "2"'), 'Cargo.toml missing tauri-plugin-updater');
+  assert(cargoContent.includes('tauri-plugin-process = "2"'), 'Cargo.toml missing tauri-plugin-process');
   assert(cargoContent.includes('serde ='), 'Cargo.toml missing serde');
   assert(cargoContent.includes('serde_json = "1"'), 'Cargo.toml missing serde_json');
   assert(cargoContent.includes('uuid ='), 'Cargo.toml missing uuid');
@@ -72,6 +79,9 @@ function run() {
   const mainRs = fs.readFileSync(mainRsPath, 'utf-8');
   assert(mainRs.includes('tauri_plugin_shell::init()'), 'main.rs missing tauri_plugin_shell');
   assert(mainRs.includes('tauri_plugin_fs::init()'), 'main.rs missing tauri_plugin_fs');
+  assert(mainRs.includes('tauri_plugin_process::init()'), 'main.rs missing tauri_plugin_process');
+  assert(mainRs.includes('tauri_plugin_updater::Builder::new().build()'), 'main.rs missing tauri_plugin_updater');
+  assert(mainRs.includes('restart_app_cleanly'), 'main.rs missing restart_app_cleanly');
   assert(mainRs.includes('tauri::generate_context!()'), 'main.rs missing generate_context');
   console.log('✓ src/main.rs verified');
 
@@ -93,7 +103,105 @@ function run() {
   assert(rootPkg.scripts?.['desktop:build'], 'missing desktop:build script');
   console.log('✓ root package.json scripts verified');
 
-  console.log('\nAll 6 verification checks passed successfully!');
+  // 7. desktop/prepare.js
+  const prepareJsPath = path.join(desktopDir, 'prepare.js');
+  assert(fs.existsSync(prepareJsPath), 'desktop/prepare.js must exist');
+  const prepareJs = fs.readFileSync(prepareJsPath, 'utf-8');
+  assert(prepareJs.includes('APIDOT_TARGET_TRIPLE'), 'prepare.js must support APIDOT_TARGET_TRIPLE');
+  assert(prepareJs.includes('APIDOT_AGENT_BINARY_PATH'), 'prepare.js must support APIDOT_AGENT_BINARY_PATH');
+
+  // Verify getTargetTriple logic with APIDOT_TARGET_TRIPLE override
+  const originalTriple = process.env.APIDOT_TARGET_TRIPLE;
+  try {
+    process.env.APIDOT_TARGET_TRIPLE = 'x86_64-test-target';
+    const { getTargetTriple } = require(prepareJsPath);
+    assert.strictEqual(getTargetTriple(), 'x86_64-test-target', 'getTargetTriple must return APIDOT_TARGET_TRIPLE when set');
+  } finally {
+    if (originalTriple !== undefined) {
+      process.env.APIDOT_TARGET_TRIPLE = originalTriple;
+    } else {
+      delete process.env.APIDOT_TARGET_TRIPLE;
+    }
+  }
+
+  // Verify prepareAgentBinary copies custom binary when APIDOT_AGENT_BINARY_PATH is set
+  const originalBinaryPath = process.env.APIDOT_AGENT_BINARY_PATH;
+  const originalTripleForBinary = process.env.APIDOT_TARGET_TRIPLE;
+  const mockTempBinary = path.join(desktopDir, '.tmp-mock-agent-binary');
+  const mockTargetTriple = 'mock-unit-test-triple';
+  const mockTargetBinary = path.join(srcTauriDir, 'binaries', `apidot-agent-${mockTargetTriple}`);
+
+  try {
+    fs.writeFileSync(mockTempBinary, 'MOCK_AGENT_BINARY_CONTENT');
+    process.env.APIDOT_AGENT_BINARY_PATH = mockTempBinary;
+    process.env.APIDOT_TARGET_TRIPLE = mockTargetTriple;
+
+    const { prepareAgentBinary } = require(prepareJsPath);
+    prepareAgentBinary();
+
+    assert(fs.existsSync(mockTargetBinary), 'mock binary must be copied to target destination');
+    const copiedContent = fs.readFileSync(mockTargetBinary, 'utf-8');
+    assert.strictEqual(copiedContent, 'MOCK_AGENT_BINARY_CONTENT', 'copied binary content must match source');
+  } finally {
+    if (fs.existsSync(mockTempBinary)) {
+      fs.unlinkSync(mockTempBinary);
+    }
+    if (fs.existsSync(mockTargetBinary)) {
+      fs.unlinkSync(mockTargetBinary);
+    }
+    if (originalBinaryPath !== undefined) {
+      process.env.APIDOT_AGENT_BINARY_PATH = originalBinaryPath;
+    } else {
+      delete process.env.APIDOT_AGENT_BINARY_PATH;
+    }
+    if (originalTripleForBinary !== undefined) {
+      process.env.APIDOT_TARGET_TRIPLE = originalTripleForBinary;
+    } else {
+      delete process.env.APIDOT_TARGET_TRIPLE;
+    }
+  }
+  console.log('✓ desktop/prepare.js verified');
+
+  // 8. .github/workflows/desktop-release.yml
+  const desktopWorkflowPath = path.resolve(desktopDir, '..', '.github', 'workflows', 'desktop-release.yml');
+  assert(fs.existsSync(desktopWorkflowPath), '.github/workflows/desktop-release.yml must exist');
+  const workflowContent = fs.readFileSync(desktopWorkflowPath, 'utf-8');
+
+  // Triggers & permissions
+  assert(/tags:\s*\n\s+- ['"]v\*['"]/.test(workflowContent), 'desktop-release.yml must trigger on tags v*');
+  assert(workflowContent.includes('workflow_dispatch:'), 'desktop-release.yml must support workflow_dispatch');
+  assert(workflowContent.includes('contents: write'), 'desktop-release.yml must require contents: write permission');
+
+  // Matrix runners & targets
+  assert(workflowContent.includes('macos-latest'), 'desktop-release.yml matrix missing macos-latest');
+  assert(workflowContent.includes('macos-13'), 'desktop-release.yml matrix missing macos-13');
+  assert(workflowContent.includes('ubuntu-latest'), 'desktop-release.yml matrix missing ubuntu-latest');
+  assert(workflowContent.includes('windows-latest'), 'desktop-release.yml matrix missing windows-latest');
+  assert(workflowContent.includes('aarch64-apple-darwin'), 'desktop-release.yml matrix missing aarch64-apple-darwin');
+  assert(workflowContent.includes('x86_64-apple-darwin'), 'desktop-release.yml matrix missing x86_64-apple-darwin');
+  assert(workflowContent.includes('x86_64-unknown-linux-gnu'), 'desktop-release.yml matrix missing x86_64-unknown-linux-gnu');
+  assert(workflowContent.includes('x86_64-pc-windows-msvc'), 'desktop-release.yml matrix missing x86_64-pc-windows-msvc');
+
+  // Steps & actions
+  assert(workflowContent.includes('actions/setup-dotnet'), 'desktop-release.yml missing actions/setup-dotnet');
+  assert(workflowContent.includes("dotnet-version: '9.0.x'"), 'desktop-release.yml must use .NET 9.0.x');
+  assert(workflowContent.includes('actions/setup-node'), 'desktop-release.yml missing actions/setup-node');
+  assert(workflowContent.includes('node-version: 20'), 'desktop-release.yml must use Node 20');
+  assert(workflowContent.includes('rustup target add'), 'desktop-release.yml must configure rustup target');
+  assert(workflowContent.includes('libwebkit2gtk-4.1-dev'), 'desktop-release.yml must install Linux webkit prerequisites');
+  assert(workflowContent.includes('dotnet publish'), 'desktop-release.yml must compile Agent Native AOT');
+  assert(workflowContent.includes('APIDOT_TARGET_TRIPLE'), 'desktop-release.yml must pass APIDOT_TARGET_TRIPLE to prepare.js');
+  assert(workflowContent.includes('APIDOT_AGENT_BINARY_PATH'), 'desktop-release.yml must pass APIDOT_AGENT_BINARY_PATH to prepare.js');
+  assert(workflowContent.includes('npm --prefix desktop install'), 'desktop-release.yml must install desktop dependencies');
+  assert(workflowContent.includes('tauri-apps/tauri-action@v0'), 'desktop-release.yml must use tauri-apps/tauri-action@v0');
+  assert(workflowContent.includes('projectPath: desktop'), 'tauri-action must use projectPath: desktop');
+  assert(workflowContent.includes('includeUpdaterJson: true'), 'tauri-action must set includeUpdaterJson: true');
+  assert(workflowContent.includes('updaterJsonKeepUniversal: true'), 'tauri-action must set updaterJsonKeepUniversal: true');
+  assert(workflowContent.includes('TAURI_SIGNING_PRIVATE_KEY'), 'tauri-action must use TAURI_SIGNING_PRIVATE_KEY');
+  assert(workflowContent.includes('TAURI_SIGNING_PRIVATE_KEY_PASSWORD'), 'tauri-action must use TAURI_SIGNING_PRIVATE_KEY_PASSWORD');
+  console.log('✓ .github/workflows/desktop-release.yml verified');
+
+  console.log('\nAll 8 verification checks passed successfully!');
 }
 
 run();
