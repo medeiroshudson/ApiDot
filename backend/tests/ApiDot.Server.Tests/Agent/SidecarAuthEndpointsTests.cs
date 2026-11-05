@@ -183,6 +183,32 @@ public class SidecarAuthEndpointsTests
     }
 
     [Fact]
+    public async Task Sidecar_AuthCallback_WithOriginParameter_RedirectsToOriginSuccessPage()
+    {
+        var app = SidecarCommand.BuildWebApplication(0, "secret-123", serverUrl: "https://hub.example.com");
+        await app.StartAsync();
+
+        try
+        {
+            var port = SidecarCommand.GetBoundPort(app);
+            using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
+            {
+                BaseAddress = new Uri($"http://127.0.0.1:{port}")
+            };
+
+            var callbackRes = await client.GetAsync("/auth/callback?token=my-token-789&origin=http://localhost:3000");
+            callbackRes.StatusCode.Should().Be(HttpStatusCode.Redirect);
+            callbackRes.Headers.Location.Should().NotBeNull();
+            callbackRes.Headers.Location!.ToString().Should().Be("http://localhost:3000/auth/desktop-success");
+        }
+        finally
+        {
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task Sidecar_AuthCallback_DoesNotRequireSecretHeader()
     {
         var app = SidecarCommand.BuildWebApplication(0, "secret-123");

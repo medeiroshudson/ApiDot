@@ -1,9 +1,9 @@
 use std::path::{Component, Path, PathBuf};
 
-/// Retorna o diretório raiz de armazenamento offline local (`~/.apidot/storage`).
+/// Returns the local offline storage root directory (`~/.apidot/storage`).
 ///
-/// Suporta sobrescrita via variável de ambiente `APIDOT_STORAGE_ROOT` para testes.
-/// Caso o diretório ainda não exista, cria-o recursivamente.
+/// Supports override via the `APIDOT_STORAGE_ROOT` environment variable for testing.
+/// Recursively creates the directory if it does not yet exist.
 pub fn get_storage_root() -> PathBuf {
     let root = if let Ok(custom_root) = std::env::var("APIDOT_STORAGE_ROOT") {
         if !custom_root.trim().is_empty() {
@@ -32,14 +32,14 @@ fn default_storage_root() -> PathBuf {
     }
 }
 
-/// Sanitiza e valida um caminho relativo contra tentativas de path traversal (ex: `..`).
-/// Garante que o arquivo ou diretório permaneça estritamente contido no diretório raiz de armazenamento.
+/// Sanitizes and validates a relative path against path traversal attempts (e.g. `..`).
+/// Ensures that the target file or directory remains strictly contained within the storage root directory.
 pub fn sanitize_relative_path(rel_path: &str) -> Result<PathBuf, String> {
     if rel_path.contains('\0') {
         return Err("Invalid path containing null character".to_string());
     }
 
-    // Normaliza separadores de caminho estilo Windows para Unix antes de analisar componentes
+    // Normalize Windows-style backslash separators to Unix slashes before inspecting components
     let normalized = rel_path.replace('\\', "/");
     let trimmed = normalized.trim().trim_start_matches('/');
     if trimmed.is_empty() {
@@ -65,12 +65,12 @@ pub fn sanitize_relative_path(rel_path: &str) -> Result<PathBuf, String> {
     let root = get_storage_root();
     let full_path = root.join(trimmed);
 
-    // Verificação adicional para garantir que não haja escape do diretório base
+    // Defense-in-depth verification ensuring the path does not escape the base root
     if !full_path.starts_with(&root) {
         return Err("Resolved path escapes storage root directory".to_string());
     }
 
-    // Impede que referências como "." ou "./" resolvam para a própria raiz do armazenamento
+    // Prevents references like "." or "./" from resolving to the storage root itself
     if full_path == root {
         return Err("Path refers to storage root directory; target must be a child entry".to_string());
     }
@@ -78,7 +78,7 @@ pub fn sanitize_relative_path(rel_path: &str) -> Result<PathBuf, String> {
     Ok(full_path)
 }
 
-/// Comando IPC Tauri para gravar conteúdo em um arquivo sob `~/.apidot/storage/<rel_path>`.
+/// Tauri IPC command to write file content under `~/.apidot/storage/<rel_path>`.
 #[tauri::command]
 pub async fn fs_save_storage(rel_path: String, content: String) -> Result<(), String> {
     let full_path = sanitize_relative_path(&rel_path)?;
@@ -96,7 +96,7 @@ pub async fn fs_save_storage(rel_path: String, content: String) -> Result<(), St
     Ok(())
 }
 
-/// Comando IPC Tauri para ler o conteúdo de um arquivo em `~/.apidot/storage/<rel_path>`.
+/// Tauri IPC command to read file content under `~/.apidot/storage/<rel_path>`.
 #[tauri::command]
 pub async fn fs_load_storage(rel_path: String) -> Result<String, String> {
     let full_path = sanitize_relative_path(&rel_path)?;
@@ -110,7 +110,7 @@ pub async fn fs_load_storage(rel_path: String) -> Result<String, String> {
         .map_err(|e| format!("Failed to read storage file '{:?}': {}", full_path, e))
 }
 
-/// Comando IPC Tauri para listar entradas (arquivos/diretórios) sob `~/.apidot/storage/<rel_dir>`.
+/// Tauri IPC command to list entries (files/directories) under `~/.apidot/storage/<rel_dir>`.
 #[tauri::command]
 pub async fn fs_list_storage(rel_dir: String) -> Result<Vec<String>, String> {
     let normalized = rel_dir.replace('\\', "/");
@@ -139,13 +139,13 @@ pub async fn fs_list_storage(rel_dir: String) -> Result<Vec<String>, String> {
     Ok(entries)
 }
 
-/// Comando IPC Tauri para excluir um arquivo ou diretório sob `~/.apidot/storage/<rel_path>`.
+/// Tauri IPC command to delete a file or directory under `~/.apidot/storage/<rel_path>`.
 #[tauri::command]
 pub async fn fs_delete_storage(rel_path: String) -> Result<(), String> {
     let full_path = sanitize_relative_path(&rel_path)?;
 
     if !full_path.exists() {
-        return Ok(()); // Operação idempotente
+        return Ok(()); // Idempotent operation
     }
 
     if full_path.is_dir() {

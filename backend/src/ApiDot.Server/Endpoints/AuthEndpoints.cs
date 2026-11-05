@@ -59,7 +59,8 @@ public static class AuthEndpoints
                     {
                         var exchangeToken = authService.CreateDesktopExchangeToken(userId, emailClaim, nameClaim ?? emailClaim);
                         var delimiter = effectiveDesktopCallback.Contains('?') ? "&" : "?";
-                        return Results.Redirect($"{effectiveDesktopCallback}{delimiter}token={Uri.EscapeDataString(exchangeToken)}");
+                        var currentHost = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+                        return Results.Redirect($"{effectiveDesktopCallback}{delimiter}token={Uri.EscapeDataString(exchangeToken)}&origin={Uri.EscapeDataString(currentHost)}");
                     }
                 }
             }

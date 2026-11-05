@@ -93,8 +93,8 @@ describe('GlobalSettingsModal', () => {
 
     render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="agents" />);
 
-    // 1. Valida abas laterais "Local Agents" e "General & Interface"
-    expect(screen.getByRole('tab', { name: /local agents/i })).toBeInTheDocument();
+    // 1. Valida abas laterais "Devices" e "General & Interface"
+    expect(screen.getByRole('tab', { name: /devices|dispositivos/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /general & interface/i })).toBeInTheDocument();
 
     // 2. Valida listagem de dispositivos (sem exibição de token)
@@ -180,11 +180,11 @@ describe('GlobalSettingsModal', () => {
     expect(stopPollingSpy).toHaveBeenCalledTimes(2);
   });
 
-  it('switches between General & Interface and Local Agents tabs with General as default', () => {
+  it('switches between General & Interface and Devices tabs with General as default', () => {
     render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} />);
 
     const generalTab = screen.getByRole('tab', { name: /general & interface/i });
-    const agentsTab = screen.getByRole('tab', { name: /local agents/i });
+    const agentsTab = screen.getByRole('tab', { name: /devices|dispositivos/i });
 
     // General & Interface is the default 1st tab
     expect(generalTab).toHaveAttribute('aria-selected', 'true');
@@ -200,7 +200,7 @@ describe('GlobalSettingsModal', () => {
     expect(agentsTab).toHaveAttribute('aria-selected', 'true');
     expect(generalTab).toHaveAttribute('aria-selected', 'false');
     expect(
-      screen.getByRole('heading', { name: /devices & local agents|dispositivos & local agents/i })
+      screen.getByRole('heading', { name: /devices|dispositivos/i })
     ).toBeInTheDocument();
   });
 
@@ -381,7 +381,7 @@ describe('GlobalSettingsModal', () => {
     render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="agents" />);
 
     expect(
-      screen.getByText(/no local agents registered|nenhum agente local cadastrado/i)
+      screen.getByText(/no (devices|local agents) registered|nenhum (dispositivo|agente local) cadastrado/i)
     ).toBeInTheDocument();
   });
 

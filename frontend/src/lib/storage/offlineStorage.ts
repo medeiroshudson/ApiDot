@@ -25,7 +25,7 @@ export const COLLECTIONS_DIR = 'collections';
 const LOCAL_STORAGE_PREFIX = 'apidot_fs_';
 
 /**
- * Retorna a função de invoke do Tauri IPC caso disponível no ambiente.
+ * Retrieves the Tauri IPC invoke function if available in the runtime environment.
  */
 function getTauriInvoke(): ((cmd: string, args?: Record<string, unknown>) => Promise<any>) | null {
   if (typeof window === 'undefined') {
@@ -47,8 +47,8 @@ function getTauriInvoke(): ((cmd: string, args?: Record<string, unknown>) => Pro
 }
 
 /**
- * Adaptadores de armazenamento padrão com despacho direto para IPC do Tauri no desktop
- * e fallback resiliente em localStorage no navegador web / ambiente de testes.
+ * Default storage adapters that dispatch directly to Tauri IPC in desktop mode
+ * with resilient localStorage fallback in web browsers and test environments.
  */
 export const defaultStorageAdapters: StorageAdapters = {
   saveFile: async (relPath: string, content: string): Promise<void> => {
@@ -130,7 +130,7 @@ export const defaultStorageAdapters: StorageAdapters = {
           rel_path: relPath,
         });
       } catch {
-        // Idempotente em caso de arquivo inexistente
+        // Idempotent when file does not exist
       }
       return;
     }
@@ -142,7 +142,7 @@ export const defaultStorageAdapters: StorageAdapters = {
 };
 
 /**
- * Consulta a lista de mutações offline pendentes da fila local.
+ * Retrieves pending offline mutations from the local queue file.
  */
 export async function getPendingMutations(
   adapters?: StorageAdapters
@@ -159,7 +159,7 @@ export async function getPendingMutations(
 }
 
 /**
- * Enfileira uma mutação pendente para reconciliação futura com o servidor.
+ * Enqueues a pending mutation for future cloud synchronization.
  */
 export async function queuePendingMutation(
   mutation: PendingMutation,
@@ -181,7 +181,7 @@ export async function queuePendingMutation(
 }
 
 /**
- * Limpa a fila de mutações pendentes após sincronização bem-sucedida.
+ * Clears the pending mutations queue after successful cloud reconciliation.
  */
 export async function clearPendingMutations(
   adapters?: StorageAdapters
@@ -196,7 +196,7 @@ export async function clearPendingMutations(
 }
 
 /**
- * Salva um workspace no disco local e opcionalmente enfileira mutação de Upsert.
+ * Persists a workspace to local disk and enqueues an Upsert mutation by default.
  */
 export async function saveWorkspaceOffline(
   workspace: WorkspaceDto,
@@ -226,7 +226,7 @@ export async function saveWorkspaceOffline(
 }
 
 /**
- * Carrega todos os workspaces persistidos no diretório offline local.
+ * Loads all workspaces persisted in the local offline directory.
  */
 export async function loadWorkspacesOffline(
   adapters?: StorageAdapters
@@ -258,7 +258,7 @@ export async function loadWorkspacesOffline(
           workspaces.push(parsed as WorkspaceDto);
         }
       } catch {
-        // Ignora arquivos corrompidos sem interromper a listagem dos demais
+        // Silently skip corrupted files without breaking remaining entries
       }
     }
 
@@ -269,7 +269,7 @@ export async function loadWorkspacesOffline(
 }
 
 /**
- * Salva uma coleção no disco local (`collections/<workspaceId>/<id>.json`).
+ * Persists a collection to local disk (`collections/<workspaceId>/<id>.json`).
  */
 export async function saveCollectionOffline(
   collection: any,
@@ -301,7 +301,7 @@ export async function saveCollectionOffline(
 }
 
 /**
- * Carrega as coleções offline vinculadas a um workspace.
+ * Loads all offline collections associated with a workspace.
  */
 export async function loadCollectionsOffline(
   workspaceId: string,
@@ -335,7 +335,7 @@ export async function loadCollectionsOffline(
           collections.push(parsed);
         }
       } catch {
-        // Ignora arquivos corrompidos
+        // Skip corrupted entries
       }
     }
 
@@ -346,7 +346,7 @@ export async function loadCollectionsOffline(
 }
 
 /**
- * Exclui um workspace local e enfileira a mutação de exclusão correspondente.
+ * Deletes a local workspace file and enqueues a Delete mutation.
  */
 export async function deleteWorkspaceOffline(
   workspaceId: string,
@@ -375,7 +375,7 @@ export async function deleteWorkspaceOffline(
 }
 
 /**
- * Exclui uma coleção local e enfileira a mutação de exclusão correspondente.
+ * Deletes a local collection file and enqueues a Delete mutation.
  */
 export async function deleteCollectionOffline(
   collectionId: string,
@@ -405,7 +405,7 @@ export async function deleteCollectionOffline(
 }
 
 /**
- * Aliases de compatibilidade para atender às interfaces do plano original.
+ * Compatibility aliases adhering to design plan interfaces.
  */
 export const saveWorkspaceLocally = saveWorkspaceOffline;
 export const loadWorkspacesLocally = loadWorkspacesOffline;

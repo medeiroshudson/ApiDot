@@ -1,92 +1,92 @@
-# Design Técnico: Autenticação SSO no Navegador Externo via Loopback Callback e Tela de Sucesso i18n
+# Technical Design: Desktop SSO via External Browser, Loopback Callback, and Localized Confirmation
 
-**Data:** 2026-11-03  
-**Status:** Aprovado  
-**Autor:** Hudson Medeiros & Orchestrator  
-**Escopo:** Full-Stack (.NET 9 Backend & Native AOT Agent / Next.js 16 Web / Tauri v2 Desktop)
-
----
-
-## 1. Intenção e Motivação (The Why)
-
-No aplicativo Desktop (Tauri v2), ao clicar em "Entrar com SSO", a navegação padrão dentro do WebView isolado do sistema exige que o usuário redigite suas credenciais do Authentik (incluindo usuário, senha e chaves de segurança/2FA), pois o WebView não compartilha os cookies de sessão do navegador padrão do sistema operacional (Chrome, Safari, Brave, Edge).
-
-Para proporcionar uma experiência de autenticação instantânea de um clique (aproveitando que o desenvolvedor já está autenticado no Authentik em seu navegador), o fluxo de SSO do aplicativo Desktop deve:
-1. Abrir a tela de autenticação em uma nova aba do navegador padrão do sistema.
-2. Permitir que o Authentik valide a sessão existente imediatamente.
-3. Redirecionar o navegador de volta para o Sidecar local em loopback (`http://127.0.0.1:<porta>/auth/callback?token=...`).
-4. O Sidecar recebe o token, notifica o aplicativo Desktop e redireciona o navegador para a página `/auth/desktop-success`.
-5. A página exibe a mensagem de confirmação com suporte completo ao sistema nativo de internacionalização (`en-US` padrão, `pt-BR`).
-6. O aplicativo Desktop conclui o login automaticamente, salva a sessão e carrega os workspaces.
+**Date:** 2026-11-03  
+**Status:** Approved  
+**Author:** Hudson Medeiros & Orchestrator  
+**Scope:** Full-Stack (.NET 9 Backend & Native AOT Agent / Next.js 16 Web / Tauri v2 Desktop)
 
 ---
 
-## 2. Metas, Não-Metas e Anti-Metas
+## 1. Intent and Motivation (The Why)
 
-### 2.1. Metas (Goals)
-- **Abertura no Navegador Externo:**
-  - No Desktop, o clique no botão de SSO invoca o navegador padrão do sistema operacional, mantendo a janela do app aberta com indicador de espera (*"Aguardando autenticação no navegador..."*).
-- **Callback no Sidecar Local (`ApiDot.Agent`):**
-  - Rota `GET /auth/callback` no Kestrel Slim do Sidecar recebendo o token de troca temporário e redirecionando para `/auth/desktop-success`.
-  - Rota `GET /auth/session` (protegida por `X-ApiDot-Sidecar-Secret`) para entrega segura e de uso único do token ao aplicativo Desktop.
-- **Geração e Troca de Token no `ApiDot.Server`:**
-  - Parâmetro `desktop_callback` no `/api/auth/login`, preservado no estado OIDC.
-  - Ao concluir o fluxo OIDC, se `desktop_callback` estiver presente, gera um `DesktopExchangeToken` temporário (expiração em 5 minutos, uso único) e redireciona para `${desktop_callback}?token=${exchangeToken}`.
-  - Endpoint `POST /api/auth/desktop-exchange` para validar o token de troca e emitir a sessão do usuário.
-- **Página de Sucesso com i18n (`/auth/desktop-success`):**
-  - Página estática/client em Next.js com internacionalização completa (`en-US` e `pt-BR`), informando que a autenticação foi concluída e que a aba pode ser fechada.
-- **Preservação da Aplicação Web:**
-  - No navegador Web comum, o botão de SSO continua navegando diretamente para `/api/auth/login` sem acionar o fluxo de desktop callback.
+In the desktop application (Tauri v2), clicking "Sign in with SSO" inside the isolated system WebView requires the user to re-enter their Authentik credentials (including username, password, and security keys/2FA) because the WebView does not share session cookies with the operating system's default browser (Chrome, Safari, Brave, Edge).
 
-### 2.2. Não-Metas (Non-Goals)
-- Não registrar esquemas de URI customizados no SO (`apidot://`) neste momento: o loopback callback no Sidecar é mais seguro, não exige permissões de registro no SO e evita telas de confirmação de segurança do navegador.
-- Não manter tokens de troca ativos permanentemente: tokens de troca expiram em 5 minutos e são invalidados no primeiro uso.
-
-### 2.3. Anti-Metas (Anti-Goals)
-- **Zero digitação redundante de credenciais:** O usuário já autenticado no Authentik no navegador não deve ver tela de senha.
-- **Zero exposição de segredos no histórico:** O token de troca é efêmero e não confere privilégios duradouros sem a troca segura na API.
+To provide an instant single-click authentication experience (leveraging the developer's active Authentik session in their primary browser), the desktop SSO flow must:
+1. Open the authentication screen in a new tab of the operating system's default browser.
+2. Allow Authentik to validate the existing session immediately without manual re-entry.
+3. Redirect the browser back to the local loopback sidecar (`http://127.0.0.1:<port>/auth/callback?token=...`).
+4. The sidecar captures the token, notifies the desktop application, and redirects the browser to `/auth/desktop-success`.
+5. The confirmation page renders with native internationalization support (`en-US` default, `pt-BR`).
+6. The desktop application completes authentication, stores the session, and loads the workspace.
 
 ---
 
-## 3. Arquitetura e Fluxo Detalhado
+## 2. Goals, Non-Goals, and Anti-Goals
+
+### 2.1. Goals
+- **System Browser Delegation:**
+  - In desktop mode, clicking SSO opens the system default browser while keeping the desktop window in an accessible waiting state (*"Waiting for authentication in your browser..."*).
+- **Loopback Callback on Sidecar (`ApiDot.Agent`):**
+  - Endpoint `GET /auth/callback` in the sidecar Kestrel Slim server captures the ephemeral exchange token and redirects to `/auth/desktop-success`.
+  - Endpoint `GET /auth/session` (protected by `X-ApiDot-Sidecar-Secret`) allows secure, single-use retrieval of the token by the desktop application.
+- **Token Generation and Exchange on `ApiDot.Server`:**
+  - Support `desktop_callback` query parameter on `/api/auth/login`, preserved through OIDC challenge state.
+  - Upon OIDC completion, if `desktop_callback` is present, generate a single-use `DesktopExchangeToken` (5-minute TTL) and redirect to `${desktop_callback}?token=${exchangeToken}`.
+  - Endpoint `POST /api/auth/desktop-exchange` validates the token and establishes the authenticated session.
+- **Localized Confirmation Page (`/auth/desktop-success`):**
+  - Static/client Next.js page with i18n (`en-US` default, `pt-BR`), instructing the user that sign-in succeeded and the tab can be closed.
+- **Web App Preservation:**
+  - Standard web browsers continue using direct in-tab navigation to `/api/auth/login` without triggering desktop loopback callbacks.
+
+### 2.2. Non-Goals
+- Do not register OS custom protocol schemes (`apidot://`) at this stage: loopback callback is more secure, requires no elevated registry/OS permissions, and avoids intrusive browser protocol confirmation prompts.
+- Do not persist exchange tokens long-term: exchange tokens expire in 5 minutes and are invalidated on first read.
+
+### 2.3. Anti-Goals
+- **Zero redundant credential typing:** A user with an active Authentik session in their browser must not see a login/password form.
+- **Zero secret leakage:** Ephemeral exchange tokens have strict TTL and grant zero access without server-side validation.
+
+---
+
+## 3. Architecture and Sequence Flow
 
 ```text
-[ApiDot Desktop]                [Navegador Padrão]            [Authentik / ApiDot.Server]         [Sidecar Local]
+[ApiDot Desktop]                [Default Browser]             [Authentik / ApiDot.Server]         [Local Sidecar]
        │                                │                                    │                            │
- 1. Clica "SSO"                         │                                    │                            │
+ 1. Clicks "SSO"                        │                                    │                            │
        ├───────────────────────────────►│                                    │                            │
-       │  Abre browser padrão:          │                                    │                            │
+       │  Opens default browser:        │                                    │                            │
        │  /api/auth/login?              │                                    │                            │
        │  desktop_callback=http://...   │                                    │                            │
        │                                ├───────────────────────────────────►│                            │
-       │                                │ 2. Valida sessão existente         │                            │
-       │                                │    no Authentik                    │                            │
+       │                                │ 2. Validates existing session      │                            │
+       │                                │    in Authentik                    │                            │
        │                                │◄───────────────────────────────────┤                            │
-       │                                │ 3. Redireciona:                    │                            │
+       │                                │ 3. Redirects:                      │                            │
        │                                │    http://127.0.0.1:<p>/auth/cb    │                            │
        │                                │    ?token=<exchange_token>         │                            │
        │                                ├────────────────────────────────────────────────────────────────►│
-       │                                │                                    │   4. Guarda token          │
+       │                                │                                    │   4. Stores token          │
        │                                │◄────────────────────────────────────────────────────────────────┤
-       │                                │ 5. Redireciona 302:                │      em memória            │
+       │                                │ 5. 302 Redirect:                   │      in memory             │
        │                                │    /auth/desktop-success           │                            │
        │                                ├───────────────────────────────────►│                            │
-       │                                │ 6. Renderiza tela i18n             │                            │
+       │                                │ 6. Renders i18n success UI         │                            │
        │ 7. Polling GET /auth/session   │                                    │                            │
        ├─────────────────────────────────────────────────────────────────────────────────────────────────►│
        │◄─────────────────────────────────────────────────────────────────────────────────────────────────┤
-       │ 8. Recebe <exchange_token>     │                                    │                            │
+       │ 8. Receives <exchange_token>   │                                    │                            │
        ├────────────────────────────────────────────────────────────────────►│                            │
        │ 9. POST /api/auth/desktop-exchange                                  │                            │
        │◄────────────────────────────────────────────────────────────────────┤                            │
-       │ 10. Sessão autenticada (Cookie/UserDto)                             │                            │
+       │ 10. Authenticated session (Cookie/UserDto)                          │                            │
        ▼                                                                                                  
-  Entra no Workspace
+  Enters Workspace
 ```
 
 ---
 
-## 4. Dicionários de Tradução (i18n)
+## 4. Translation Dictionaries (i18n)
 
 ### `frontend/src/i18n/locales/en-US.ts`
 ```typescript
@@ -114,20 +114,20 @@ auth: {
 
 ---
 
-## 5. Fases de Implementação
+## 5. Delivery Phases
 
-1. **Fase 1: Backend (`ApiDot.Server`)**
-   - Suporte a `desktop_callback` no `/api/auth/login`.
-   - Armazenamento em memória com expiração de `DesktopExchangeToken`.
+1. **Phase 1: Backend (`ApiDot.Server`)**
+   - Support `desktop_callback` parameter in `/api/auth/login`.
+   - In-memory thread-safe storage with TTL for `DesktopExchangeToken`.
    - Endpoint `POST /api/auth/desktop-exchange`.
-   - Testes de integração.
-2. **Fase 2: Sidecar (`ApiDot.Agent`)**
-   - Endpoints `GET /auth/callback` e `GET /auth/session` no Kestrel Slim com CORS.
-   - Testes unitários do sidecar auth.
-3. **Fase 3: Frontend Web (`/auth/desktop-success`)**
-   - Criação da página com suporte a i18n, logo do ApiDot e estilo escuro.
-   - Testes com Vitest.
-4. **Fase 4: Integração Desktop no Login (`LoginPage.tsx`)**
-   - Detecção de `isDesktop()` no botão de SSO.
-   - Abertura de browser padrão via Tauri IPC e polling de conclusão com fallback.
-   - Testes de integração da tela de login.
+   - Comprehensive integration tests.
+2. **Phase 2: Sidecar (`ApiDot.Agent`)**
+   - Endpoints `GET /auth/callback` and `GET /auth/session` in Kestrel Slim with CORS.
+   - Unit tests for sidecar authentication loopback.
+3. **Phase 3: Frontend Web (`/auth/desktop-success`)**
+   - Static/client page with i18n support, ApiDot branding, and dark theme.
+   - Vitest component tests.
+4. **Phase 4: Desktop Login Integration (`LoginPage.tsx`)**
+   - Runtime detection in SSO button.
+   - External browser opener and sidecar session polling with cancellation.
+   - Login integration tests.

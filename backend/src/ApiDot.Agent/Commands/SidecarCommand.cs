@@ -100,15 +100,30 @@ public static class SidecarCommand
 
         app.MapGet("/health", () => Results.Ok("ok"));
 
-        app.MapGet("/auth/callback", (string? token) =>
+        app.MapGet("/auth/callback", (string? token, string? origin, HttpContext context) =>
         {
             if (!string.IsNullOrWhiteSpace(token))
             {
                 sessionState.SetToken(token.Trim());
             }
 
-            var destination = !string.IsNullOrWhiteSpace(serverUrl)
-                ? $"{serverUrl.TrimEnd('/')}/auth/desktop-success"
+            string? targetOrigin = null;
+            if (!string.IsNullOrWhiteSpace(origin) && Uri.TryCreate(origin, UriKind.Absolute, out var parsedOrigin))
+            {
+                targetOrigin = $"{parsedOrigin.Scheme}://{parsedOrigin.Authority}";
+            }
+            else if (context.Request.Headers.TryGetValue("Referer", out var referer)
+                     && Uri.TryCreate(referer.ToString(), UriKind.Absolute, out var parsedReferer))
+            {
+                targetOrigin = $"{parsedReferer.Scheme}://{parsedReferer.Authority}";
+            }
+            else if (!string.IsNullOrWhiteSpace(serverUrl) && Uri.TryCreate(serverUrl, UriKind.Absolute, out var parsedServer))
+            {
+                targetOrigin = $"{parsedServer.Scheme}://{parsedServer.Authority}";
+            }
+
+            var destination = !string.IsNullOrWhiteSpace(targetOrigin)
+                ? $"{targetOrigin.TrimEnd('/')}/auth/desktop-success"
                 : "/auth/desktop-success";
 
             return Results.Redirect(destination);
@@ -222,4 +237,12 @@ public static class SidecarCommand
             return 1;
         }
     }
+}
+
+public class SidecarAgentCommand : IAgentCommand
+{
+    public bool CanHandle(AgentCommandType commandType) => commandType == AgentCommandType.Sidecar;
+
+    public Task<int> ExecuteAsync(AgentCliOptions options, CancellationToken cancellationToken = default) =>
+        SidecarCommand.RunAsync(options, cancellationToken);
 }

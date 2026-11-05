@@ -1,4 +1,5 @@
 using System.Text;
+using ApiDot.Core.Versioning;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -21,18 +22,14 @@ public static class InstallScriptEndpoints
 
     public static string GetAppVersion(IConfiguration configuration)
     {
-        var raw = configuration["APIDOT_VERSION"] ?? configuration["AgentRelease:Version"] ?? "dev";
-        return string.IsNullOrWhiteSpace(raw) ? "dev" : raw.Trim();
+        var raw = configuration["APIDOT_VERSION"] ?? configuration["AgentRelease:Version"];
+        return ApiDotVersion.GetRawVersion(raw);
     }
 
     public static string GetNormalizedVersion(IConfiguration configuration)
     {
         var version = GetAppVersion(configuration);
-        if (string.Equals(version, "dev", StringComparison.OrdinalIgnoreCase))
-        {
-            return "dev";
-        }
-        return version.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? version : $"v{version}";
+        return ApiDotVersion.Normalize(version);
     }
 
     public static IEndpointRouteBuilder MapInstallScriptEndpoints(this IEndpointRouteBuilder app)

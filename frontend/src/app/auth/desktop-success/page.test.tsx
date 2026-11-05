@@ -41,7 +41,8 @@ describe('DesktopSuccessPage (/auth/desktop-success)', () => {
   it('renders ApiDot branding and visual elements', () => {
     render(<DesktopSuccessPage />);
 
-    expect(screen.getByText(/⚡ ApiDot/i)).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /ApiDot/i })).toBeInTheDocument();
+    expect(screen.getByText('ApiDot')).toBeInTheDocument();
   });
 
   it('attempts to close window when action button is clicked', () => {

@@ -5,8 +5,8 @@ use tokio::sync::Mutex;
 pub const SIDECAR_READY_MARKER_PREFIX: &str = "[APIDOT_SIDECAR_READY:";
 pub const SIDECAR_READY_MARKER_SUFFIX: &str = "]";
 
-/// Extrai o número da porta a partir de uma linha de stdout contendo `[APIDOT_SIDECAR_READY:<port>]`.
-/// Retorna `Some(port)` caso uma porta numérica válida (1-65535) seja identificada, ou `None` caso contrário.
+/// Extracts the port number from a stdout line containing `[APIDOT_SIDECAR_READY:<port>]`.
+/// Returns `Some(port)` if a valid numeric port (1-65535) is found, otherwise `None`.
 pub fn parse_sidecar_port(line: &str) -> Option<u16> {
     if let Some(start_idx) = line.find(SIDECAR_READY_MARKER_PREFIX) {
         let after_prefix = &line[start_idx + SIDECAR_READY_MARKER_PREFIX.len()..];
@@ -22,14 +22,14 @@ pub fn parse_sidecar_port(line: &str) -> Option<u16> {
     None
 }
 
-/// Metadados de conexão do Sidecar local (porta alocada dinamicamente e segredo de autenticação efêmero).
+/// Connection metadata for the local Sidecar (dynamically allocated loopback port and ephemeral secret).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct SidecarInfo {
     pub port: u16,
     pub secret: String,
 }
 
-/// Gerenciador de ciclo de vida do processo filho do Sidecar (.NET Native AOT).
+/// Lifecycle manager for the .NET Native AOT Sidecar child process.
 pub struct SidecarManager {
     pub child: Option<tokio::process::Child>,
     pub info: Option<SidecarInfo>,
@@ -38,7 +38,7 @@ pub struct SidecarManager {
 pub type SidecarState = SidecarManager;
 
 impl SidecarManager {
-    /// Cria uma nova instância de SidecarManager em estado inicial não inicializado.
+    /// Creates a new uninitialized SidecarManager instance.
     pub fn new() -> Self {
         Self {
             child: None,
@@ -46,7 +46,7 @@ impl SidecarManager {
         }
     }
 
-    /// Cria uma instância pré-populada com metadados para cenários de teste ou simulação.
+    /// Creates a pre-populated SidecarManager instance for testing or simulation.
     pub fn with_info(port: u16, secret: String) -> Self {
         Self {
             child: None,
@@ -54,7 +54,7 @@ impl SidecarManager {
         }
     }
 
-    /// Verifica se o processo filho do sidecar está em execução ativa, limpando referências em caso de término.
+    /// Verifies if the sidecar child process is actively running, clearing references if it terminated.
     pub fn poll_active(&mut self) -> bool {
         if let Some(child) = &mut self.child {
             match child.try_wait() {
@@ -71,26 +71,26 @@ impl SidecarManager {
         }
     }
 
-    /// Verifica se o processo filho do sidecar está ativo e os metadados de porta estão disponíveis.
+    /// Checks whether the sidecar child process is running and loopback endpoint metadata is ready.
     pub fn is_running(&mut self) -> bool {
         self.poll_active() && self.info.is_some()
     }
 
-    /// Retorna uma cópia dos metadados de porta e segredo do sidecar, se disponível.
+    /// Returns a copy of the sidecar port and secret metadata, if available.
     pub fn get_info(&self) -> Option<SidecarInfo> {
         self.info.clone()
     }
 
-    /// Inicia o processo `apidot-agent sidecar --port 0 --secret <secret>`, captura a porta atribuída e armazena os metadados.
+    /// Starts the `apidot-agent sidecar --port 0 --secret <secret>` process, captures bound port, and stores metadata.
     pub async fn start_sidecar(&mut self) -> Result<SidecarInfo, String> {
-        // Se já estiver em execução com metadados válidos, retorna as informações atuais
+        // Return existing info if already running
         if self.poll_active() {
             if let Some(info) = &self.info {
                 return Ok(info.clone());
             }
         }
 
-        // Garante a finalização de qualquer processo residual anterior
+        // Ensure any residual process is cleanly terminated
         let _ = self.stop_sidecar().await;
 
         let secret = uuid::Uuid::new_v4().to_string();
@@ -120,7 +120,7 @@ impl SidecarManager {
 
         let stderr = child.stderr.take();
 
-        // Tarefa em segundo plano para drenar e logar o stderr sem bloquear o pipe do sistema
+        // Background task to drain and log stderr without blocking system pipe buffer
         if let Some(err_stream) = stderr {
             tokio::spawn(async move {
                 use tokio::io::AsyncBufReadExt;
@@ -136,7 +136,7 @@ impl SidecarManager {
             });
         }
 
-        // Leitura síncrona do stdout até a detecção do marcador de prontidão
+        // Read stdout line-by-line until ready marker is detected
         let mut reader = tokio::io::BufReader::new(stdout);
         let mut line = String::new();
 
@@ -172,7 +172,7 @@ impl SidecarManager {
             }
         };
 
-        // Drena o restante do stdout em segundo plano para evitar bloqueio de buffer do pipe
+        // Drain remaining stdout in the background to prevent pipe buffer deadlock
         tokio::spawn(async move {
             use tokio::io::AsyncBufReadExt;
             let mut drain_line = String::new();
@@ -191,7 +191,7 @@ impl SidecarManager {
         Ok(info)
     }
 
-    /// Encerra graciosamente ou finaliza forçadamente o processo filho do sidecar (garantindo ZERO processos órfãos).
+    /// Gracefully stops or terminates the sidecar child process (guaranteeing zero orphan processes).
     pub async fn stop_sidecar(&mut self) -> Result<(), String> {
         self.info = None;
         if let Some(mut child) = self.child.take() {
@@ -202,11 +202,11 @@ impl SidecarManager {
                         fn kill(pid: i32, sig: i32) -> i32;
                     }
                     unsafe {
-                        // Envia SIGTERM (15) para finalização graciosa
+                        // Send SIGTERM (15) for graceful shutdown
                         kill(pid as i32, 15);
                     }
 
-                    // Aguarda até 500ms para encerramento limpo antes de forçar kill
+                    // Wait up to 500ms for clean termination before forcing kill
                     let wait_timeout = tokio::time::timeout(
                         std::time::Duration::from_millis(500),
                         child.wait(),
@@ -219,7 +219,7 @@ impl SidecarManager {
                 }
             }
 
-            // Encerramento forçado caso o encerramento gracioso expire ou em outras plataformas (ex: Windows)
+            // Force kill if graceful termination timed out or on other platforms (e.g. Windows)
             let _ = child.start_kill();
             let _ = child.wait().await;
         }
@@ -241,7 +241,7 @@ impl Drop for SidecarManager {
     }
 }
 
-/// Localiza o caminho para o binário do sidecar `apidot-agent`.
+/// Locates the path to the `apidot-agent` sidecar binary.
 pub fn resolve_sidecar_binary_path() -> PathBuf {
     if let Ok(env_path) = std::env::var("APIDOT_SIDECAR_PATH") {
         let path = PathBuf::from(env_path);
@@ -250,7 +250,7 @@ pub fn resolve_sidecar_binary_path() -> PathBuf {
         }
     }
 
-    // Binários bundled relativos ao executável em execução (bundle de produção)
+    // Bundled binaries relative to current executable (production bundle)
     if let Ok(current_exe) = std::env::current_exe() {
         if let Some(exe_dir) = current_exe.parent() {
             let bundled_candidates = [
@@ -267,7 +267,7 @@ pub fn resolve_sidecar_binary_path() -> PathBuf {
         }
     }
 
-    // Caminhos padrão de desenvolvimento e build
+    // Default development and build candidate paths
     let dev_candidates = [
         "desktop/src-tauri/binaries/apidot-agent",
         "desktop/src-tauri/binaries/apidot-agent.exe",
@@ -293,7 +293,7 @@ pub fn resolve_sidecar_binary_path() -> PathBuf {
     PathBuf::from("apidot-agent")
 }
 
-/// Comando IPC Tauri para consultar metadados do sidecar (porta e segredo de autenticação efêmero).
+/// Tauri IPC command to retrieve sidecar metadata (port and ephemeral secret).
 #[tauri::command]
 pub async fn get_sidecar_info(
     state: tauri::State<'_, Arc<Mutex<SidecarManager>>>,

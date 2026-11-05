@@ -7,6 +7,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { isDesktop } from '@/lib/desktop/runtime';
 import { startDesktopSsoFlow } from '@/lib/desktop/desktopAuth';
 import { LogIn, Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
+import ApiDotLogo from '@assets/api-dot-white.svg';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -160,9 +161,8 @@ export default function LoginPage() {
         {/* Header with ApiDot branding */}
         <div className="flex flex-col items-center text-center gap-1.5">
           <div className="inline-flex items-center justify-center gap-2 mb-1">
-            <span className="text-2xl font-bold tracking-tight text-white select-none">
-              ⚡ ApiDot
-            </span>
+            <ApiDotLogo className="h-8 w-auto text-white" aria-label="ApiDot" />
+            <span className="sr-only">ApiDot</span>
           </div>
           <p className="text-sm text-neutral-400">
             {t('auth.loginSubtitle')}

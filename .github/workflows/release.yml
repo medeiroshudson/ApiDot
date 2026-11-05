@@ -149,8 +149,30 @@ jobs:
           dotnet-version: '9.0.x'
 
       - name: Publish Native AOT Agent
+        shell: bash
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag_name || inputs.tag_name }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          dotnet publish backend/src/ApiDot.Agent/ApiDot.Agent.csproj -c Release -r ${{ matrix.rid }} -p:PublishAot=true -p:InvariantGlobalization=true --self-contained -o ./publish
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_TAG" ]; then
+            RELEASE_TAG="$INPUT_TAG"
+          elif [ "$REF_TYPE" = "tag" ]; then
+            RELEASE_TAG="$REF_NAME"
+          elif [ "$REF_NAME" = "dev" ]; then
+            RELEASE_TAG="dev"
+          else
+            RELEASE_TAG="${REF_NAME:-dev}"
+          fi
+
+          if [[ "$RELEASE_TAG" =~ ^v?[0-9] ]]; then
+            VERSION_NUM="${RELEASE_TAG#v}"
+          else
+            VERSION_NUM="0.0.0"
+          fi
+
+          dotnet publish backend/src/ApiDot.Agent/ApiDot.Agent.csproj -c Release -r ${{ matrix.rid }} -p:PublishAot=true -p:InvariantGlobalization=true -p:Version="$VERSION_NUM" -p:InformationalVersion="$RELEASE_TAG" --self-contained -o ./publish
 
       - name: Stage artifact
         shell: bash

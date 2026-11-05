@@ -150,7 +150,8 @@ public static class ServiceCollectionExtensions
                         {
                             var exchangeToken = authService.CreateDesktopExchangeToken(userId, emailClaim, nameClaim ?? emailClaim);
                             var delimiter = desktopCallback.Contains('?') ? "&" : "?";
-                            context.ReturnUri = $"{desktopCallback}{delimiter}token={Uri.EscapeDataString(exchangeToken)}";
+                            var currentHost = $"{context.HttpContext.Request.Scheme}://{context.HttpContext.Request.Host}";
+                            context.ReturnUri = $"{desktopCallback}{delimiter}token={Uri.EscapeDataString(exchangeToken)}&origin={Uri.EscapeDataString(currentHost)}";
                         }
                     }
 

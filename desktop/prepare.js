@@ -10,7 +10,7 @@ const binariesDir = path.join(desktopDir, 'src-tauri', 'binaries');
 const frontendDir = path.join(repoRoot, 'frontend');
 const frontendOutDir = path.join(frontendDir, 'out');
 
-// 1. Determina o target-triple da plataforma atual
+// 1. Determine target triple for host platform
 function getTargetTriple() {
   if (process.env.APIDOT_TARGET_TRIPLE) {
     return process.env.APIDOT_TARGET_TRIPLE;
@@ -29,7 +29,7 @@ function getTargetTriple() {
   return `${arch}-${platform}`;
 }
 
-// 2. Garante a compilação e posicionamento do binário Native AOT do Agent
+// 2. Ensure ApiDot.Agent Native AOT binary is built and placed in binaries/
 function prepareAgentBinary() {
   const targetTriple = getTargetTriple();
   const isWindows = process.platform === 'win32' || targetTriple.includes('windows');
@@ -119,7 +119,7 @@ function prepareAgentBinary() {
   }
 }
 
-// 3. Garante que frontend/out exista para evitar erro no tauri build
+// 3. Ensure frontend/out directory exists for Tauri bundle
 function prepareFrontendOut() {
   if (!fs.existsSync(frontendOutDir)) {
     fs.mkdirSync(frontendOutDir, { recursive: true });
@@ -127,7 +127,7 @@ function prepareFrontendOut() {
 
   const indexHtml = path.join(frontendOutDir, 'index.html');
   if (!fs.existsSync(indexHtml)) {
-    // Cria index.html de redirecionamento ou placeholder estático
+    // Create static redirect/placeholder for standalone bundle
     fs.writeFileSync(
       indexHtml,
       `<!DOCTYPE html>
@@ -139,8 +139,8 @@ function prepareFrontendOut() {
 </head>
 <body style="background:#0a0a0a;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
   <div>
-    <h2>Carregando ApiDot...</h2>
-    <p style="color:#888;">Conectando ao frontend local...</p>
+    <h2>Loading ApiDot...</h2>
+    <p style="color:#888;">Connecting to local frontend...</p>
   </div>
 </body>
 </html>`

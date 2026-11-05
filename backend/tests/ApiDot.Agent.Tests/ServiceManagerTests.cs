@@ -87,7 +87,7 @@ public class ServiceManagerTests : IDisposable
         var unit = ServiceManager.GenerateSystemdUnit(config, "/usr/bin/apidot-agent");
 
         unit.Should().Contain("[Unit]");
-        unit.Should().Contain("Description=ApiDot Local Agent");
+        unit.Should().Contain("Description=ApiDot Agent");
         unit.Should().Contain("After=network.target");
         unit.Should().Contain("[Service]");
         unit.Should().Contain("ExecStart=\"/usr/bin/apidot-agent\" connect");
