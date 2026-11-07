@@ -39,14 +39,23 @@ function run() {
   assert(tauriConf.plugins.updater.endpoints[0].includes('github.com/medeiroshudson/ApiDot/releases'), 'updater endpoint must point to GitHub releases');
 
   // The updater refuses to start with a placeholder key. Generating the key pair is an
-  // operator step, so fail the build early instead of shipping an unusable updater.
+  // operator step; warn during development and fail only where a release is built.
   const updaterPubkey = tauriConf.plugins?.updater?.pubkey;
-  assert(
+  const hasRealUpdaterKey =
     typeof updaterPubkey === 'string' &&
-      !updaterPubkey.startsWith('REPLACE_WITH') &&
-      updaterPubkey.length >= 32,
-    'plugins.updater.pubkey must be a real public key: generate the updater key pair with "npx tauri signer generate" and commit the generated public key (keep the private key and its password in CI secrets only).'
-  );
+    !updaterPubkey.startsWith('REPLACE_WITH') &&
+    updaterPubkey.length >= 32;
+
+  if (!hasRealUpdaterKey) {
+    const message =
+      'plugins.updater.pubkey is not a real public key: generate the key pair with "npx tauri signer generate", commit the public key and keep the private key only in CI secrets.';
+
+    if (process.env.APIDOT_REQUIRE_UPDATER_KEY === 'true') {
+      assert(false, message);
+    } else {
+      console.warn(`WARN: ${message} (set APIDOT_REQUIRE_UPDATER_KEY=true to make this fatal)`);
+    }
+  }
   console.log('✓ tauri.conf.json verified');
 
   // 2. capabilities/default.json
