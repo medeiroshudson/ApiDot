@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
       target: dev
     ports:
-      - "5001:5000"
+      - "127.0.0.1:5001:5000"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Data Source=/app/data/apidot.db;Foreign Keys=True
@@ -13,7 +13,8 @@ services:
       - APIDOT_VERSION=${APIDOT_VERSION:-dev}
       - APIDOT_AUTH_ENABLED=${APIDOT_AUTH_ENABLED:-true}
       - APIDOT_ROOT_EMAIL=${APIDOT_ROOT_EMAIL:-contato@hmedeiros.dev}
-      - APIDOT_ROOT_PASSWORD=${APIDOT_ROOT_PASSWORD:-RootStrongPassword123!}
+      - APIDOT_ROOT_PASSWORD=${APIDOT_ROOT_PASSWORD:?APIDOT_ROOT_PASSWORD must be set}
+      - APIDOT_DEMO_ENABLED=${APIDOT_DEMO_ENABLED:-false}
       - OIDC_AUTHORITY=${OIDC_AUTHORITY:-}
       - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
       - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-}
@@ -41,7 +42,7 @@ services:
       dockerfile: Dockerfile
       target: dev
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - NODE_ENV=development
       - API_BASE_URL=http://server:5000

@@ -107,6 +107,11 @@ jobs:
       - name: Install Desktop dependencies
         run: npm --prefix desktop install
 
+      - name: Validate desktop release configuration
+        run: node desktop/validate-config.js
+        env:
+          APIDOT_REQUIRE_UPDATER_KEY: 'true'
+
       - name: Build Desktop Application and Create Release
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:

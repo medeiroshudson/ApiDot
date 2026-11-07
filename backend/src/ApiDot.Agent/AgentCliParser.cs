@@ -28,6 +28,7 @@ public record AgentCliOptions
     public int Port { get; init; }
     public string? Secret { get; init; }
     public string? ConfigPath { get; init; }
+    public bool TokenFromCommandLine { get; init; }
 }
 
 public static class AgentCliParser
@@ -243,6 +244,7 @@ public static class AgentCliParser
         string? token = null;
         string? agentName = null;
         bool? ignoreSsl = null;
+        var tokenFromCommandLine = false;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -266,6 +268,7 @@ public static class AgentCliParser
                     if (i + 1 < args.Length)
                     {
                         token = args[++i];
+                        tokenFromCommandLine = true;
                     }
                     else
                     {
@@ -337,7 +340,7 @@ public static class AgentCliParser
             return new AgentCliOptions
             {
                 Command = AgentCommandType.Connect,
-                ErrorMessage = "Error: --token is required."
+                ErrorMessage = "Error: --token is required (or set the APIDOT_AGENT_TOKEN environment variable)."
             };
         }
 
@@ -347,7 +350,8 @@ public static class AgentCliParser
             ServerUrl = serverUrl,
             Token = token,
             AgentName = agentName,
-            IgnoreSsl = effectiveIgnoreSsl
+            IgnoreSsl = effectiveIgnoreSsl,
+            TokenFromCommandLine = tokenFromCommandLine
         };
     }
 

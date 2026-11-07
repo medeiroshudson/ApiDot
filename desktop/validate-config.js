@@ -37,6 +37,25 @@ function run() {
   assert(tauriConf.bundle?.externalBin?.includes('binaries/apidot-agent'), 'externalBin must include binaries/apidot-agent');
   assert(Array.isArray(tauriConf.plugins?.updater?.endpoints) && tauriConf.plugins.updater.endpoints.length > 0, 'updater endpoints must be configured');
   assert(tauriConf.plugins.updater.endpoints[0].includes('github.com/medeiroshudson/ApiDot/releases'), 'updater endpoint must point to GitHub releases');
+
+  // The updater refuses to start with a placeholder key. Generating the key pair is an
+  // operator step; warn during development and fail only where a release is built.
+  const updaterPubkey = tauriConf.plugins?.updater?.pubkey;
+  const hasRealUpdaterKey =
+    typeof updaterPubkey === 'string' &&
+    !updaterPubkey.startsWith('REPLACE_WITH') &&
+    updaterPubkey.length >= 32;
+
+  if (!hasRealUpdaterKey) {
+    const message =
+      'plugins.updater.pubkey is not a real public key: generate the key pair with "npx tauri signer generate", commit the public key and keep the private key only in CI secrets.';
+
+    if (process.env.APIDOT_REQUIRE_UPDATER_KEY === 'true') {
+      assert(false, message);
+    } else {
+      console.warn(`WARN: ${message} (set APIDOT_REQUIRE_UPDATER_KEY=true to make this fatal)`);
+    }
+  }
   console.log('✓ tauri.conf.json verified');
 
   // 2. capabilities/default.json
@@ -193,7 +212,11 @@ function run() {
   assert(workflowContent.includes('APIDOT_TARGET_TRIPLE'), 'desktop-release.yml must pass APIDOT_TARGET_TRIPLE to prepare.js');
   assert(workflowContent.includes('APIDOT_AGENT_BINARY_PATH'), 'desktop-release.yml must pass APIDOT_AGENT_BINARY_PATH to prepare.js');
   assert(workflowContent.includes('npm --prefix desktop install'), 'desktop-release.yml must install desktop dependencies');
-  assert(workflowContent.includes('tauri-apps/tauri-action@v0'), 'desktop-release.yml must use tauri-apps/tauri-action@v0');
+  assert(workflowContent.includes('tauri-apps/tauri-action@'), 'desktop-release.yml must use tauri-apps/tauri-action');
+  assert(
+    /tauri-apps\/tauri-action@(v0|[0-9a-f]{40})/.test(workflowContent),
+    'tauri-apps/tauri-action must be pinned to v0 or a full commit SHA'
+  );
   assert(workflowContent.includes('projectPath: desktop'), 'tauri-action must use projectPath: desktop');
   assert(workflowContent.includes('includeUpdaterJson: true'), 'tauri-action must set includeUpdaterJson: true');
   assert(workflowContent.includes('updaterJsonKeepUniversal: true'), 'tauri-action must set updaterJsonKeepUniversal: true');

@@ -8,6 +8,7 @@ import {
   ActiveRequestDetails,
   SCRATCHPAD_REQ_ID,
   getScratchpadKey,
+  redactEditorRequestForStorage,
 } from './useRequestStore';
 import { RequestData } from '@/components/request/RequestEditor';
 import { ResponseData } from '@/components/response/ResponseViewer';
@@ -512,9 +513,12 @@ describe('useRequestStore', () => {
       expect(raw).toBeTruthy();
       const parsed = JSON.parse(raw!);
 
-      // Only currentEditorData should be preserved in localStorage
+      // Only currentEditorData should be preserved in localStorage, with credentials redacted
       expect(parsed.state).toEqual({
-        currentEditorData: sampleEditorData,
+        currentEditorData: {
+          ...sampleEditorData,
+          auth: { type: 'bearer' },
+        },
       });
 
       // Transient / volatile memory fields must be undefined in storage to prevent QuotaExceededError
@@ -728,6 +732,63 @@ describe('useRequestStore', () => {
       expect(state.responsesByRequestId['__scratchpad__:ws-target']).toBeUndefined();
       // Other request responses remain intact!
       expect(state.responsesByRequestId['req-kept']).toEqual(reqResp);
+    });
+  });
+
+  describe('14. Persisted Request Credential Redaction', () => {
+    it('should drop auth secrets and sensitive header values from persisted JSON', () => {
+      useRequestStore.getState().setCurrentEditorData({
+        method: 'POST',
+        url: 'https://api.example.com/v1/users?page=2',
+        target: 'Agent',
+        headers: [
+          'Authorization: Bearer super-secret-token',
+          'X-Api-Key: super-secret-api-key',
+          'API-KEY: another-secret-key',
+          'Cookie: session=super-secret-cookie',
+          'Proxy-Authorization: Basic cHJveHk6c2VjcmV0',
+          'Content-Type: application/json',
+          'Accept: application/json',
+        ].join('\n'),
+        body: '{"name":"Alice"}',
+        auth: { type: 'basic', username: 'alice', password: 'super-secret-password' },
+        pathParams: { id: '42' },
+      });
+
+      const raw = localStorage.getItem(REQUEST_STORAGE_KEY);
+      expect(raw).toBeTruthy();
+
+      // No credential material may reach localStorage
+      expect(raw).not.toContain('super-secret-token');
+      expect(raw).not.toContain('super-secret-api-key');
+      expect(raw).not.toContain('another-secret-key');
+      expect(raw).not.toContain('super-secret-cookie');
+      expect(raw).not.toContain('cHJveHk6c2VjcmV0');
+      expect(raw).not.toContain('super-secret-password');
+      expect(raw).not.toContain('alice');
+
+      const parsed = JSON.parse(raw!);
+      expect(parsed.state.currentEditorData).toEqual({
+        method: 'POST',
+        url: 'https://api.example.com/v1/users?page=2',
+        target: 'Agent',
+        headers: [
+          'Authorization: [redacted]',
+          'X-Api-Key: [redacted]',
+          'API-KEY: [redacted]',
+          'Cookie: [redacted]',
+          'Proxy-Authorization: [redacted]',
+          'Content-Type: application/json',
+          'Accept: application/json',
+        ].join('\n'),
+        body: '{"name":"Alice"}',
+        auth: { type: 'basic' },
+        pathParams: { id: '42' },
+      });
+    });
+
+    it('should keep null currentEditorData null in persisted storage', () => {
+      expect(redactEditorRequestForStorage(null)).toBeNull();
     });
   });
 });

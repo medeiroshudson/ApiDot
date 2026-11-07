@@ -15,13 +15,54 @@ public class AgentWebSocketHandler : IAgentWebSocketHandler
     public const int MaxMessageSizeBytes = 16 * 1024 * 1024; // 16 MB
     public const int BufferSizeBytes = 1024 * 64; // 64 KB
 
+    private const string BearerPrefix = "Bearer ";
+
     private readonly IAgentHub _agentHub;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<AgentWebSocketHandler> _logger;
 
-    public AgentWebSocketHandler(IAgentHub agentHub, IServiceScopeFactory scopeFactory)
+    public AgentWebSocketHandler(
+        IAgentHub agentHub,
+        IServiceScopeFactory scopeFactory,
+        ILogger<AgentWebSocketHandler> logger)
     {
         _agentHub = agentHub ?? throw new ArgumentNullException(nameof(agentHub));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    /// <summary>
+    /// Resolves the agent device token from the request, preferring the
+    /// <c>Authorization: Bearer</c> header over the deprecated <c>?token=</c> query parameter.
+    /// </summary>
+    /// <param name="context">Current HTTP context.</param>
+    /// <param name="usedQueryToken">True when the token came from the query string.</param>
+    /// <returns>The raw token, or null when the request carries no token.</returns>
+    internal static string? ExtractToken(HttpContext context, out bool usedQueryToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        usedQueryToken = false;
+
+        var authorization = context.Request.Headers.Authorization.ToString();
+        if (!string.IsNullOrWhiteSpace(authorization)
+            && authorization.StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var headerToken = authorization[BearerPrefix.Length..].Trim();
+            if (!string.IsNullOrWhiteSpace(headerToken))
+            {
+                return headerToken;
+            }
+        }
+
+        var queryToken = context.Request.Query["token"].ToString();
+        if (!string.IsNullOrWhiteSpace(queryToken))
+        {
+            usedQueryToken = true;
+            return queryToken;
+        }
+
+        return null;
     }
 
     public async Task<IResult> HandleAsync(HttpContext context, CancellationToken cancellationToken = default)
@@ -41,7 +82,14 @@ public class AgentWebSocketHandler : IAgentWebSocketHandler
             : null;
         var effectiveToken = linkedCts?.Token ?? (cancellationToken != default ? cancellationToken : context.RequestAborted);
 
-        var token = context.Request.Query["token"].ToString();
+        var token = ExtractToken(context, out var usedQueryToken);
+        if (usedQueryToken)
+        {
+            _logger.LogWarning(
+                "Agent device authenticated via the deprecated '?token=' query parameter. " +
+                "Send the token in the 'Authorization: Bearer <token>' header instead.");
+        }
+
         if (string.IsNullOrWhiteSpace(token))
         {
             using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));

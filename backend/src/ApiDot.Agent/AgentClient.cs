@@ -211,6 +211,9 @@ public class AgentClient : IDisposable
         while (!cancellationToken.IsCancellationRequested)
         {
             using var clientWebSocket = new ClientWebSocket();
+            // The token stays in the query string for backwards compatibility, but the
+            // Authorization header is the preferred channel (query strings leak into logs).
+            clientWebSocket.Options.SetRequestHeader("Authorization", $"Bearer {Token}");
             if (IgnoreSsl)
             {
                 clientWebSocket.Options.RemoteCertificateValidationCallback = delegate { return true; };

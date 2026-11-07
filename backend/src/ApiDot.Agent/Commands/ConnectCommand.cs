@@ -10,6 +10,13 @@ public class ConnectCommand : IAgentCommand
 
     public async Task<int> ExecuteAsync(AgentCliOptions options, CancellationToken cancellationToken = default)
     {
+        if (options.TokenFromCommandLine)
+        {
+            Console.Error.WriteLine(
+                "Warning: passing the agent token via --token exposes it in the process list and shell history. " +
+                "Prefer the APIDOT_AGENT_TOKEN environment variable.");
+        }
+
         if (Runner != null)
         {
             return await Runner(options, cancellationToken);
