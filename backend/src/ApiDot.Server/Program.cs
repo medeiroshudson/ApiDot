@@ -70,6 +70,7 @@ builder.Services.AddOptions<ForwardedHeadersOptions>()
 
 builder.Services.AddServerDatabase(builder.Configuration);
 builder.Services.AddServerAuthentication(builder.Configuration);
+builder.Services.AddSessionCookieHardening();
 builder.Services.AddServerServices(builder.Configuration);
 builder.Services.AddServerHttpClients();
 
