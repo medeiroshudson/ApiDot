@@ -48,11 +48,8 @@ public class AuthFlowE2ETests : IClassFixture<WebApplicationFactory<Program>>, I
                     services.Remove(descriptor);
                 }
 
-                services.AddDbContext<ApiDotDbContext>((sp, options) =>
-                {
-                    options.UseSqlite($"Data Source={_dbPath};Foreign Keys=True");
-                    options.AddInterceptors(sp.GetRequiredService<WorkspaceScopeInterceptor>());
-                });
+                services.AddDbContext<ApiDotDbContext>(options =>
+                    options.UseSqlite($"Data Source={_dbPath};Foreign Keys=True"));
             });
         });
     }
