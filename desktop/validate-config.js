@@ -212,7 +212,11 @@ function run() {
   assert(workflowContent.includes('APIDOT_TARGET_TRIPLE'), 'desktop-release.yml must pass APIDOT_TARGET_TRIPLE to prepare.js');
   assert(workflowContent.includes('APIDOT_AGENT_BINARY_PATH'), 'desktop-release.yml must pass APIDOT_AGENT_BINARY_PATH to prepare.js');
   assert(workflowContent.includes('npm --prefix desktop install'), 'desktop-release.yml must install desktop dependencies');
-  assert(workflowContent.includes('tauri-apps/tauri-action@v0'), 'desktop-release.yml must use tauri-apps/tauri-action@v0');
+  assert(workflowContent.includes('tauri-apps/tauri-action@'), 'desktop-release.yml must use tauri-apps/tauri-action');
+  assert(
+    /tauri-apps\/tauri-action@(v0|[0-9a-f]{40})/.test(workflowContent),
+    'tauri-apps/tauri-action must be pinned to v0 or a full commit SHA'
+  );
   assert(workflowContent.includes('projectPath: desktop'), 'tauri-action must use projectPath: desktop');
   assert(workflowContent.includes('includeUpdaterJson: true'), 'tauri-action must set includeUpdaterJson: true');
   assert(workflowContent.includes('updaterJsonKeepUniversal: true'), 'tauri-action must set updaterJsonKeepUniversal: true');
