@@ -1,4 +1,6 @@
-use apidot_desktop::sidecar::{parse_sidecar_port, SidecarInfo, SidecarManager};
+use apidot_desktop::sidecar::{
+    build_sidecar_command, parse_sidecar_port, SidecarInfo, SidecarManager,
+};
 
 #[test]
 fn test_parse_sidecar_ready_line() {
@@ -37,6 +39,32 @@ fn test_parse_sidecar_invalid_lines() {
     assert_eq!(parse_sidecar_port("[APIDOT_SIDECAR_READY:54321"), None);
     assert_eq!(parse_sidecar_port(""), None);
     assert_eq!(parse_sidecar_port("info: Starting Kestrel server..."), None);
+}
+
+#[test]
+fn test_sidecar_command_passes_secret_only_through_the_environment() {
+    let cmd = build_sidecar_command(
+        std::path::Path::new("/usr/bin/apidot-agent"),
+        "top-secret-value",
+    );
+    let std_cmd = cmd.as_std();
+
+    let args: Vec<String> = std_cmd
+        .get_args()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(args, vec!["sidecar", "--port", "0"]);
+    assert!(!args.iter().any(|arg| arg == "--secret"));
+    assert!(!args.iter().any(|arg| arg.contains("top-secret-value")));
+
+    let secret_env = std_cmd
+        .get_envs()
+        .find(|(key, _)| *key == "APIDOT_SIDECAR_SECRET");
+    let (_, value) = secret_env.expect("APIDOT_SIDECAR_SECRET must be set on the child process");
+    assert_eq!(
+        value.map(|value| value.to_string_lossy().into_owned()),
+        Some("top-secret-value".to_string())
+    );
 }
 
 #[test]

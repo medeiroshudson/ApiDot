@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -36,6 +36,23 @@ pub struct SidecarManager {
 }
 
 pub type SidecarState = SidecarManager;
+
+/// Builds the sidecar child-process command.
+///
+/// The ephemeral secret is passed only through the `APIDOT_SIDECAR_SECRET`
+/// environment variable. Command-line arguments are visible to every local
+/// user through process listings, so the secret must not appear there.
+pub fn build_sidecar_command(binary_path: &Path, secret: &str) -> tokio::process::Command {
+    let mut cmd = tokio::process::Command::new(binary_path);
+    cmd.arg("sidecar")
+        .arg("--port")
+        .arg("0")
+        .env("APIDOT_SIDECAR_SECRET", secret)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true);
+    cmd
+}
 
 impl SidecarManager {
     /// Creates a new uninitialized SidecarManager instance.
@@ -81,7 +98,8 @@ impl SidecarManager {
         self.info.clone()
     }
 
-    /// Starts the `apidot-agent sidecar --port 0 --secret <secret>` process, captures bound port, and stores metadata.
+    /// Starts the `apidot-agent sidecar --port 0` process with the secret in the
+    /// environment, captures the bound port, and stores metadata.
     pub async fn start_sidecar(&mut self) -> Result<SidecarInfo, String> {
         // Return existing info if already running
         if self.poll_active() {
@@ -96,16 +114,7 @@ impl SidecarManager {
         let secret = uuid::Uuid::new_v4().to_string();
         let binary_path = resolve_sidecar_binary_path();
 
-        let mut cmd = tokio::process::Command::new(&binary_path);
-        cmd.arg("sidecar")
-            .arg("--port")
-            .arg("0")
-            .arg("--secret")
-            .arg(&secret)
-            .env("APIDOT_SIDECAR_SECRET", &secret)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true);
+        let mut cmd = build_sidecar_command(&binary_path, &secret);
 
         let mut child = cmd.spawn().map_err(|err| {
             format!(
