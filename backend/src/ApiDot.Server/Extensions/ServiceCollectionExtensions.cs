@@ -49,6 +49,19 @@ public static class ServiceCollectionExtensions
             };
         });
 
+        // Harden the session cookie outside local/test environments: the __Host- prefix
+        // requires Secure, a path of / and no Domain attribute.
+        services.AddOptions<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme)
+            .Configure<IHostEnvironment>((options, environment) =>
+            {
+                var relaxForLocalDevelopment = environment.IsDevelopment() || environment.IsEnvironment("Test");
+
+                options.Cookie.Name = relaxForLocalDevelopment ? "apidot_session" : "__Host-apidot_session";
+                options.Cookie.HttpOnly = true;
+                options.Cookie.SameSite = SameSiteMode.Lax;
+                options.Cookie.SecurePolicy = relaxForLocalDevelopment ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+            });
+
         var oidcAuthority = configuration["OIDC_AUTHORITY"]
             ?? configuration["Apidot:OidcAuthority"]
             ?? configuration["Oidc:Authority"];
