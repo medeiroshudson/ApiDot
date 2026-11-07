@@ -6,18 +6,23 @@ using ApiDot.Server.Execution;
 using ApiDot.Server.Security;
 using ApiDot.Server.Services;
 using ApiDot.Server.WebSockets;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace ApiDot.Server.Extensions;
 
 public static class ServiceCollectionExtensions
 {
+    private const string DefaultSchemeName = "ApiDotDefault";
+
     public static IServiceCollection AddServerAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -32,8 +37,8 @@ public static class ServiceCollectionExtensions
 
         var authBuilder = services.AddAuthentication(options =>
         {
-            options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-            options.DefaultAuthenticateScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+            options.DefaultScheme = DefaultSchemeName;
+            options.DefaultAuthenticateScheme = DefaultSchemeName;
             options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
             options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
         })
@@ -56,6 +61,23 @@ public static class ServiceCollectionExtensions
                 return Task.CompletedTask;
             };
         });
+
+        authBuilder.AddPolicyScheme(
+            DefaultSchemeName,
+            DefaultSchemeName,
+            options => options.ForwardDefaultSelector = context =>
+            {
+                var requestConfiguration = context.RequestServices.GetRequiredService<IConfiguration>();
+                var environment = context.RequestServices.GetRequiredService<IHostEnvironment>();
+
+                return AuthBypass.IsEnabled(requestConfiguration, environment)
+                    ? DevRootAuthenticationHandler.SchemeName
+                    : CookieAuthenticationDefaults.AuthenticationScheme;
+            });
+
+        authBuilder.AddScheme<AuthenticationSchemeOptions, DevRootAuthenticationHandler>(
+            DevRootAuthenticationHandler.SchemeName,
+            _ => { });
 
         var oidcAuthority = configuration["OIDC_AUTHORITY"]
             ?? configuration["Apidot:OidcAuthority"]
@@ -167,7 +189,12 @@ public static class ServiceCollectionExtensions
             });
         }
 
-        services.AddAuthorization();
+        services.AddAuthorization(options =>
+        {
+            options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .Build();
+        });
         return services;
     }
 

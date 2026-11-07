@@ -15,7 +15,7 @@ public static class AgentWebSocketEndpoints
             CancellationToken cancellationToken) =>
         {
             return await handler.HandleAsync(context, cancellationToken);
-        });
+        }).AllowAnonymous();
 
         return app;
     }

@@ -14,7 +14,7 @@ public static class HealthEndpoints
             status = "Healthy",
             version = InstallScriptEndpoints.GetAppVersion(configuration),
             timestamp = DateTime.UtcNow
-        }));
+        })).AllowAnonymous();
 
         return app;
     }
