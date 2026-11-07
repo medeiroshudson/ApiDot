@@ -35,7 +35,8 @@ public class AuthFlowE2ETests : IClassFixture<WebApplicationFactory<Program>>, I
                     ["APIDOT_ROOT_EMAIL"] = RootEmail,
                     ["APIDOT_ROOT_PASSWORD"] = RootPassword,
                     ["APIDOT_AUTH_ENABLED"] = "true",
-                    ["APIDOT_LOCAL_AUTH_ENABLED"] = "true"
+                    ["APIDOT_LOCAL_AUTH_ENABLED"] = "true",
+                    ["APIDOT_AUTH_RATE_LIMIT_PERMIT"] = "1000"
                 });
             });
 

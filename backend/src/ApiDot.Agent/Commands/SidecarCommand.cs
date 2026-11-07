@@ -23,9 +23,11 @@ public static class SidecarCommand
 
     public static Func<AgentCliOptions, CancellationToken, Task>? WebSocketStarter { get; set; }
 
-    private sealed class SidecarSessionState
+    internal sealed class SidecarSessionState
     {
+        private const int StateSizeBytes = 32;
         private string? _pendingToken;
+        private string? _state;
 
         public void SetToken(string? token)
         {
@@ -36,6 +38,65 @@ public static class SidecarCommand
         {
             return Interlocked.Exchange(ref _pendingToken, null);
         }
+
+        public string NewState()
+        {
+            Span<byte> randomBytes = stackalloc byte[StateSizeBytes];
+            RandomNumberGenerator.Fill(randomBytes);
+            var state = Convert.ToHexStringLower(randomBytes);
+            Interlocked.Exchange(ref _state, state);
+            return state;
+        }
+
+        public bool TryConsumeState(string? state)
+        {
+            if (string.IsNullOrEmpty(state))
+            {
+                return false;
+            }
+
+            var expected = Volatile.Read(ref _state);
+            if (string.IsNullOrEmpty(expected))
+            {
+                return false;
+            }
+
+            var expectedBytes = Encoding.UTF8.GetBytes(expected);
+            var providedBytes = Encoding.UTF8.GetBytes(state);
+            if (expectedBytes.Length != providedBytes.Length)
+            {
+                return false;
+            }
+
+            if (!CryptographicOperations.FixedTimeEquals(providedBytes, expectedBytes))
+            {
+                return false;
+            }
+
+            return ReferenceEquals(Interlocked.CompareExchange(ref _state, null, expected), expected);
+        }
+    }
+
+    private static readonly string[] DefaultDesktopOrigins =
+    [
+        "tauri://localhost",
+        "https://tauri.localhost",
+        "http://localhost:3000"
+    ];
+
+    private static HashSet<string> ParseAllowedOrigins(string? configuredOriginList)
+    {
+        var raw = string.IsNullOrWhiteSpace(configuredOriginList)
+            ? string.Join(',', DefaultDesktopOrigins)
+            : configuredOriginList;
+
+        var origins = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var origin in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            origins.Add(origin.TrimEnd('/'));
+        }
+
+        return origins;
     }
 
     public static WebApplication BuildWebApplication(
@@ -56,16 +117,22 @@ public static class SidecarCommand
 
         var app = builder.Build();
         var sessionState = new SidecarSessionState();
+        var allowedOrigins = ParseAllowedOrigins(app.Configuration["APIDOT_DESKTOP_ORIGINS"]);
 
         app.Use(async (context, next) =>
         {
-            var origin = context.Request.Headers["Origin"].ToString();
-            context.Response.Headers["Access-Control-Allow-Origin"] = string.IsNullOrEmpty(origin) ? "*" : origin;
-            context.Response.Headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS";
-            context.Response.Headers["Access-Control-Allow-Headers"] = $"{SecretHeaderName}, Content-Type, Authorization";
-            if (context.Request.Headers.ContainsKey("Access-Control-Request-Private-Network"))
+            var origin = context.Request.Headers["Origin"].ToString().TrimEnd('/');
+            var isAllowedOrigin = !string.IsNullOrEmpty(origin) && allowedOrigins.Contains(origin);
+
+            if (isAllowedOrigin)
             {
-                context.Response.Headers["Access-Control-Allow-Private-Network"] = "true";
+                context.Response.Headers["Access-Control-Allow-Origin"] = origin;
+                context.Response.Headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS";
+                context.Response.Headers["Access-Control-Allow-Headers"] = $"{SecretHeaderName}, Content-Type, Authorization";
+                if (context.Request.Headers.ContainsKey("Access-Control-Request-Private-Network"))
+                {
+                    context.Response.Headers["Access-Control-Allow-Private-Network"] = "true";
+                }
             }
 
             if (HttpMethods.IsOptions(context.Request.Method))
@@ -75,7 +142,8 @@ public static class SidecarCommand
             }
 
             var requiresSecret = context.Request.Path.StartsWithSegments("/execute")
-                || context.Request.Path.StartsWithSegments("/auth/session");
+                || context.Request.Path.StartsWithSegments("/auth/session")
+                || context.Request.Path.StartsWithSegments("/auth/state");
 
             if (requiresSecret)
             {
@@ -100,8 +168,13 @@ public static class SidecarCommand
 
         app.MapGet("/health", () => Results.Ok("ok"));
 
-        app.MapGet("/auth/callback", (string? token, string? origin, HttpContext context) =>
+        app.MapGet("/auth/callback", (string? token, string? origin, string? state, HttpContext context) =>
         {
+            if (!sessionState.TryConsumeState(state))
+            {
+                return Results.BadRequest();
+            }
+
             if (!string.IsNullOrWhiteSpace(token))
             {
                 sessionState.SetToken(token.Trim());
@@ -133,6 +206,11 @@ public static class SidecarCommand
         {
             var token = sessionState.ConsumeToken();
             return Results.Ok(new DesktopSessionDto(token));
+        });
+
+        app.MapGet("/auth/state", () =>
+        {
+            return Results.Ok(new DesktopAuthStateDto(sessionState.NewState()));
         });
 
         app.MapPost("/execute", async (HttpRequestDispatch dispatch, CancellationToken cancellationToken) =>

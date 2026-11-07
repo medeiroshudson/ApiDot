@@ -18,11 +18,12 @@ public class PasswordHasherTests
 
         hash.Should().NotBeNullOrWhiteSpace();
         salt.Should().NotBeNullOrWhiteSpace();
+        hash.Should().StartWith("v2$");
 
         var saltBytes = Convert.FromBase64String(salt);
         saltBytes.Length.Should().Be(16);
 
-        var hashBytes = Convert.FromBase64String(hash);
+        var hashBytes = Convert.FromBase64String(hash["v2$".Length..]);
         hashBytes.Length.Should().Be(32);
     }
 

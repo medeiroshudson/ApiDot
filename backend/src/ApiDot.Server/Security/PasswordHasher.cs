@@ -6,7 +6,9 @@ public class PasswordHasher : IPasswordHasher
 {
     private const int SaltSizeBytes = 16;
     private const int HashSizeBytes = 32;
-    private const int Iterations = 100_000;
+    private const int Iterations = 600_000;
+    private const int LegacyIterations = 100_000;
+    private const string VersionPrefix = "v2$";
     private static readonly HashAlgorithmName Algorithm = HashAlgorithmName.SHA256;
 
     public (string Hash, string Salt) HashPassword(string password)
@@ -23,7 +25,7 @@ public class PasswordHasher : IPasswordHasher
 
         try
         {
-            return (Convert.ToBase64String(hashBytes), Convert.ToBase64String(saltBytes));
+            return (VersionPrefix + Convert.ToBase64String(hashBytes), Convert.ToBase64String(saltBytes));
         }
         finally
         {
@@ -45,8 +47,10 @@ public class PasswordHasher : IPasswordHasher
 
         try
         {
+            var (encodedHash, iterations) = ParseHash(hash);
+
             saltBytes = Convert.FromBase64String(salt);
-            expectedHashBytes = Convert.FromBase64String(hash);
+            expectedHashBytes = Convert.FromBase64String(encodedHash);
 
             if (saltBytes.Length != SaltSizeBytes || expectedHashBytes.Length != HashSizeBytes)
             {
@@ -56,7 +60,7 @@ public class PasswordHasher : IPasswordHasher
             actualHashBytes = Rfc2898DeriveBytes.Pbkdf2(
                 password,
                 saltBytes,
-                Iterations,
+                iterations,
                 Algorithm,
                 HashSizeBytes);
 
@@ -81,5 +85,17 @@ public class PasswordHasher : IPasswordHasher
                 CryptographicOperations.ZeroMemory(saltBytes);
             }
         }
+    }
+
+    public bool NeedsRehash(string? hash)
+    {
+        return string.IsNullOrEmpty(hash) || !hash.StartsWith(VersionPrefix, StringComparison.Ordinal);
+    }
+
+    private static (string EncodedHash, int Iterations) ParseHash(string hash)
+    {
+        return hash.StartsWith(VersionPrefix, StringComparison.Ordinal)
+            ? (hash[VersionPrefix.Length..], Iterations)
+            : (hash, LegacyIterations);
     }
 }

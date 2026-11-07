@@ -10,6 +10,23 @@ namespace ApiDot.Server.Tests.Agent;
 [Collection("SidecarCommandTests")]
 public class SidecarAuthEndpointsTests
 {
+    private static async Task<string> GetAuthStateAsync(HttpClient client)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/auth/state");
+        if (!client.DefaultRequestHeaders.Contains(SidecarCommand.SecretHeaderName))
+        {
+            request.Headers.Add(SidecarCommand.SecretHeaderName, "secret-123");
+        }
+
+        var response = await client.SendAsync(request);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var payload = await response.Content.ReadFromJsonAsync(AgentJsonContext.Default.DesktopAuthStateDto);
+        payload.Should().NotBeNull();
+        payload!.State.Should().NotBeNullOrWhiteSpace();
+        return payload.State!;
+    }
+
     [Fact]
     public async Task Sidecar_AuthCallback_StoresTokenAndRedirectsToSuccessPage()
     {
@@ -24,7 +41,8 @@ public class SidecarAuthEndpointsTests
                 BaseAddress = new Uri($"http://127.0.0.1:{port}")
             };
 
-            var callbackRes = await client.GetAsync("/auth/callback?token=test-desktop-token-123");
+            var state = await GetAuthStateAsync(client);
+            var callbackRes = await client.GetAsync($"/auth/callback?token=test-desktop-token-123&state={Uri.EscapeDataString(state)}");
             Assert.Equal(HttpStatusCode.Redirect, callbackRes.StatusCode);
             Assert.Contains("/auth/desktop-success", callbackRes.Headers.Location!.ToString());
 
@@ -100,7 +118,7 @@ public class SidecarAuthEndpointsTests
                 BaseAddress = new Uri($"http://127.0.0.1:{port}")
             };
 
-            await client.GetAsync("/auth/callback?token=single-use-token-456");
+            await client.GetAsync($"/auth/callback?token=single-use-token-456&state={Uri.EscapeDataString(await GetAuthStateAsync(client))}");
 
             client.DefaultRequestHeaders.Add("X-ApiDot-Sidecar-Secret", "secret-123");
 
@@ -165,7 +183,8 @@ public class SidecarAuthEndpointsTests
                 BaseAddress = new Uri($"http://127.0.0.1:{port}")
             };
 
-            var callbackRes = await client.GetAsync("/auth/callback?token=my-token-789");
+            var state = await GetAuthStateAsync(client);
+            var callbackRes = await client.GetAsync($"/auth/callback?token=my-token-789&state={Uri.EscapeDataString(state)}");
             callbackRes.StatusCode.Should().Be(HttpStatusCode.Redirect);
             callbackRes.Headers.Location.Should().NotBeNull();
             callbackRes.Headers.Location!.ToString().Should().Be("https://hub.example.com/auth/desktop-success");
@@ -196,7 +215,8 @@ public class SidecarAuthEndpointsTests
                 BaseAddress = new Uri($"http://127.0.0.1:{port}")
             };
 
-            var callbackRes = await client.GetAsync("/auth/callback?token=my-token-789&origin=http://localhost:3000");
+            var state = await GetAuthStateAsync(client);
+            var callbackRes = await client.GetAsync($"/auth/callback?token=my-token-789&origin=http://localhost:3000&state={Uri.EscapeDataString(state)}");
             callbackRes.StatusCode.Should().Be(HttpStatusCode.Redirect);
             callbackRes.Headers.Location.Should().NotBeNull();
             callbackRes.Headers.Location!.ToString().Should().Be("http://localhost:3000/auth/desktop-success");
@@ -223,7 +243,8 @@ public class SidecarAuthEndpointsTests
             };
 
             // No secret header added
-            var callbackRes = await client.GetAsync("/auth/callback?token=public-browser-flow");
+            var state = await GetAuthStateAsync(client);
+            var callbackRes = await client.GetAsync($"/auth/callback?token=public-browser-flow&state={Uri.EscapeDataString(state)}");
             callbackRes.StatusCode.Should().Be(HttpStatusCode.Redirect);
         }
         finally

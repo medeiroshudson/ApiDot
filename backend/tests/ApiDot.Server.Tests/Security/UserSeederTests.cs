@@ -214,7 +214,8 @@ public class UserSeederTests : IDisposable
     {
         var config = CreateConfiguration(new Dictionary<string, string?>
         {
-            ["APIDOT_ROOT_PASSWORD"] = "RootPassOnly"
+            ["APIDOT_ROOT_PASSWORD"] = "RootPassOnly",
+            ["APIDOT_DEMO_ENABLED"] = "true"
         });
 
         var seeder = new UserSeeder(_dbContext, config, _passwordHasher);

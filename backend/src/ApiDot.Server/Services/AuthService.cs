@@ -84,6 +84,13 @@ public class AuthService(
             return null;
         }
 
+        if (passwordHasher.NeedsRehash(user.PasswordHash))
+        {
+            var (newHash, newSalt) = passwordHasher.HashPassword(password);
+            user.PasswordHash = newHash;
+            user.PasswordSalt = newSalt;
+        }
+
         user.LastLoginAtUtc = DateTime.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -116,7 +123,7 @@ public class AuthService(
         return (true, userDto, null);
     }
 
-    public async Task<User> ProcessOidcLoginAsync(
+    public async Task<User?> ProcessOidcLoginAsync(
         string subject,
         string email,
         string? displayName = null,
@@ -129,10 +136,12 @@ public class AuthService(
 
         var normalizedEmail = email.Trim().ToLowerInvariant();
 
-        // 1. Try finding existing user by OidcSubject
+        // 1. Try finding existing user by OidcSubject, scoped to the issuing provider
         var user = await dbContext.Users
             .TagWith(ScopeMarker)
-            .FirstOrDefaultAsync(u => u.OidcSubject == subject, cancellationToken);
+            .FirstOrDefaultAsync(
+                u => u.OidcSubject == subject && (u.OidcIssuer == issuer || u.OidcIssuer == null),
+                cancellationToken);
 
         // 2. If not found by subject, try finding by Email (Account Linking)
         if (user == null)
@@ -140,6 +149,14 @@ public class AuthService(
             user = await dbContext.Users
                 .TagWith(ScopeMarker)
                 .FirstOrDefaultAsync(u => u.Email == normalizedEmail, cancellationToken);
+
+            if (user != null && user.IsRoot)
+            {
+                logger?.LogWarning(
+                    "Account Linking refused: OIDC subject {Subject} from issuer {Issuer} matched root user {Email}. Root accounts must never be linked automatically from an identity provider.",
+                    subject, issuer, normalizedEmail);
+                return null;
+            }
 
             if (user != null)
             {

@@ -27,12 +27,13 @@ describe('desktopAuth', () => {
         openBrowser: mockOpen,
         pollSession: vi.fn().mockResolvedValue('exchange-token-123'),
         exchangeToken: mockExchange,
+        getState: vi.fn().mockResolvedValue('state-abc'),
         port: 54321,
         serverUrl: 'https://apidot.hmedeiros.dev',
       });
 
       expect(mockOpen).toHaveBeenCalledWith(
-        expect.stringContaining('desktop_callback=http%3A%2F%2F127.0.0.1%3A54321%2Fauth%2Fcallback')
+        expect.stringContaining('desktop_callback=http%3A%2F%2F127.0.0.1%3A54321%2Fauth%2Fcallback%3Fstate%3Dstate-abc')
       );
       expect(result.success).toBe(true);
       expect(result.user).toEqual({ id: 'u1', email: 'test@hmedeiros.dev' });
@@ -48,11 +49,12 @@ describe('desktopAuth', () => {
         openBrowser: mockOpen,
         pollSession: mockPoll,
         exchangeToken: mockExchange,
+        getState: vi.fn().mockResolvedValue('state-auto'),
       });
 
       expect(runtime.getSidecarInfo).toHaveBeenCalled();
       expect(mockOpen).toHaveBeenCalledWith(
-        expect.stringContaining('desktop_callback=http%3A%2F%2F127.0.0.1%3A42000%2Fauth%2Fcallback')
+        expect.stringContaining('desktop_callback=http%3A%2F%2F127.0.0.1%3A42000%2Fauth%2Fcallback%3Fstate%3Dstate-auto')
       );
       expect(mockPoll).toHaveBeenCalledWith(42000, 'sidecar-sec', expect.any(Object));
       expect(mockExchange).toHaveBeenCalledWith('tok-auto', undefined);
@@ -66,13 +68,14 @@ describe('desktopAuth', () => {
         openBrowser: mockOpen,
         pollSession: vi.fn().mockResolvedValue('tok-1'),
         exchangeToken: vi.fn().mockResolvedValue({ id: 'u1' } as any),
+        getState: vi.fn().mockResolvedValue('state-123'),
         port: 12345,
         serverUrl: 'https://app.apidot.dev',
         returnUrl: '/workspace/ws-1',
       });
 
       expect(mockOpen).toHaveBeenCalledWith(
-        'https://app.apidot.dev/api/auth/login?desktop_callback=http%3A%2F%2F127.0.0.1%3A12345%2Fauth%2Fcallback&returnUrl=%2Fworkspace%2Fws-1'
+        'https://app.apidot.dev/api/auth/login?desktop_callback=http%3A%2F%2F127.0.0.1%3A12345%2Fauth%2Fcallback%3Fstate%3Dstate-123&returnUrl=%2Fworkspace%2Fws-1'
       );
     });
 
@@ -83,11 +86,12 @@ describe('desktopAuth', () => {
         openBrowser: mockOpen,
         pollSession: vi.fn().mockResolvedValue('tok-1'),
         exchangeToken: vi.fn().mockResolvedValue({ id: 'u1' } as any),
+        getState: vi.fn().mockResolvedValue('state-default'),
         port: 12345,
       });
 
       expect(mockOpen).toHaveBeenCalledWith(
-        `${window.location.origin}/api/auth/login?desktop_callback=http%3A%2F%2F127.0.0.1%3A12345%2Fauth%2Fcallback`
+        `${window.location.origin}/api/auth/login?desktop_callback=http%3A%2F%2F127.0.0.1%3A12345%2Fauth%2Fcallback%3Fstate%3Dstate-default`
       );
     });
 
@@ -99,6 +103,7 @@ describe('desktopAuth', () => {
         openBrowser: vi.fn().mockResolvedValue(undefined),
         pollSession: vi.fn().mockResolvedValue(null),
         exchangeToken: vi.fn(),
+        getState: vi.fn().mockResolvedValue('state-cancel'),
         port: 54321,
         signal: controller.signal,
       });
@@ -112,6 +117,7 @@ describe('desktopAuth', () => {
         openBrowser: vi.fn().mockResolvedValue(undefined),
         pollSession: vi.fn().mockResolvedValue(null),
         exchangeToken: vi.fn(),
+        getState: vi.fn().mockResolvedValue('state-timeout'),
         port: 54321,
       });
 
@@ -124,11 +130,28 @@ describe('desktopAuth', () => {
         openBrowser: vi.fn().mockResolvedValue(undefined),
         pollSession: vi.fn().mockResolvedValue('invalid-tok'),
         exchangeToken: vi.fn().mockRejectedValue(new Error('Invalid or expired token')),
+        getState: vi.fn().mockResolvedValue('state-exchange'),
         port: 54321,
       });
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Invalid or expired token');
+    });
+
+    it('aborts the sign-in when the sidecar auth state cannot be obtained', async () => {
+      const mockOpen = vi.fn().mockResolvedValue(undefined);
+
+      const result = await startDesktopSsoFlow({
+        openBrowser: mockOpen,
+        pollSession: vi.fn(),
+        exchangeToken: vi.fn(),
+        getState: vi.fn().mockRejectedValue(new Error('Failed to obtain sidecar auth state (401)')),
+        port: 54321,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Failed to obtain sidecar auth state (401)');
+      expect(mockOpen).not.toHaveBeenCalled();
     });
   });
 
