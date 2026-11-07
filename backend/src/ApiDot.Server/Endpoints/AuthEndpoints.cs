@@ -121,7 +121,7 @@ public static class AuthEndpoints
             }
 
             return Results.Ok(user);
-        });
+        }).RequireRateLimiting("auth");
 
         group.MapPost("/local", async (
             LocalLoginRequest? request,
@@ -164,7 +164,7 @@ public static class AuthEndpoints
             }
 
             return Results.Ok(userDto);
-        });
+        }).RequireRateLimiting("auth");
 
         group.MapGet("/me", async (
             HttpContext httpContext,

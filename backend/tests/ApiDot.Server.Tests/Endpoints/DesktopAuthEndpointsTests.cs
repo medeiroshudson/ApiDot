@@ -36,6 +36,7 @@ public class DesktopAuthEndpointsTests : IClassFixture<WebApplicationFactory<Pro
                     ["APIDOT_ROOT_PASSWORD"] = "SuperSecureRootPassword123!",
                     ["APIDOT_AUTH_ENABLED"] = "true",
                     ["APIDOT_LOCAL_AUTH_ENABLED"] = "true",
+                    ["APIDOT_AUTH_RATE_LIMIT_PERMIT"] = "1000",
                     ["OIDC_AUTHORITY"] = "https://auth.hmedeiros.dev/application/o/apidot/",
                     ["OIDC_PROVIDER_NAME"] = "Authentik Homelab"
                 });

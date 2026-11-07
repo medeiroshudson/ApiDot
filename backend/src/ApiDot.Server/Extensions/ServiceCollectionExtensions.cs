@@ -109,10 +109,25 @@ public static class ServiceCollectionExtensions
                         ?? principal?.FindFirst("preferred_username")?.Value;
                     var iss = principal?.FindFirst("iss")?.Value ?? oidcAuthority;
                     var locale = principal?.FindFirst("locale")?.Value;
+                    var emailVerified = principal?.FindFirst("email_verified")?.Value;
 
                     if (string.IsNullOrWhiteSpace(sub) || string.IsNullOrWhiteSpace(email))
                     {
                         context.Fail("Required claims (sub, email) were not provided by the identity provider.");
+                        return;
+                    }
+
+                    bool requireVerifiedEmail = !string.Equals(
+                        configuration["APIDOT_OIDC_REQUIRE_VERIFIED_EMAIL"],
+                        "false",
+                        StringComparison.OrdinalIgnoreCase);
+
+                    bool isEmailVerified = string.Equals(emailVerified, "true", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(emailVerified, "1", StringComparison.OrdinalIgnoreCase);
+
+                    if (requireVerifiedEmail && !isEmailVerified)
+                    {
+                        context.Fail("Email address is not verified by the identity provider.");
                         return;
                     }
 
@@ -123,6 +138,12 @@ public static class ServiceCollectionExtensions
                         iss,
                         locale,
                         context.HttpContext.RequestAborted);
+
+                    if (user == null)
+                    {
+                        context.Fail("OIDC account could not be linked.");
+                        return;
+                    }
 
                     var claims = new List<Claim>
                     {

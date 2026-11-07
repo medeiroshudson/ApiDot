@@ -35,6 +35,8 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
                     ["APIDOT_ROOT_PASSWORD"] = TestRootPassword,
                     ["APIDOT_AUTH_ENABLED"] = "true",
                     ["APIDOT_LOCAL_AUTH_ENABLED"] = "true",
+                    ["APIDOT_DEMO_ENABLED"] = "true",
+                    ["APIDOT_AUTH_RATE_LIMIT_PERMIT"] = "1000",
                     ["OIDC_AUTHORITY"] = "https://auth.hmedeiros.dev/application/o/apidot/",
                     ["OIDC_PROVIDER_NAME"] = "Authentik Homelab"
                 });
@@ -325,7 +327,7 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
     }
 
     [Fact]
-    public async Task ProcessOidcLogin_WhenEmailMatchesExistingRootUser_PerformsAccountLinking_WithoutDuplicate()
+    public async Task ProcessOidcLogin_WhenEmailMatchesExistingRootUser_RejectsAutomaticAccountLinking()
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
@@ -345,12 +347,7 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
             displayName: "Hudson Medeiros",
             issuer: oidcIssuer);
 
-        linkedUser.Id.Should().Be(originalId);
-        linkedUser.Email.Should().Be(TestRootEmail.ToLowerInvariant());
-        linkedUser.DisplayName.Should().Be("Hudson Medeiros");
-        linkedUser.IsRoot.Should().BeTrue();
-        linkedUser.OidcSubject.Should().Be(oidcSub);
-        linkedUser.OidcIssuer.Should().Be(oidcIssuer);
+        linkedUser.Should().BeNull();
 
         using var verifyScope = _factory.Services.CreateScope();
         var verifyDb = verifyScope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
@@ -359,7 +356,10 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
             .ToListAsync();
 
         matchingUsers.Should().HaveCount(1);
-        matchingUsers[0].OidcSubject.Should().Be(oidcSub);
+        matchingUsers[0].Id.Should().Be(originalId);
+        matchingUsers[0].OidcSubject.Should().BeNull();
+        matchingUsers[0].OidcIssuer.Should().BeNull();
+        matchingUsers[0].DisplayName.Should().NotBe("Hudson Medeiros");
     }
 
     [Fact]
@@ -373,11 +373,11 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
         const string oidcSub = "new-oidc-sub-54321";
         const string oidcIssuer = "https://auth.hmedeiros.dev/application/o/apidot/";
 
-        var createdUser = await authService.ProcessOidcLoginAsync(
+        var createdUser = (await authService.ProcessOidcLoginAsync(
             subject: oidcSub,
             email: newUserEmail,
             displayName: "Novo Usuário",
-            issuer: oidcIssuer);
+            issuer: oidcIssuer))!;
 
         createdUser.Id.Should().NotBeEmpty();
         createdUser.Email.Should().Be(newUserEmail);
@@ -600,7 +600,7 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
         // Arrange
         var authService = GetAuthService();
         // Act
-        var user = await authService.ProcessOidcLoginAsync("sub1", "test@test.com", "Test", "iss", "pt-BR", CancellationToken.None);
+        var user = (await authService.ProcessOidcLoginAsync("sub1", "test@test.com", "Test", "iss", "pt-BR", CancellationToken.None))!;
         // Assert
         user.Locale.Should().Be("pt-BR");
     }
@@ -610,11 +610,11 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
     {
         // Arrange
         var authService = GetAuthService();
-        var user = await authService.ProcessOidcLoginAsync("sub2", "test2@test.com", "Test2", "iss", "en-US", CancellationToken.None);
+        var user = (await authService.ProcessOidcLoginAsync("sub2", "test2@test.com", "Test2", "iss", "en-US", CancellationToken.None))!;
         await authService.UpdateUserLocaleAsync(user.Id, "en-US", CancellationToken.None);
 
         // Act - Login again with different SSO claim
-        var loggedInAgain = await authService.ProcessOidcLoginAsync("sub2", "test2@test.com", "Test2", "iss", "pt-BR", CancellationToken.None);
+        var loggedInAgain = (await authService.ProcessOidcLoginAsync("sub2", "test2@test.com", "Test2", "iss", "pt-BR", CancellationToken.None))!;
 
         // Assert - User explicit choice preserved
         loggedInAgain.Locale.Should().Be("en-US");
@@ -624,7 +624,7 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
     public async Task ProcessOidcLogin_WhenNewUser_WithoutLocale_DefaultsToEnUs()
     {
         var authService = GetAuthService();
-        var user = await authService.ProcessOidcLoginAsync("sub-no-locale", "nolocale@test.com", "No Locale", "iss", null, CancellationToken.None);
+        var user = (await authService.ProcessOidcLoginAsync("sub-no-locale", "nolocale@test.com", "No Locale", "iss", null, CancellationToken.None))!;
 
         user.Locale.Should().Be("en-US");
     }
@@ -655,7 +655,7 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
     public async Task UpdateUserLocale_WithValidLocale_UpdatesLocaleAndReturnsTrue()
     {
         var authService = GetAuthService();
-        var user = await authService.ProcessOidcLoginAsync("sub-update-test", "update@test.com", "Update", "iss", "en-US", CancellationToken.None);
+        var user = (await authService.ProcessOidcLoginAsync("sub-update-test", "update@test.com", "Update", "iss", "en-US", CancellationToken.None))!;
 
         var success = await authService.UpdateUserLocaleAsync(user.Id, "pt-BR", CancellationToken.None);
         success.Should().BeTrue();
@@ -669,7 +669,7 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
     public async Task UpdateUserLocale_WithInvalidLocale_ReturnsFalse()
     {
         var authService = GetAuthService();
-        var user = await authService.ProcessOidcLoginAsync("sub-invalid-locale", "invalidloc@test.com", "Invalid", "iss", "en-US", CancellationToken.None);
+        var user = (await authService.ProcessOidcLoginAsync("sub-invalid-locale", "invalidloc@test.com", "Invalid", "iss", "en-US", CancellationToken.None))!;
 
         var success = await authService.UpdateUserLocaleAsync(user.Id, "de-DE", CancellationToken.None);
         success.Should().BeFalse();
@@ -705,7 +705,7 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
         await db.SaveChangesAsync();
 
         // Login with SSO providing pt-BR claim
-        var loggedIn = await authService.ProcessOidcLoginAsync("sub-null-locale", "null-locale-user@test.com", "Null Locale User", "iss", "pt-BR", CancellationToken.None);
+        var loggedIn = (await authService.ProcessOidcLoginAsync("sub-null-locale", "null-locale-user@test.com", "Null Locale User", "iss", "pt-BR", CancellationToken.None))!;
         loggedIn.Locale.Should().Be("pt-BR");
     }
 

@@ -11,6 +11,7 @@ export interface DesktopSsoOptions {
   openBrowser?: (url: string) => Promise<void>;
   pollSession?: (port: number, secret?: string, options?: PollSessionOptions) => Promise<string | null>;
   exchangeToken?: (token: string, baseUrl?: string) => Promise<AuthUser>;
+  getState?: (port: number, secret?: string, signal?: AbortSignal) => Promise<string>;
   port?: number;
   secret?: string;
   serverUrl?: string;
@@ -146,6 +147,38 @@ export async function pollDesktopSidecarSession(
 }
 
 /**
+ * Requests a fresh single-use OAuth state nonce from the local sidecar.
+ * The nonce is echoed back on the loopback callback so unsolicited callbacks
+ * cannot inject a token into the desktop session.
+ */
+export async function fetchDesktopSidecarAuthState(
+  port: number,
+  secret?: string,
+  signal?: AbortSignal
+): Promise<string> {
+  const headers: Record<string, string> = {};
+  if (secret) {
+    headers['X-ApiDot-Sidecar-Secret'] = secret;
+  }
+
+  const res = await fetch(`http://127.0.0.1:${port}/auth/state`, {
+    headers,
+    signal,
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to obtain sidecar auth state (${res.status})`);
+  }
+
+  const data = await res.json().catch(() => null);
+  if (!data || typeof data.state !== 'string' || data.state.length === 0) {
+    throw new Error('Sidecar auth state response was invalid');
+  }
+
+  return data.state;
+}
+
+/**
  * Exchanges a one-time ephemeral desktop token for an authenticated user session.
  */
 export async function exchangeDesktopToken(token: string, baseUrl?: string): Promise<AuthUser> {
@@ -216,7 +249,12 @@ export async function startDesktopSsoFlow(
       ? window.location.origin
       : 'https://apidot.hmedeiros.dev';
     const base = (options.serverUrl || defaultBase).replace(/\/+$/, '');
-    let loginUrl = `${base}/api/auth/login?desktop_callback=${encodeURIComponent(callbackUrl)}`;
+
+    const resolveState = options.getState ?? fetchDesktopSidecarAuthState;
+    const state = await resolveState(port, secret, options.signal);
+    const callbackWithState = `${callbackUrl}?state=${encodeURIComponent(state)}`;
+
+    let loginUrl = `${base}/api/auth/login?desktop_callback=${encodeURIComponent(callbackWithState)}`;
 
     if (options.returnUrl) {
       loginUrl += `&returnUrl=${encodeURIComponent(options.returnUrl)}`;

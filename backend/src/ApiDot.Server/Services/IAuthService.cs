@@ -19,7 +19,7 @@ public interface IAuthService
         HttpContext httpContext,
         CancellationToken cancellationToken = default);
 
-    Task<User> ProcessOidcLoginAsync(
+    Task<User?> ProcessOidcLoginAsync(
         string subject,
         string email,
         string? displayName = null,
