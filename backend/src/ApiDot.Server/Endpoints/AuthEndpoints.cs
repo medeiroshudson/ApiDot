@@ -19,7 +19,7 @@ public static class AuthEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var group = app.MapGroup("/api/auth").WithTags("Auth");
+        var group = app.MapGroup("/api/auth").WithTags("Auth").AllowAnonymous();
 
         group.MapGet("/config", async (IAuthService authService, CancellationToken ct) =>
         {

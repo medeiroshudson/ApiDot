@@ -104,7 +104,7 @@ public class AuthFlowE2ETests : IClassFixture<WebApplicationFactory<Program>>, I
     [Fact]
     public async Task Complete_Auth_Lifecycle_Flow_Succeeds()
     {
-        // 1. Unauthenticated client requests /api/workspaces -> receives 401 or empty/protected.
+        // 1. Unauthenticated client requests /api/workspaces -> receives 401.
         var unauthenticatedClient = _factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
@@ -112,10 +112,7 @@ public class AuthFlowE2ETests : IClassFixture<WebApplicationFactory<Program>>, I
         });
 
         var unauthWsResponse = await unauthenticatedClient.GetAsync("/api/workspaces");
-        unauthWsResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        var unauthWorkspaces = await unauthWsResponse.Content.ReadFromJsonAsync<List<WorkspaceDto>>();
-        unauthWorkspaces.Should().NotBeNull();
-        unauthWorkspaces.Should().BeEmpty("unauthenticated requests must not see workspaces when auth is active");
+        unauthWsResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
         // 2. Issues POST /api/auth/local with credentials -> receives 200 and Set-Cookie: apidot_session=...
         var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -167,12 +164,9 @@ public class AuthFlowE2ETests : IClassFixture<WebApplicationFactory<Program>>, I
         var afterLogoutMe = await client.GetAsync("/api/auth/me");
         afterLogoutMe.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
-        // 7. Subsequent call with revoked session to /api/workspaces -> returns empty/protected.
+        // 7. Subsequent call with revoked session to /api/workspaces -> returns 401.
         var afterLogoutWs = await client.GetAsync("/api/workspaces");
-        afterLogoutWs.StatusCode.Should().Be(HttpStatusCode.OK);
-        var workspacesAfterLogout = await afterLogoutWs.Content.ReadFromJsonAsync<List<WorkspaceDto>>();
-        workspacesAfterLogout.Should().NotBeNull();
-        workspacesAfterLogout.Should().BeEmpty();
+        afterLogoutWs.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]

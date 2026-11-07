@@ -44,7 +44,7 @@ public static class InstallScriptEndpoints
             var script = template.Replace("__SERVER_URL__", serverUrl);
 
             return Results.Content(script, "text/x-shellscript; charset=utf-8", Encoding.UTF8);
-        });
+        }).AllowAnonymous();
 
         app.MapGet("/install.ps1", (
             HttpContext context,
@@ -56,7 +56,7 @@ public static class InstallScriptEndpoints
             var script = template.Replace("__SERVER_URL__", serverUrl);
 
             return Results.Content(script, "text/plain; charset=utf-8", Encoding.UTF8);
-        });
+        }).AllowAnonymous();
 
         app.MapGet("/api/agent/download/{os}/{arch}", (
             string os,
@@ -87,7 +87,7 @@ public static class InstallScriptEndpoints
 
             var redirectUrl = $"{downloadBaseUrl.TrimEnd('/')}/{normalizedVersion}/{assetName}";
             return Results.Redirect(redirectUrl, permanent: false);
-        });
+        }).AllowAnonymous();
 
         return app;
     }
