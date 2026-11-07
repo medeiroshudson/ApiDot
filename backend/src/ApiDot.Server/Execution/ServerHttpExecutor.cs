@@ -27,7 +27,9 @@ public class ServerHttpExecutor(HttpClient httpClient) : IServerHttpExecutor
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            var timeoutSeconds = Math.Clamp(dispatch.TimeoutSeconds, 1, 300);
+            var timeoutSeconds = dispatch.TimeoutSeconds <= 0
+                ? 100
+                : Math.Clamp(dispatch.TimeoutSeconds, 1, 300);
             cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
 
             using var request = new HttpRequestMessage(new HttpMethod(dispatch.Method), dispatch.Url);
