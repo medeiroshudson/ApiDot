@@ -524,18 +524,10 @@ public static class RequestItemEndpoints
                 }
                 else
                 {
-                    var fallbackOnlineId = agentHub.GetFirstOnlineAgentId();
-                    if (fallbackOnlineId.HasValue)
-                    {
-                        deviceId = fallbackOnlineId.Value;
-                    }
-                    else
-                    {
-                        return Results.Problem(
-                            statusCode: StatusCodes.Status409Conflict,
-                            title: "Device Header Missing",
-                            detail: "O cabeçalho X-Device-Id é obrigatório para execução via Agent.");
-                    }
+                    return Results.Problem(
+                        statusCode: StatusCodes.Status409Conflict,
+                        title: "Device Header Missing",
+                        detail: "O cabeçalho X-Device-Id é obrigatório para execução via Agent.");
                 }
 
                 if (!AgentDeviceAuthorization.IsAuthDisabled(configuration) && !currentUserContext.IsRoot)
@@ -567,10 +559,6 @@ public static class RequestItemEndpoints
                     if (historyProvider is InMemoryResponseHistoryProvider inMemoryHistory)
                     {
                         inMemoryHistory.Record(request.Id.ToString(), result);
-                        if (request.Headers != null && request.Headers.TryGetValue("x-request-id", out var reqHeaderId) && !string.IsNullOrWhiteSpace(reqHeaderId))
-                        {
-                            inMemoryHistory.Record(reqHeaderId, result);
-                        }
                     }
                     return Results.Ok(result);
                 }
@@ -601,10 +589,6 @@ public static class RequestItemEndpoints
             if (historyProvider is InMemoryResponseHistoryProvider inMemoryHistoryProvider)
             {
                 inMemoryHistoryProvider.Record(request.Id.ToString(), responsePayload);
-                if (request.Headers != null && request.Headers.TryGetValue("x-request-id", out var reqHeaderId) && !string.IsNullOrWhiteSpace(reqHeaderId))
-                {
-                    inMemoryHistoryProvider.Record(reqHeaderId, responsePayload);
-                }
             }
             return Results.Ok(responsePayload);
         });

@@ -450,6 +450,19 @@ public static class SyncEndpoints
                     }
                 }
 
+                // [PR5] Target parent folder must belong to the entity's workspace.
+                var parentFolderId = payload?.ParentFolderId ?? existing.ParentFolderId;
+                if (parentFolderId.HasValue)
+                {
+                    var parentInWorkspace = await db.Folders.TagWith("/* __ws_scope__ */")
+                        .AnyAsync(f => f.Id == parentFolderId.Value && f.WorkspaceId == workspaceId, cancellationToken);
+                    if (!parentInWorkspace)
+                    {
+                        conflicts.Add(new SyncConflict(mutation.Id, "Folder", $"Target parent folder '{parentFolderId}' not found in workspace.", "Skipped"));
+                        return;
+                    }
+                }
+
                 if (mutation.UpdatedAtUtc < existing.CreatedAtUtc)
                 {
                     var backupName = FormatBackupName(name);
@@ -459,7 +472,7 @@ public static class SyncEndpoints
                         Name = backupName,
                         WorkspaceId = workspaceId,
                         CollectionId = collectionId,
-                        ParentFolderId = payload?.ParentFolderId ?? existing.ParentFolderId,
+                        ParentFolderId = parentFolderId,
                         DefaultTarget = payload?.DefaultTarget ?? existing.DefaultTarget,
                         CreatedAtUtc = DateTime.UtcNow
                     };
@@ -505,13 +518,26 @@ public static class SyncEndpoints
                     }
                 }
 
+                // [PR5] Target parent folder must belong to the target workspace.
+                var parentFolderId = payload?.ParentFolderId;
+                if (parentFolderId.HasValue)
+                {
+                    var parentExists = await db.Folders.TagWith("/* __ws_scope__ */")
+                        .AnyAsync(f => f.Id == parentFolderId.Value && f.WorkspaceId == workspaceId, cancellationToken);
+                    if (!parentExists)
+                    {
+                        conflicts.Add(new SyncConflict(mutation.Id, "Folder", $"Target parent folder '{parentFolderId}' not found in workspace.", "Skipped"));
+                        return;
+                    }
+                }
+
                 var folder = new Folder
                 {
                     Id = mutation.Id,
                     Name = name,
                     WorkspaceId = workspaceId,
                     CollectionId = collectionId,
-                    ParentFolderId = payload?.ParentFolderId,
+                    ParentFolderId = parentFolderId,
                     DefaultTarget = payload?.DefaultTarget ?? ExecutionTarget.Inherit,
                     CreatedAtUtc = mutation.UpdatedAtUtc
                 };
@@ -591,6 +617,29 @@ public static class SyncEndpoints
                 var collectionId = payload?.CollectionId ?? existing.CollectionId;
                 var folderId = payload?.FolderId ?? existing.FolderId;
 
+                // [PR5] Target ids from the payload must belong to the entity's workspace.
+                if (collectionId.HasValue)
+                {
+                    var collectionInWorkspace = await db.Collections.TagWith("/* __ws_scope__ */")
+                        .AnyAsync(c => c.Id == collectionId.Value && c.WorkspaceId == workspaceId, cancellationToken);
+                    if (!collectionInWorkspace)
+                    {
+                        conflicts.Add(new SyncConflict(mutation.Id, "Request", $"Target collection '{collectionId}' not found in workspace.", "Skipped"));
+                        return;
+                    }
+                }
+
+                if (folderId.HasValue)
+                {
+                    var folderInWorkspace = await db.Folders.TagWith("/* __ws_scope__ */")
+                        .AnyAsync(f => f.Id == folderId.Value && f.WorkspaceId == workspaceId, cancellationToken);
+                    if (!folderInWorkspace)
+                    {
+                        conflicts.Add(new SyncConflict(mutation.Id, "Request", $"Target folder '{folderId}' not found in workspace.", "Skipped"));
+                        return;
+                    }
+                }
+
                 if (mutation.UpdatedAtUtc < existing.CreatedAtUtc)
                 {
                     var backupName = FormatBackupName(name);
@@ -648,6 +697,29 @@ public static class SyncEndpoints
 
                 var collectionId = payload?.CollectionId;
                 var folderId = payload?.FolderId;
+
+                // [PR5] Target ids from the payload must belong to the target workspace.
+                if (collectionId.HasValue)
+                {
+                    var collectionInWorkspace = await db.Collections.TagWith("/* __ws_scope__ */")
+                        .AnyAsync(c => c.Id == collectionId.Value && c.WorkspaceId == workspaceId, cancellationToken);
+                    if (!collectionInWorkspace)
+                    {
+                        conflicts.Add(new SyncConflict(mutation.Id, "Request", $"Target collection '{collectionId}' not found in workspace.", "Skipped"));
+                        return;
+                    }
+                }
+
+                if (folderId.HasValue)
+                {
+                    var folderInWorkspace = await db.Folders.TagWith("/* __ws_scope__ */")
+                        .AnyAsync(f => f.Id == folderId.Value && f.WorkspaceId == workspaceId, cancellationToken);
+                    if (!folderInWorkspace)
+                    {
+                        conflicts.Add(new SyncConflict(mutation.Id, "Request", $"Target folder '{folderId}' not found in workspace.", "Skipped"));
+                        return;
+                    }
+                }
 
                 var reqItem = new RequestItem
                 {

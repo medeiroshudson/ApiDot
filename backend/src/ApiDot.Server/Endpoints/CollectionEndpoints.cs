@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace ApiDot.Server.Endpoints;
 
@@ -22,6 +23,7 @@ public static class CollectionEndpoints
             CreateCollectionRequest? request,
             ApiDotDbContext db,
             ICurrentUserContext currentUserContext,
+            IConfiguration configuration,
             CancellationToken cancellationToken) =>
         {
             if (request is null)
@@ -58,6 +60,21 @@ public static class CollectionEndpoints
                     detail: $"Workspace with ID '{request.WorkspaceId}' was not found.");
             }
 
+            if (request.TargetDeviceId.HasValue)
+            {
+                var targetDevice = await db.AgentDevices
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(d => d.Id == request.TargetDeviceId.Value, cancellationToken);
+
+                if (!AgentDeviceAuthorization.HasAccess(targetDevice, currentUserContext, configuration))
+                {
+                    return Results.Problem(
+                        statusCode: StatusCodes.Status400BadRequest,
+                        title: "Invalid Target Device",
+                        detail: $"You do not have permission to use device '{request.TargetDeviceId.Value}'.");
+                }
+            }
+
             var collection = new Collection
             {
                 Name = trimmedName,
@@ -87,6 +104,7 @@ public static class CollectionEndpoints
             ApiDotDbContext db,
             IWorkspaceTreeBuilder treeBuilder,
             ICurrentUserContext currentUserContext,
+            IConfiguration configuration,
             CancellationToken cancellationToken) =>
         {
             if (request is null)
@@ -123,6 +141,21 @@ public static class CollectionEndpoints
                     statusCode: StatusCodes.Status404NotFound,
                     title: "Collection Not Found",
                     detail: $"Collection with ID '{id}' was not found.");
+            }
+
+            if (request.TargetDeviceId.HasValue)
+            {
+                var targetDevice = await db.AgentDevices
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(d => d.Id == request.TargetDeviceId.Value, cancellationToken);
+
+                if (!AgentDeviceAuthorization.HasAccess(targetDevice, currentUserContext, configuration))
+                {
+                    return Results.Problem(
+                        statusCode: StatusCodes.Status400BadRequest,
+                        title: "Invalid Target Device",
+                        detail: $"You do not have permission to use device '{request.TargetDeviceId.Value}'.");
+                }
             }
 
             collection.Name = trimmedName;

@@ -178,14 +178,12 @@ public static class ServiceCollectionExtensions
 
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
-        services.AddScoped<WorkspaceScopeInterceptor>();
 
-        services.AddDbContext<ApiDotDbContext>((sp, options) =>
+        services.AddDbContext<ApiDotDbContext>(options =>
         {
             var connectionString = configuration.GetConnectionString("DefaultConnection")
                 ?? "Data Source=apidot.db;Foreign Keys=True";
             options.UseSqlite(connectionString);
-            options.AddInterceptors(sp.GetRequiredService<WorkspaceScopeInterceptor>());
         });
 
         return services;
@@ -199,9 +197,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserSeeder, UserSeeder>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddSingleton<ITargetResolver, TargetResolver>();
-        services.AddSingleton<InMemoryResponseHistoryProvider>();
-        services.AddSingleton<IResponseHistoryProvider>(sp => sp.GetRequiredService<InMemoryResponseHistoryProvider>());
-        services.AddSingleton<IVariableInterpolator>(sp => new VariableInterpolator(sp.GetRequiredService<IResponseHistoryProvider>()));
+        services.AddMemoryCache(o => o.SizeLimit = 256L * 1024 * 1024);
+        services.AddScoped<InMemoryResponseHistoryProvider>();
+        services.AddScoped<IResponseHistoryProvider>(sp => sp.GetRequiredService<InMemoryResponseHistoryProvider>());
+        services.AddScoped<IVariableInterpolator>(sp => new VariableInterpolator(sp.GetRequiredService<IResponseHistoryProvider>()));
         services.AddSingleton<IVariableResolver, VariableResolver>();
         services.AddSingleton<IAgentHub, AgentHub>();
         services.AddSingleton<ISpecImportStrategy, OpenApiImportStrategy>();

@@ -21,10 +21,32 @@ public static class WorkspaceEndpoints
 
         group.MapGet("/", async (
             ApiDotDbContext db,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
-            var workspaces = await db.Workspaces
-                .AsNoTracking()
+            IQueryable<Workspace> query;
+
+            if (currentUserContext.IsRoot)
+            {
+                query = db.Workspaces.AsNoTracking();
+            }
+            else if (currentUserContext.IsAuthenticated
+                && currentUserContext.UserId.HasValue
+                && currentUserContext.UserId.Value != Guid.Empty)
+            {
+                var currentUserId = currentUserContext.UserId.Value;
+                query =
+                    from w in db.Workspaces.AsNoTracking()
+                    join m in db.WorkspaceMembers on w.Id equals m.WorkspaceId
+                    where m.UserId == currentUserId
+                    select w;
+            }
+            else
+            {
+                return Results.Ok(Array.Empty<WorkspaceDto>());
+            }
+
+            var workspaces = await query
                 .OrderBy(w => w.Name)
                 .Select(w => new WorkspaceDto(w.Id, w.Name, w.CreatedAtUtc))
                 .ToListAsync(cancellationToken);
@@ -79,18 +101,21 @@ public static class WorkspaceEndpoints
             Guid id,
             ApiDotDbContext db,
             IWorkspaceTreeBuilder treeBuilder,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
+            if (!await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, id, cancellationToken))
+            {
+                return WorkspaceNotFound(id);
+            }
+
             var workspace = await db.Workspaces
                 .AsNoTracking()
                 .FirstOrDefaultAsync(w => w.Id == id, cancellationToken);
 
             if (workspace is null)
             {
-                return Results.Problem(
-                    statusCode: StatusCodes.Status404NotFound,
-                    title: "Workspace Not Found",
-                    detail: $"Workspace with ID '{id}' was not found.");
+                return WorkspaceNotFound(id);
             }
 
             var collections = await db.Collections
@@ -120,15 +145,13 @@ public static class WorkspaceEndpoints
         group.MapGet("/{id:guid}/variables", async (
             Guid id,
             ApiDotDbContext db,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
-            var workspaceExists = await db.Workspaces.AnyAsync(w => w.Id == id, cancellationToken);
-            if (!workspaceExists)
+            if (!await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, id, cancellationToken)
+                || !await db.Workspaces.AnyAsync(w => w.Id == id, cancellationToken))
             {
-                return Results.Problem(
-                    statusCode: StatusCodes.Status404NotFound,
-                    title: "Workspace Not Found",
-                    detail: $"Workspace with ID '{id}' was not found.");
+                return WorkspaceNotFound(id);
             }
 
             var variables = await db.EnvironmentVariables
@@ -145,15 +168,13 @@ public static class WorkspaceEndpoints
             Guid id,
             BatchSaveVariablesRequest request,
             ApiDotDbContext db,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
-            var workspaceExists = await db.Workspaces.AnyAsync(w => w.Id == id, cancellationToken);
-            if (!workspaceExists)
+            if (!await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, id, cancellationToken)
+                || !await db.Workspaces.AnyAsync(w => w.Id == id, cancellationToken))
             {
-                return Results.Problem(
-                    statusCode: StatusCodes.Status404NotFound,
-                    title: "Workspace Not Found",
-                    detail: $"Workspace with ID '{id}' was not found.");
+                return WorkspaceNotFound(id);
             }
 
             var incoming = request?.Variables ?? [];
@@ -303,15 +324,13 @@ public static class WorkspaceEndpoints
             ResolveVariablesRequest? request,
             ApiDotDbContext db,
             IVariableResolver resolver,
+            ICurrentUserContext currentUserContext,
             CancellationToken cancellationToken) =>
         {
-            var workspaceExists = await db.Workspaces.AnyAsync(w => w.Id == id, cancellationToken);
-            if (!workspaceExists)
+            if (!await WorkspaceAuthorization.CanAccessWorkspaceAsync(db, currentUserContext, id, cancellationToken)
+                || !await db.Workspaces.AnyAsync(w => w.Id == id, cancellationToken))
             {
-                return Results.Problem(
-                    statusCode: StatusCodes.Status404NotFound,
-                    title: "Workspace Not Found",
-                    detail: $"Workspace with ID '{id}' was not found.");
+                return WorkspaceNotFound(id);
             }
 
             var variables = await db.EnvironmentVariables
@@ -333,4 +352,10 @@ public static class WorkspaceEndpoints
 
         return app;
     }
+
+    private static IResult WorkspaceNotFound(Guid id) =>
+        Results.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Workspace Not Found",
+            detail: $"Workspace with ID '{id}' was not found.");
 }

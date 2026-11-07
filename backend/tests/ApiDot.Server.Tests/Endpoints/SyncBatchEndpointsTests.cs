@@ -674,7 +674,7 @@ public class SyncBatchEndpointsTests : IClassFixture<WebApplicationFactory<Progr
         result.Should().NotBeNull();
         result!.AppliedCount.Should().Be(1);
         result.ConflictCount.Should().Be(1);
-        result.Conflicts[0].Reason.Should().Contain("Database constraint failure");
+        result.Conflicts[0].Reason.Should().Contain("not found in workspace");
 
         using (var scope = _factory.Services.CreateScope())
         {

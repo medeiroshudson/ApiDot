@@ -48,11 +48,8 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
                     services.Remove(descriptor);
                 }
 
-                services.AddDbContext<ApiDotDbContext>((sp, options) =>
-                {
-                    options.UseSqlite($"Data Source={_dbName}.db;Foreign Keys=True");
-                    options.AddInterceptors(sp.GetRequiredService<WorkspaceScopeInterceptor>());
-                });
+                services.AddDbContext<ApiDotDbContext>(options =>
+                    options.UseSqlite($"Data Source={_dbName}.db;Foreign Keys=True"));
             });
         });
     }
@@ -112,11 +109,8 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
                     services.Remove(descriptor);
                 }
 
-                services.AddDbContext<ApiDotDbContext>((sp, options) =>
-                {
-                    options.UseSqlite($"Data Source={unconfiguredDb}.db;Foreign Keys=True");
-                    options.AddInterceptors(sp.GetRequiredService<WorkspaceScopeInterceptor>());
-                });
+                services.AddDbContext<ApiDotDbContext>(options =>
+                    options.UseSqlite($"Data Source={unconfiguredDb}.db;Foreign Keys=True"));
             });
         });
 
@@ -426,11 +420,8 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
                     services.Remove(descriptor);
                 }
 
-                services.AddDbContext<ApiDotDbContext>((sp, options) =>
-                {
-                    options.UseSqlite($"Data Source={disabledDb}.db;Foreign Keys=True");
-                    options.AddInterceptors(sp.GetRequiredService<WorkspaceScopeInterceptor>());
-                });
+                services.AddDbContext<ApiDotDbContext>(options =>
+                    options.UseSqlite($"Data Source={disabledDb}.db;Foreign Keys=True"));
             });
         });
 
@@ -489,11 +480,8 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
                     services.Remove(descriptor);
                 }
 
-                services.AddDbContext<ApiDotDbContext>((sp, options) =>
-                {
-                    options.UseSqlite($"Data Source={disabledDb}.db;Foreign Keys=True");
-                    options.AddInterceptors(sp.GetRequiredService<WorkspaceScopeInterceptor>());
-                });
+                services.AddDbContext<ApiDotDbContext>(options =>
+                    options.UseSqlite($"Data Source={disabledDb}.db;Foreign Keys=True"));
             });
         });
 
@@ -549,11 +537,8 @@ public class AuthEndpointsTests : IClassFixture<WebApplicationFactory<Program>>,
                     services.Remove(descriptor);
                 }
 
-                services.AddDbContext<ApiDotDbContext>((sp, options) =>
-                {
-                    options.UseSqlite($"Data Source={disabledDb}.db;Foreign Keys=True");
-                    options.AddInterceptors(sp.GetRequiredService<WorkspaceScopeInterceptor>());
-                });
+                services.AddDbContext<ApiDotDbContext>(options =>
+                    options.UseSqlite($"Data Source={disabledDb}.db;Foreign Keys=True"));
             });
         });
 

@@ -49,11 +49,8 @@ public class DesktopAuthEndpointsTests : IClassFixture<WebApplicationFactory<Pro
                     services.Remove(descriptor);
                 }
 
-                services.AddDbContext<ApiDotDbContext>((sp, options) =>
-                {
-                    options.UseSqlite($"Data Source={_dbName}.db;Foreign Keys=True");
-                    options.AddInterceptors(sp.GetRequiredService<WorkspaceScopeInterceptor>());
-                });
+                services.AddDbContext<ApiDotDbContext>(options =>
+                    options.UseSqlite($"Data Source={_dbName}.db;Foreign Keys=True"));
 
                 services.AddAuthentication().AddOpenIdConnect(OpenIdConnectDefaults.AuthenticationScheme, options =>
                 {
