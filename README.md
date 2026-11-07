@@ -25,10 +25,8 @@
 > Experience ApiDot live in your browser without installing anything:
 > 
 > - **URL:** [https://apidot.hmedeiros.dev](https://apidot.hmedeiros.dev)
-> - **Username:** `demo`
-> - **Password:** `demo`
 > 
-> *Pre-configured with sample collections, OpenAPI specifications, environments, and real-time execution.*
+> *A read-only sandbox pre-configured with sample collections, OpenAPI specifications, environments, and real-time execution. Access is granted on request.*
 
 ---
 
