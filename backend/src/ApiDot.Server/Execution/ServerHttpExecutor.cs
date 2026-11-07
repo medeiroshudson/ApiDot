@@ -7,6 +7,12 @@ namespace ApiDot.Server.Execution;
 
 public class ServerHttpExecutor(HttpClient httpClient) : IServerHttpExecutor
 {
+    public const long MaxResponseBytes = 32 * 1024 * 1024;
+
+    private const int ReadBufferSize = 81920;
+
+    private const string ResponseTooLargeMessage = "Response body exceeded the 32 MB limit.";
+
     private static readonly HashSet<string> DisallowedBodyMethods = new(StringComparer.OrdinalIgnoreCase)
     {
         "GET",
@@ -21,10 +27,10 @@ public class ServerHttpExecutor(HttpClient httpClient) : IServerHttpExecutor
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            if (dispatch.TimeoutSeconds > 0)
-            {
-                cts.CancelAfter(TimeSpan.FromSeconds(dispatch.TimeoutSeconds));
-            }
+            var timeoutSeconds = dispatch.TimeoutSeconds <= 0
+                ? 100
+                : Math.Clamp(dispatch.TimeoutSeconds, 1, 300);
+            cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
 
             using var request = new HttpRequestMessage(new HttpMethod(dispatch.Method), dispatch.Url);
 
@@ -58,7 +64,21 @@ public class ServerHttpExecutor(HttpClient httpClient) : IServerHttpExecutor
             byte[]? bodyBytes = null;
             if (response.Content != null)
             {
-                bodyBytes = await response.Content.ReadAsByteArrayAsync(cts.Token);
+                var (exceeded, body) = await ReadBodyAsync(response.Content, cts.Token);
+                if (exceeded)
+                {
+                    stopwatch.Stop();
+                    var elapsedMs = stopwatch.Elapsed.TotalMilliseconds;
+                    return new HttpResponsePayload
+                    {
+                        DispatchId = dispatch.Id,
+                        StatusCode = 0,
+                        ErrorMessage = ResponseTooLargeMessage,
+                        Timing = new TimingBreakdown(0, 0, ttfbMs, Math.Max(0, elapsedMs - ttfbMs), elapsedMs)
+                    };
+                }
+
+                bodyBytes = body;
             }
             stopwatch.Stop();
             var totalMs = stopwatch.Elapsed.TotalMilliseconds;
@@ -92,6 +112,29 @@ public class ServerHttpExecutor(HttpClient httpClient) : IServerHttpExecutor
                 ErrorMessage = ex.Message,
                 Timing = new TimingBreakdown(0, 0, 0, 0, stopwatch.Elapsed.TotalMilliseconds)
             };
+        }
+    }
+
+    private static async Task<(bool Exceeded, byte[]? Body)> ReadBodyAsync(HttpContent content, CancellationToken cancellationToken)
+    {
+        await using var stream = await content.ReadAsStreamAsync(cancellationToken);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[ReadBufferSize];
+
+        while (true)
+        {
+            var read = await stream.ReadAsync(chunk, cancellationToken);
+            if (read == 0)
+            {
+                return (false, buffer.ToArray());
+            }
+
+            if (buffer.Length + read > MaxResponseBytes)
+            {
+                return (true, null);
+            }
+
+            buffer.Write(chunk, 0, read);
         }
     }
 
