@@ -23,7 +23,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 builder.Services.AddServerDatabase(builder.Configuration);
 builder.Services.AddServerAuthentication(builder.Configuration);
 builder.Services.AddServerServices(builder.Configuration);
-builder.Services.AddServerHttpClients();
+builder.Services.AddServerHttpClients(builder.Configuration);
 
 var app = builder.Build();
 

@@ -213,14 +213,26 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddServerHttpClients(this IServiceCollection services)
+    public static IServiceCollection AddServerHttpClients(this IServiceCollection services, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
 
-        services.AddHttpClient<IServerHttpExecutor, ServerHttpExecutor>();
+        services.AddSingleton(new OutboundRequestPolicy(new OutboundPolicyOptions
+        {
+            AllowPrivateNetworks = string.Equals(
+                configuration["APIDOT_OUTBOUND_ALLOW_PRIVATE"],
+                "true",
+                StringComparison.OrdinalIgnoreCase),
+            AllowedHosts = (configuration["APIDOT_OUTBOUND_ALLOWED_HOSTS"] ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        }));
+
+        services.AddHttpClient<IServerHttpExecutor, ServerHttpExecutor>()
+            .ConfigurePrimaryHttpMessageHandler(sp => sp.GetRequiredService<OutboundRequestPolicy>().CreateHandler());
         services.AddHttpClient();
         services.AddHttpClient("SpecFetcher", c => c.Timeout = TimeSpan.FromSeconds(15))
-            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+            .ConfigurePrimaryHttpMessageHandler(sp => sp.GetRequiredService<OutboundRequestPolicy>().CreateHandler());
 
         return services;
     }
