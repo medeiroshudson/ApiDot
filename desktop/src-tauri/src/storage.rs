@@ -17,9 +17,35 @@ pub fn get_storage_root() -> PathBuf {
 
     if !root.exists() {
         let _ = std::fs::create_dir_all(&root);
+        // Keep the storage root private to the current user.
+        let _ = set_directory_permissions(&root);
     }
 
     root
+}
+
+/// Restricts a directory to owner-only access (0700) on Unix platforms.
+#[cfg(unix)]
+fn set_directory_permissions(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+}
+
+#[cfg(not(unix))]
+fn set_directory_permissions(_path: &Path) -> std::io::Result<()> {
+    Ok(())
+}
+
+/// Restricts a file to owner read/write access (0600) on Unix platforms.
+#[cfg(unix)]
+fn set_file_permissions(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+}
+
+#[cfg(not(unix))]
+fn set_file_permissions(_path: &Path) -> std::io::Result<()> {
+    Ok(())
 }
 
 fn default_storage_root() -> PathBuf {
@@ -87,11 +113,20 @@ pub async fn fs_save_storage(rel_path: String, content: String) -> Result<(), St
         tokio::fs::create_dir_all(parent)
             .await
             .map_err(|e| format!("Failed to create parent directories for '{:?}': {}", parent, e))?;
+
+        set_directory_permissions(parent).map_err(|e| {
+            format!("Failed to restrict permissions on directory '{:?}': {}", parent, e)
+        })?;
     }
 
     tokio::fs::write(&full_path, content)
         .await
         .map_err(|e| format!("Failed to write storage file '{:?}': {}", full_path, e))?;
+
+    // Persisted payloads may contain request secrets, so keep them owner-only.
+    set_file_permissions(&full_path).map_err(|e| {
+        format!("Failed to restrict permissions on storage file '{:?}': {}", full_path, e)
+    })?;
 
     Ok(())
 }

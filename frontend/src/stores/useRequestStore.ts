@@ -67,6 +67,49 @@ export const DEFAULT_REQUESTS: DependencyRequest[] = [
 
 export const REQUEST_STORAGE_KEY = 'apidot_request_storage';
 
+const REDACTED_HEADER_NAMES = new Set([
+  'authorization',
+  'x-api-key',
+  'api-key',
+  'cookie',
+  'proxy-authorization',
+]);
+
+function redactHeaderLine(line: string): string {
+  const separatorIndex = line.indexOf(':');
+  if (separatorIndex <= 0) {
+    return line;
+  }
+
+  const name = line.slice(0, separatorIndex).trim().toLowerCase();
+  if (!REDACTED_HEADER_NAMES.has(name)) {
+    return line;
+  }
+
+  const lineEnding = line.endsWith('\r') ? '\r' : '';
+  return `${line.slice(0, separatorIndex)}: [redacted]${lineEnding}`;
+}
+
+/**
+ * Prepares the editor request for persistence without credential material.
+ *
+ * Auth secrets (token, password, API key value) and sensitive header values are
+ * dropped so localStorage never holds reusable credentials.
+ */
+export function redactEditorRequestForStorage(data: RequestData | null): RequestData | null {
+  if (!data) {
+    return data;
+  }
+
+  return {
+    ...data,
+    auth: { type: data.auth?.type ?? 'none' },
+    headers: data.headers
+      ? data.headers.split('\n').map(redactHeaderLine).join('\n')
+      : data.headers,
+  };
+}
+
 export const INITIAL_REQUEST_STATE = {
   activeRequestId: null as string | null,
   activeRequestDetails: null as ActiveRequestDetails | null,
@@ -350,7 +393,7 @@ export const useRequestStore = create<RequestState>()(
         typeof window !== 'undefined' ? window.localStorage : dummyStorage
       ),
       partialize: (state) => ({
-        currentEditorData: state.currentEditorData,
+        currentEditorData: redactEditorRequestForStorage(state.currentEditorData),
       }),
     }
   )
