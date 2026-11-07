@@ -45,10 +45,9 @@ public class AuthRateLimitTests : IDisposable
                     services.Remove(descriptor);
                 }
 
-                services.AddDbContext<ApiDotDbContext>((sp, options) =>
+                services.AddDbContext<ApiDotDbContext>(options =>
                 {
                     options.UseSqlite($"Data Source={_dbName}.db;Foreign Keys=True");
-                    options.AddInterceptors(sp.GetRequiredService<WorkspaceScopeInterceptor>());
                 });
             });
         });
