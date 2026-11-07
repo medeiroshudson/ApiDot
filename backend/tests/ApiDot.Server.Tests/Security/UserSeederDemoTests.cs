@@ -52,4 +52,48 @@ public class UserSeederDemoTests : IDisposable
         var demoUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == UserSeeder.DemoEmail);
         demoUser.Should().BeNull();
     }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("0")]
+    [InlineData("false")]
+    [InlineData("FALSE")]
+    [InlineData("no")]
+    public async Task When_DemoFlagIsNotExplicitlyTrue_DoesNotCreateDemoUser(string demoFlag)
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["APIDOT_ROOT_PASSWORD"] = "RootPassOnly",
+                ["APIDOT_DEMO_ENABLED"] = demoFlag
+            })
+            .Build();
+
+        var seeder = new UserSeeder(_dbContext, config, new PasswordHasher());
+        await seeder.SeedRootUserAndOrphanWorkspacesAsync();
+
+        var demoUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == UserSeeder.DemoEmail);
+        demoUser.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("true")]
+    [InlineData("True")]
+    [InlineData("TRUE")]
+    public async Task When_DemoFlagIsExplicitlyTrue_CreatesDemoUser(string demoFlag)
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["APIDOT_ROOT_PASSWORD"] = "RootPassOnly",
+                ["APIDOT_DEMO_ENABLED"] = demoFlag
+            })
+            .Build();
+
+        var seeder = new UserSeeder(_dbContext, config, new PasswordHasher());
+        await seeder.SeedRootUserAndOrphanWorkspacesAsync();
+
+        var demoUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == UserSeeder.DemoEmail);
+        demoUser.Should().NotBeNull();
+    }
 }
