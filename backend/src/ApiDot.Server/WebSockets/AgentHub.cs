@@ -194,21 +194,28 @@ public class AgentHub : IAgentHub
         }
     }
 
-    public bool TryCompleteDispatch(HttpResponsePayload response)
+    public bool TryCompleteDispatch(Guid deviceId, HttpResponsePayload response)
     {
         ArgumentNullException.ThrowIfNull(response);
 
-        if (_pendingDispatches.TryRemove(response.DispatchId, out var pending))
+        if (!_pendingDispatches.TryGetValue(response.DispatchId, out var pending))
         {
-            return pending.Tcs.TrySetResult(response);
+            return false;
         }
 
-        return false;
-    }
+        // Only the device that received the dispatch may complete it. Checking before
+        // removing keeps another device's pending entry intact.
+        if (pending.UserId != deviceId)
+        {
+            return false;
+        }
 
-    public void ReceiveResponse(HttpResponsePayload response)
-    {
-        TryCompleteDispatch(response);
+        if (!_pendingDispatches.TryRemove(new KeyValuePair<Guid, PendingDispatch>(response.DispatchId, pending)))
+        {
+            return false;
+        }
+
+        return pending.Tcs.TrySetResult(response);
     }
 
     private static void ValidateUserId(Guid userId)
