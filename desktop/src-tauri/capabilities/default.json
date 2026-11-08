@@ -7,9 +7,11 @@
   ],
   "permissions": [
     "core:default",
+    "core:event:default",
     "shell:default",
     "fs:default",
     "updater:default",
-    "process:default"
+    "process:default",
+    "deep-link:default"
   ]
 }

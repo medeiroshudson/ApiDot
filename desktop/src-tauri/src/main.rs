@@ -23,6 +23,17 @@ fn main() {
     let sidecar_manager = Arc::new(Mutex::new(SidecarManager::new()));
 
     tauri::Builder::default()
+        // Must stay the first plugin: it intercepts launches of a second instance.
+        // The `deep-link` feature forwards the URL to tauri-plugin-deep-link, which
+        // then emits `onOpenUrl`, so no event is re-emitted here.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
+        // Registered after single-instance so forwarded URLs are delivered.
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
