@@ -8,6 +8,12 @@ import { useI18nStore } from '@/stores/useI18nStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { AgentDeviceDto } from '@/lib/deviceApi';
 import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
+import {
+  API_BASE_STORAGE_KEY,
+  apiUrl,
+  getApiBase,
+  setApiBase,
+} from '@/lib/api/base';
 
 const mockDevices: AgentDeviceDto[] = [
   {
@@ -636,6 +642,59 @@ describe('GlobalSettingsModal', () => {
 
       expect(screen.getByText('Nova versão disponível')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Baixar e Atualizar' })).toBeInTheDocument();
+    });
+  });
+
+  describe('Desktop Server URL', () => {
+    beforeEach(() => {
+      setApiBase(null);
+    });
+
+    it('hides the server URL field on the web', () => {
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
+
+      expect(screen.queryByLabelText(/server url/i)).toBeNull();
+    });
+
+    it('shows the stored base in the desktop field', () => {
+      (window as any).__TAURI__ = {};
+      setApiBase('https://stored.example.com');
+
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
+
+      expect(screen.getByLabelText(/server url/i)).toHaveValue('https://stored.example.com');
+    });
+
+    it('normalizes, persists and applies a valid server URL', () => {
+      (window as any).__TAURI__ = {};
+
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
+
+      fireEvent.change(screen.getByLabelText(/server url/i), {
+        target: { value: ' https://apidot.example.com/ ' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /save|salvar/i }));
+
+      expect(getApiBase()).toBe('https://apidot.example.com');
+      expect(localStorage.getItem(API_BASE_STORAGE_KEY)).toBe('https://apidot.example.com');
+      expect(apiUrl('/api/workspaces')).toBe('https://apidot.example.com/api/workspaces');
+      expect(screen.getByLabelText(/server url/i)).toHaveValue('https://apidot.example.com');
+    });
+
+    it('shows an inline error and keeps the previous base for an invalid value', () => {
+      (window as any).__TAURI__ = {};
+      setApiBase('https://stored.example.com');
+
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
+
+      fireEvent.change(screen.getByLabelText(/server url/i), {
+        target: { value: 'not-a-url' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /save|salvar/i }));
+
+      expect(screen.getByRole('alert')).toHaveTextContent(/valid http\(s\) url/i);
+      expect(getApiBase()).toBe('https://stored.example.com');
+      expect(localStorage.getItem(API_BASE_STORAGE_KEY)).toBe('https://stored.example.com');
     });
   });
 });
