@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Menu, Settings, Sliders, ChevronDown, LogOut, Globe, Check } from 'lucide-react';
+import { Menu, Settings, Sliders, ChevronDown, LogOut, Globe, Check, MonitorUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
 import { useAuthStore } from '@/stores/useAuthStore';
@@ -9,6 +9,8 @@ import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useRequestStore } from '@/stores/useRequestStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { isDesktop } from '@/lib/desktop/runtime';
+import { useAppRoute } from '@/hooks/useAppRoute';
+import { toDeepLink } from '@/lib/routing/route';
 import { useTranslation } from '@/hooks/useTranslation';
 import ApiDotLogo from '@assets/api-dot-white.svg';
 
@@ -73,6 +75,7 @@ export function AppHeader({
   const availableVersion = useUpdateStore((s) => s.availableVersion);
   const isDesktopEnv = isDesktop();
   const showUpdatePill = isDesktopEnv && updateStatus === 'available';
+  const { route } = useAppRoute();
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -263,6 +266,19 @@ export function AppHeader({
             </div>
           )}
         </div>
+
+        {/* Web affordance: hand the current route over to the desktop app. */}
+        {!isDesktopEnv && (route.kind === 'workspace' || route.kind === 'request') && (
+          <a
+            href={toDeepLink(route)}
+            aria-label={t('header.openInDesktop')}
+            title={t('header.openInDesktop')}
+            data-testid="open-in-desktop"
+            className="p-2 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-400 cursor-pointer"
+          >
+            <MonitorUp className="w-4 h-4" aria-hidden="true" />
+          </a>
+        )}
 
         <button
           type="button"

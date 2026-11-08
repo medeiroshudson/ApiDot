@@ -29,6 +29,7 @@ const enUS = {
     roles: 'Roles',
     environmentSelectorAria: 'Select active environment',
     environmentManage: 'Manage Environments',
+    openInDesktop: 'Open in desktop app',
   },
   sidebar: {
     workspace: 'Workspace',
