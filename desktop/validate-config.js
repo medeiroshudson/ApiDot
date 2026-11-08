@@ -37,6 +37,14 @@ function run() {
   assert(tauriConf.bundle?.externalBin?.includes('binaries/apidot-agent'), 'externalBin must include binaries/apidot-agent');
   assert(Array.isArray(tauriConf.plugins?.updater?.endpoints) && tauriConf.plugins.updater.endpoints.length > 0, 'updater endpoints must be configured');
   assert(tauriConf.plugins.updater.endpoints[0].includes('github.com/medeiroshudson/ApiDot/releases'), 'updater endpoint must point to GitHub releases');
+  assert(
+    Array.isArray(tauriConf.plugins?.['deep-link']?.desktop?.schemes),
+    'plugins.deep-link.desktop.schemes must be an array'
+  );
+  assert(
+    tauriConf.plugins['deep-link'].desktop.schemes.includes('apidot'),
+    'plugins.deep-link.desktop.schemes must include apidot'
+  );
 
   // The updater refuses to start with a placeholder key. Generating the key pair is an
   // operator step; warn during development and fail only where a release is built.
@@ -68,6 +76,8 @@ function run() {
   assert(capability.permissions.includes('fs:default'), 'permissions must include fs:default');
   assert(capability.permissions.includes('updater:default'), 'permissions must include updater:default');
   assert(capability.permissions.includes('process:default'), 'permissions must include process:default');
+  assert(capability.permissions.includes('core:event:default'), 'permissions must include core:event:default');
+  assert(capability.permissions.includes('deep-link:default'), 'permissions must include deep-link:default');
   console.log('✓ capabilities/default.json verified');
 
   // 3. Cargo.toml
@@ -82,6 +92,15 @@ function run() {
   assert(cargoContent.includes('tauri-plugin-fs = "2"'), 'Cargo.toml missing tauri-plugin-fs');
   assert(cargoContent.includes('tauri-plugin-updater = "2"'), 'Cargo.toml missing tauri-plugin-updater');
   assert(cargoContent.includes('tauri-plugin-process = "2"'), 'Cargo.toml missing tauri-plugin-process');
+  assert(cargoContent.includes('tauri-plugin-deep-link = "2"'), 'Cargo.toml missing tauri-plugin-deep-link');
+  assert(
+    /tauri-plugin-single-instance\s*=\s*\{[^}]*version\s*=\s*"2"/.test(cargoContent),
+    'Cargo.toml missing tauri-plugin-single-instance v2'
+  );
+  assert(
+    /tauri-plugin-single-instance\s*=\s*\{[^}]*features\s*=\s*\[[^\]]*"deep-link"/.test(cargoContent),
+    'tauri-plugin-single-instance must enable the deep-link feature'
+  );
   assert(cargoContent.includes('serde ='), 'Cargo.toml missing serde');
   assert(cargoContent.includes('serde_json = "1"'), 'Cargo.toml missing serde_json');
   assert(cargoContent.includes('uuid ='), 'Cargo.toml missing uuid');
