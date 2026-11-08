@@ -84,7 +84,7 @@ public class AgentClient : IDisposable
         {
             Scheme = wsScheme,
             Path = "/ws/agent",
-            Query = $"token={Uri.EscapeDataString(Token)}&name={Uri.EscapeDataString(AgentName)}&version={Uri.EscapeDataString(ApiDotVersion.Resolve())}"
+            Query = $"name={Uri.EscapeDataString(AgentName)}&version={Uri.EscapeDataString(ApiDotVersion.Resolve())}"
         };
 
         return builder.Uri;
@@ -211,8 +211,8 @@ public class AgentClient : IDisposable
         while (!cancellationToken.IsCancellationRequested)
         {
             using var clientWebSocket = new ClientWebSocket();
-            // The token stays in the query string for backwards compatibility, but the
-            // Authorization header is the preferred channel (query strings leak into logs).
+            // The Authorization header is the only channel used to send the token;
+            // query strings leak into logs through the URL.
             clientWebSocket.Options.SetRequestHeader("Authorization", $"Bearer {Token}");
             if (IgnoreSsl)
             {
@@ -221,7 +221,7 @@ public class AgentClient : IDisposable
 
             try
             {
-                Console.WriteLine($"Connecting to {hubUri} as '{AgentName}'...");
+                Console.WriteLine($"Connecting to {hubUri.GetLeftPart(UriPartial.Path)} as '{AgentName}'...");
                 await clientWebSocket.ConnectAsync(hubUri, cancellationToken);
                 Console.WriteLine("Connected to hub. Waiting for dispatches...");
 

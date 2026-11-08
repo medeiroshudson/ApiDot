@@ -85,7 +85,7 @@ public class AgentHubTests
         var actEmptyUserIdDispatch = () => hub.DispatchToAgentAsync(Guid.Empty, new HttpRequestDispatch { Url = "http://localhost" }, CancellationToken.None);
         await actEmptyUserIdDispatch.Should().ThrowAsync<ArgumentException>();
 
-        var actNullResponse = () => hub.ReceiveResponse(null!);
+        var actNullResponse = () => hub.TryCompleteDispatch(userId, null!);
         actNullResponse.Should().Throw<ArgumentNullException>();
 
         var actEmptyUserIdUnregister = () => hub.UnregisterAgent(Guid.Empty);
@@ -99,7 +99,7 @@ public class AgentHubTests
     }
 
     [Fact]
-    public async Task Hub_Should_Dispatch_To_Agent_And_Resolve_On_ReceiveResponse()
+    public async Task Hub_Should_Dispatch_To_Agent_And_Resolve_On_TryCompleteDispatch()
     {
         var hub = new AgentHub();
         var userId = Guid.NewGuid();
@@ -138,11 +138,56 @@ public class AgentHubTests
             Body = System.Text.Encoding.UTF8.GetBytes("{\"success\":true}")
         };
 
-        hub.ReceiveResponse(expectedResponse);
+        hub.TryCompleteDispatch(userId, expectedResponse).Should().BeTrue();
 
         var actualResponse = await dispatchTask;
         actualResponse.Should().NotBeNull();
         actualResponse.DispatchId.Should().Be(dispatch.Id);
+        actualResponse.StatusCode.Should().Be(200);
+        actualResponse.StatusText.Should().Be("OK");
+        hub.PendingDispatchCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Hub_Should_Not_Complete_Pending_Dispatch_From_A_Different_Device()
+    {
+        var hub = new AgentHub();
+        var ownerId = Guid.NewGuid();
+        var foreignId = Guid.NewGuid();
+        hub.RegisterAgent(ownerId, "Owner-Agent", new TestWebSocket(WebSocketState.Open));
+        hub.RegisterAgent(foreignId, "Foreign-Agent", new TestWebSocket(WebSocketState.Open));
+
+        var dispatch = new HttpRequestDispatch
+        {
+            Id = Guid.NewGuid(),
+            Url = "http://localhost:5000/api/owned"
+        };
+
+        var dispatchTask = hub.DispatchToAgentAsync(ownerId, dispatch, CancellationToken.None);
+
+        hub.PendingDispatchCount.Should().Be(1);
+
+        var spoofedResponse = new HttpResponsePayload
+        {
+            DispatchId = dispatch.Id,
+            StatusCode = 418,
+            StatusText = "I'm a teapot"
+        };
+
+        hub.TryCompleteDispatch(foreignId, spoofedResponse).Should().BeFalse();
+        dispatchTask.IsCompleted.Should().BeFalse();
+        hub.PendingDispatchCount.Should().Be(1);
+
+        var expectedResponse = new HttpResponsePayload
+        {
+            DispatchId = dispatch.Id,
+            StatusCode = 200,
+            StatusText = "OK"
+        };
+
+        hub.TryCompleteDispatch(ownerId, expectedResponse).Should().BeTrue();
+
+        var actualResponse = await dispatchTask;
         actualResponse.StatusCode.Should().Be(200);
         actualResponse.StatusText.Should().Be("OK");
         hub.PendingDispatchCount.Should().Be(0);
@@ -197,15 +242,14 @@ public class AgentHubTests
 
         hub.PendingDispatchCount.Should().Be(0);
 
-        // Calling ReceiveResponse after cancellation should not throw and be ignored
+        // Completing the dispatch after cancellation should be rejected without throwing
         var lateResponse = new HttpResponsePayload
         {
             DispatchId = dispatch.Id,
             StatusCode = 200,
             StatusText = "OK"
         };
-        var lateAct = () => hub.ReceiveResponse(lateResponse);
-        lateAct.Should().NotThrow();
+        hub.TryCompleteDispatch(userId, lateResponse).Should().BeFalse();
     }
 
     [Fact]
@@ -232,12 +276,12 @@ public class AgentHubTests
         // Complete each pending dispatch
         for (var i = 0; i < count; i++)
         {
-            hub.ReceiveResponse(new HttpResponsePayload
+            hub.TryCompleteDispatch(userId, new HttpResponsePayload
             {
                 DispatchId = dispatches[i].Id,
                 StatusCode = 200,
                 StatusText = "OK"
-            });
+            }).Should().BeTrue();
         }
 
         var responses = await Task.WhenAll(dispatchTasks);
@@ -294,12 +338,12 @@ public class AgentHubTests
         hub.PendingDispatchCount.Should().Be(1);
 
         // Completing the other agent's dispatch should succeed
-        hub.ReceiveResponse(new HttpResponsePayload
+        hub.TryCompleteDispatch(otherUserId, new HttpResponsePayload
         {
             DispatchId = otherDispatch.Id,
             StatusCode = 200,
             StatusText = "OK"
-        });
+        }).Should().BeTrue();
 
         var otherResponse = await otherTask;
         otherResponse.StatusCode.Should().Be(200);

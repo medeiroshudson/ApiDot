@@ -321,7 +321,7 @@ public class AgentWebSocketHandler : IAgentWebSocketHandler
 
                                 if (payload != null && payload.DispatchId != Guid.Empty)
                                 {
-                                    _agentHub.TryCompleteDispatch(payload);
+                                    _agentHub.TryCompleteDispatch(deviceId, payload);
                                 }
                             }
                         }

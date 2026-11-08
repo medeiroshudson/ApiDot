@@ -16,6 +16,9 @@ public sealed class OutboundRequestPolicy(OutboundPolicyOptions options)
     {
         AllowAutoRedirect = false,
         PooledConnectionLifetime = PooledConnectionLifetime,
+        // A proxy would make ConnectCallback validate the proxy endpoint instead of
+        // the destination, bypassing the private-network block.
+        UseProxy = false,
         ConnectCallback = async (context, cancellationToken) =>
         {
             var host = context.DnsEndPoint.Host;

@@ -224,7 +224,6 @@ public class FullExecutionFlowTests : IClassFixture<WebApplicationFactory<Progra
         {
             throw new OperationCanceledException("Agent execution timed out.");
         }
-        public void ReceiveResponse(HttpResponsePayload response) { }
         public int PendingDispatchCount => 0;
     }
 

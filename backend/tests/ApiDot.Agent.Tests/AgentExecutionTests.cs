@@ -200,12 +200,12 @@ public class AgentExecutionTests
     }
 
     [Theory]
-    [InlineData("https://hub.example.com", "wss://hub.example.com/ws/agent?token=tok&name=agent&version=dev")]
-    [InlineData("wss://hub.example.com", "wss://hub.example.com/ws/agent?token=tok&name=agent&version=dev")]
-    [InlineData("http://hub.example.com", "ws://hub.example.com/ws/agent?token=tok&name=agent&version=dev")]
-    [InlineData("ws://hub.example.com", "ws://hub.example.com/ws/agent?token=tok&name=agent&version=dev")]
-    [InlineData("HTTPS://hub.example.com:8443", "wss://hub.example.com:8443/ws/agent?token=tok&name=agent&version=dev")]
-    [InlineData("WSS://hub.example.com:8443", "wss://hub.example.com:8443/ws/agent?token=tok&name=agent&version=dev")]
+    [InlineData("https://hub.example.com", "wss://hub.example.com/ws/agent?name=agent&version=dev")]
+    [InlineData("wss://hub.example.com", "wss://hub.example.com/ws/agent?name=agent&version=dev")]
+    [InlineData("http://hub.example.com", "ws://hub.example.com/ws/agent?name=agent&version=dev")]
+    [InlineData("ws://hub.example.com", "ws://hub.example.com/ws/agent?name=agent&version=dev")]
+    [InlineData("HTTPS://hub.example.com:8443", "wss://hub.example.com:8443/ws/agent?name=agent&version=dev")]
+    [InlineData("WSS://hub.example.com:8443", "wss://hub.example.com:8443/ws/agent?name=agent&version=dev")]
     public void BuildWebSocketUri_ShouldHandleDifferentSchemes_AndPreserveWss(string serverUrl, string expectedUri)
     {
         var client = new AgentClient(serverUrl, "tok", "agent");

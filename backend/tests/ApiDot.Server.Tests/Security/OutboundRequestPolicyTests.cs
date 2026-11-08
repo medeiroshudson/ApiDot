@@ -83,4 +83,16 @@ public class OutboundRequestPolicyTests
         handler.PooledConnectionLifetime.Should().Be(TimeSpan.FromMinutes(5));
         handler.ConnectCallback.Should().NotBeNull();
     }
+
+    [Fact]
+    public void CreateHandler_DoesNotUseAnEnvironmentOrSystemProxy()
+    {
+        var policy = CreatePolicy();
+
+        var handler = policy.CreateHandler();
+
+        // ConnectCallback resolves and validates the destination address; a proxy
+        // would be validated instead and the private-network block would be bypassed.
+        handler.UseProxy.Should().BeFalse();
+    }
 }

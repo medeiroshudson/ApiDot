@@ -123,8 +123,8 @@ public class UserSeeder(
             logger?.LogInformation("Attached root user as owner to {Count} orphan workspace(s).", orphanWorkspaces.Count);
         }
 
-        var demoEnabledStr = configuration["APIDOT_DEMO_ENABLED"] ?? configuration["Apidot:DemoEnabled"] ?? "false";
-        bool demoEnabled = !string.Equals(demoEnabledStr, "false", StringComparison.OrdinalIgnoreCase);
+        var demoEnabledStr = configuration["APIDOT_DEMO_ENABLED"] ?? configuration["Apidot:DemoEnabled"];
+        bool demoEnabled = string.Equals(demoEnabledStr, "true", StringComparison.OrdinalIgnoreCase);
         if (demoEnabled)
         {
             await SeedDemoUserAsync(cancellationToken);
