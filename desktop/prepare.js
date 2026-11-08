@@ -118,44 +118,39 @@ function prepareAgentBinary() {
   }
 }
 
-// 3. Ensure frontend/out directory exists for Tauri bundle
-function prepareFrontendOut() {
-  if (!fs.existsSync(frontendOutDir)) {
-    fs.mkdirSync(frontendOutDir, { recursive: true });
+// 3. Verify the frontend static export exists for the Tauri bundle
+const DESKTOP_BUILD_HINT =
+  'Run "npm --prefix frontend run build:desktop" to generate the static export in frontend/out.';
+
+function verifyFrontendOut() {
+  const indexHtml = path.join(frontendOutDir, 'index.html');
+
+  if (!fs.existsSync(indexHtml)) {
+    console.error(`Error: ${indexHtml} is missing; the desktop bundle would have no app shell.`);
+    console.error(DESKTOP_BUILD_HINT);
+    process.exit(1);
   }
 
-  const indexHtml = path.join(frontendOutDir, 'index.html');
-  if (!fs.existsSync(indexHtml)) {
-    // Create static redirect/placeholder for standalone bundle
-    fs.writeFileSync(
-      indexHtml,
-      `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>ApiDot</title>
-  <meta http-equiv="refresh" content="0; url=http://localhost:3000">
-</head>
-<body style="background:#0a0a0a;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
-  <div>
-    <h2>Loading ApiDot...</h2>
-    <p style="color:#888;">Connecting to local frontend...</p>
-  </div>
-</body>
-</html>`
+  const html = fs.readFileSync(indexHtml, 'utf-8');
+  if (html.includes('url=http://localhost:3000')) {
+    console.error(
+      `Error: ${indexHtml} is the old dev redirect stub (points at http://localhost:3000), not the exported app shell.`
     );
-    console.log(`✓ Created placeholder ${indexHtml} for Tauri bundle`);
+    console.error(DESKTOP_BUILD_HINT);
+    process.exit(1);
   }
+
+  console.log(`✓ Static frontend export found at ${frontendOutDir}`);
 }
 
 if (require.main === module) {
   prepareAgentBinary();
-  prepareFrontendOut();
+  verifyFrontendOut();
   console.log('✓ Desktop environment preparation completed successfully.');
 }
 
 module.exports = {
   getTargetTriple,
   prepareAgentBinary,
-  prepareFrontendOut,
+  verifyFrontendOut,
 };
