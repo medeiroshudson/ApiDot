@@ -14,6 +14,7 @@ const mockReplace = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useParams: vi.fn(),
+  usePathname: () => '/',
   useRouter: () => ({
     push: mockPush,
     replace: mockReplace,

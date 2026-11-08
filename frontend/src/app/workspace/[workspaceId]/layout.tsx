@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useEffect, use } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { WorkspaceShell } from '@/components/layout/WorkspaceShell';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { useAppRoute } from '@/hooks/useAppRoute';
 
 export interface WorkspaceLayoutProps {
   children: React.ReactNode;
@@ -13,14 +14,17 @@ export interface WorkspaceLayoutProps {
 
 export default function WorkspaceLayout({ children, params: propsParams }: WorkspaceLayoutProps) {
   const router = useRouter();
-  const routeParams = useParams();
+  const { route } = useAppRoute();
 
   const unwrappedParams =
     propsParams && typeof (propsParams as any).then === 'function'
       ? use(propsParams as Promise<{ workspaceId: string }>)
       : (propsParams as { workspaceId: string } | undefined);
 
-  const rawId = unwrappedParams?.workspaceId ?? routeParams?.workspaceId;
+  const propWorkspaceId = unwrappedParams?.workspaceId;
+  const routeWorkspaceId =
+    route.kind === 'workspace' || route.kind === 'request' ? route.workspaceId : undefined;
+  const rawId = propWorkspaceId ?? routeWorkspaceId;
   const workspaceId = Array.isArray(rawId) ? rawId[0] : (typeof rawId === 'string' ? rawId : '');
 
   const activeWorkspace = useWorkspaceStore((s) =>

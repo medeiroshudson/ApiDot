@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
 const mockReplace = vi.fn();
 vi.mock('next/navigation', () => ({
   useParams: vi.fn(),
+  usePathname: () => '/',
   useRouter: () => ({
     push: vi.fn(),
     replace: mockReplace,
