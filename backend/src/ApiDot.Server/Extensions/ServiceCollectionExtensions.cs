@@ -59,6 +59,11 @@ public static class ServiceCollectionExtensions
             DefaultSchemeName,
             options => options.ForwardDefaultSelector = context =>
             {
+                if (DesktopBearerAuthenticationHandler.HasBearerScheme(context.Request.Headers.Authorization))
+                {
+                    return DesktopBearerAuthenticationHandler.SchemeName;
+                }
+
                 var requestConfiguration = context.RequestServices.GetRequiredService<IConfiguration>();
                 var environment = context.RequestServices.GetRequiredService<IHostEnvironment>();
 
@@ -66,6 +71,10 @@ public static class ServiceCollectionExtensions
                     ? DevRootAuthenticationHandler.SchemeName
                     : CookieAuthenticationDefaults.AuthenticationScheme;
             });
+
+        authBuilder.AddScheme<AuthenticationSchemeOptions, DesktopBearerAuthenticationHandler>(
+            DesktopBearerAuthenticationHandler.SchemeName,
+            _ => { });
 
         authBuilder.AddScheme<AuthenticationSchemeOptions, DevRootAuthenticationHandler>(
             DevRootAuthenticationHandler.SchemeName,
