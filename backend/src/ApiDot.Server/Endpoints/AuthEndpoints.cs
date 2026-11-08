@@ -243,6 +243,32 @@ public static class AuthEndpoints
             return Results.Ok(new { message = "Logged out successfully" });
         });
 
+        group.MapDelete("/desktop-token", async (
+            HttpContext httpContext,
+            IAuthService authService,
+            CancellationToken ct) =>
+        {
+            // The group is anonymous, so the bearer scheme is authenticated explicitly
+            // instead of relying on the fallback policy.
+            var result = await httpContext.AuthenticateAsync(DesktopBearerAuthenticationHandler.SchemeName);
+            if (!result.Succeeded)
+            {
+                return Results.Unauthorized();
+            }
+
+            var rawToken = DesktopBearerAuthenticationHandler.ExtractBearerToken(
+                httpContext.Request.Headers.Authorization);
+
+            if (string.IsNullOrWhiteSpace(rawToken))
+            {
+                return Results.Unauthorized();
+            }
+
+            // Revocation is idempotent: re-revoking an already revoked token still succeeds.
+            await authService.RevokeDesktopTokenAsync(rawToken, ct);
+            return Results.NoContent();
+        });
+
         return app;
     }
 
