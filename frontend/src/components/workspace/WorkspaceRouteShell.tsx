@@ -48,7 +48,13 @@ export function WorkspaceRouteShell({
           // screen can resume it through the hash.
           useAuthStore
             .getState()
-            .setPendingRoute(workspaceId ? { kind: 'workspace', workspaceId } : { kind: 'home' });
+            .setPendingRoute(
+              workspaceId && requestId
+                ? { kind: 'request', workspaceId, requestId }
+                : workspaceId
+                  ? { kind: 'workspace', workspaceId }
+                  : { kind: 'home' }
+            );
           router.replace('/login');
           return;
         }
