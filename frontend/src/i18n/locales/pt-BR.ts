@@ -31,6 +31,7 @@ const ptBR = {
     roles: 'Papéis',
     environmentSelectorAria: 'Selecionar ambiente ativo',
     environmentManage: 'Gerenciar Ambientes',
+    openInDesktop: 'Abrir no aplicativo desktop',
   },
   sidebar: {
     workspace: 'Workspace',

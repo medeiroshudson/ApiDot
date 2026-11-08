@@ -165,3 +165,23 @@ export function toPath(route: AppRoute): string {
 export function toHash(route: AppRoute): string {
   return `#${toPath(route)}`;
 }
+
+/**
+ * Serialises a route as an OS deep link.
+ *
+ * `home` has no dedicated destination, so it maps to the bare application
+ * opener `apidot://open` (which `parseDeepLink` reports as an unparsable
+ * link, i.e. a plain app launch with nothing to resume).
+ */
+export function toDeepLink(route: AppRoute): string {
+  switch (route.kind) {
+    case 'workspace':
+      return `apidot://workspace/${encodeURIComponent(route.workspaceId)}`;
+    case 'request':
+      return `apidot://workspace/${encodeURIComponent(
+        route.workspaceId
+      )}/request/${encodeURIComponent(route.requestId)}`;
+    default:
+      return 'apidot://open';
+  }
+}

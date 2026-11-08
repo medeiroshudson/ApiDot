@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { DeepLinkBridge } from '@/components/desktop/DeepLinkBridge';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -15,6 +16,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className="min-h-screen bg-neutral-950 text-neutral-100 antialiased font-sans">
         {children}
+        <DeepLinkBridge />
       </body>
     </html>
   );

@@ -9,11 +9,15 @@ import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useI18nStore } from '@/stores/useI18nStore';
 
 const mockReplace = vi.fn();
+const mockParams: { current: Record<string, string | string[] | undefined> } = { current: {} };
+const mockPathname = { current: '/' };
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     replace: mockReplace,
     push: vi.fn(),
   }),
+  useParams: () => mockParams.current,
+  usePathname: () => mockPathname.current,
 }));
 
 describe('AppHeader', () => {
@@ -34,6 +38,9 @@ describe('AppHeader', () => {
     useAuthStore.getState().reset();
     useWorkspaceStore.getState().reset();
     useI18nStore.setState({ locale: 'en-US' });
+    mockParams.current = {};
+    mockPathname.current = '/';
+    window.history.replaceState(null, '', '/');
   });
 
   afterEach(() => {
@@ -41,6 +48,7 @@ describe('AppHeader', () => {
     delete (window as any).__TAURI__;
     delete (window as any).__TAURI_INTERNALS__;
     useUpdateStore.getState().reset();
+    window.history.replaceState(null, '', '/');
   });
   it('renders workspace title and default fallback', () => {
     const { rerender } = render(<AppHeader title="My Custom Workspace" />);
@@ -376,6 +384,54 @@ describe('AppHeader', () => {
       expect(screen.getByRole('button', { name: 'Global Settings' })).toBeInTheDocument();
       expect(screen.getByText('Language')).toBeInTheDocument();
       expect(toggleBtn).toHaveTextContent(/english/i);
+    });
+  });
+
+  describe('Open in desktop', () => {
+    it('is hidden inside the desktop shell', () => {
+      (window as any).__TAURI__ = {};
+      window.history.replaceState(null, '', '/#/workspace/ws-d/request/req-d');
+
+      render(<AppHeader />);
+
+      expect(screen.queryByTestId('open-in-desktop')).toBeNull();
+    });
+
+    it('is hidden on the web home route', () => {
+      render(<AppHeader />);
+
+      expect(screen.queryByTestId('open-in-desktop')).toBeNull();
+    });
+
+    it('links a request route to its apidot deep link', () => {
+      mockParams.current = { workspaceId: 'ws-1', requestId: 'req-1' };
+
+      render(<AppHeader />);
+
+      const link = screen.getByRole('link', { name: 'Open in desktop app' });
+      expect(link).toHaveAttribute('href', 'apidot://workspace/ws-1/request/req-1');
+      expect(link).toHaveAttribute('aria-label', 'Open in desktop app');
+      expect(link).toHaveAttribute('title', 'Open in desktop app');
+      expect(link.tagName).toBe('A');
+    });
+
+    it('links a workspace route to its apidot deep link with encoded ids', () => {
+      mockParams.current = { workspaceId: 'ws 1' };
+
+      render(<AppHeader />);
+
+      const link = screen.getByTestId('open-in-desktop');
+      expect(link).toHaveAttribute('href', 'apidot://workspace/ws%201');
+    });
+
+    it('is localised in pt-BR', () => {
+      useI18nStore.setState({ locale: 'pt-BR' });
+      mockParams.current = { workspaceId: 'ws-1' };
+
+      render(<AppHeader />);
+
+      const link = screen.getByTestId('open-in-desktop');
+      expect(link).toHaveAttribute('aria-label', 'Abrir no aplicativo desktop');
     });
   });
 
