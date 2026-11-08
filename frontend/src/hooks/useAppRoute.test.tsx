@@ -194,6 +194,18 @@ describe('useAppRoute', () => {
       expect(window.location.hash).toBe('#/workspace/ws-3');
     });
 
+    it('keeps every hook instance in sync after a desktop navigation', () => {
+      const first = renderHook(() => useAppRoute());
+      const second = renderHook(() => useAppRoute());
+
+      act(() => {
+        first.result.current.navigate({ kind: 'workspace', workspaceId: 'ws-shared' });
+      });
+
+      expect(window.location.hash).toBe('#/workspace/ws-shared');
+      expect(second.result.current.route).toEqual({ kind: 'workspace', workspaceId: 'ws-shared' });
+    });
+
     it('returns to the hash form of home', () => {
       window.history.replaceState(null, '', '/#/workspace/ws-1');
 

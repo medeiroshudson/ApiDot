@@ -41,6 +41,21 @@ function currentHash(): string {
   return window.location.hash;
 }
 
+/**
+ * Announces a hash change that was produced by `history.pushState` /
+ * `history.replaceState` (which do not fire `hashchange` themselves).
+ */
+function notifyHashChange(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  if (typeof HashChangeEvent === 'function') {
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    return;
+  }
+  window.dispatchEvent(new Event('hashchange'));
+}
+
 export interface UseAppRouteResult {
   route: AppRoute;
   navigate: (route: AppRoute, opts?: { replace?: boolean }) => void;
@@ -89,7 +104,8 @@ export function useAppRoute(): UseAppRouteResult {
     (next: AppRoute, opts?: { replace?: boolean }) => {
       if (desktop) {
         const hash = toHash(next);
-        if (currentHash() !== hash) {
+        const hashChanged = currentHash() !== hash;
+        if (hashChanged) {
           const url = `${window.location.pathname}${window.location.search}${hash}`;
           if (opts?.replace) {
             window.history.replaceState(window.history.state, '', url);
@@ -97,9 +113,12 @@ export function useAppRoute(): UseAppRouteResult {
             window.history.pushState(window.history.state, '', url);
           }
         }
-        // history.pushState/replaceState do not emit `hashchange`, so publish
-        // the new route to the local state directly.
+        // pushState/replaceState emit no `hashchange`; notify every hook
+        // instance (root shell, provider, pages) that the route changed.
         setHashRoute(next);
+        if (hashChanged) {
+          notifyHashChange();
+        }
         return;
       }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useAppRoute } from '@/hooks/useAppRoute';
 import {
   WorkspaceTreeDto,
   FolderNodeDto,
@@ -82,7 +82,7 @@ export function WorkspaceProvider({
   workspaceId: string;
   children: React.ReactNode;
 }): React.JSX.Element {
-  const router = useRouter();
+  const { navigate } = useAppRoute();
 
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const setActiveWorkspaceId = useWorkspaceStore((s) => s.setActiveWorkspaceId);
@@ -147,10 +147,10 @@ export function WorkspaceProvider({
             schemaDefinition: req.schemaDefinition,
           });
         }
-        router.push(`/workspace/${encodeURIComponent(workspaceId)}/request/${encodeURIComponent(item.id)}`);
+        navigate({ kind: 'request', workspaceId, requestId: item.id });
       }
     },
-    [setActiveItem, tree, setActiveRequest, router, workspaceId]
+    [setActiveItem, tree, setActiveRequest, navigate, workspaceId]
   );
 
   const handleCreateRequest = useCallback(
@@ -186,10 +186,10 @@ export function WorkspaceProvider({
         collectionId: created.collectionId,
         folderId: created.folderId,
       });
-      router.push(`/workspace/${encodeURIComponent(workspaceId)}/request/${encodeURIComponent(created.id)}`);
+      navigate({ kind: 'request', workspaceId, requestId: created.id });
       return created;
     },
-    [tree, createRequest, workspaceId, setActiveItem, setActiveRequest, router]
+    [tree, createRequest, workspaceId, setActiveItem, setActiveRequest, navigate]
   );
 
   const handleUpdateRequestName = useCallback(
@@ -290,10 +290,10 @@ export function WorkspaceProvider({
       clearResponseForRequest(id);
       if (activeRequestId === id) {
         resetScratchpad(workspaceId);
-        router.push(`/workspace/${encodeURIComponent(workspaceId)}`);
+        navigate({ kind: 'workspace', workspaceId });
       }
     },
-    [activeRequestId, resetScratchpad, workspaceId, router, treeDeleteRequest, clearResponseForRequest]
+    [activeRequestId, resetScratchpad, workspaceId, navigate, treeDeleteRequest, clearResponseForRequest]
   );
 
   const contextValue = useMemo<WorkspaceContextValue>(

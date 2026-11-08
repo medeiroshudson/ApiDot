@@ -15,6 +15,8 @@ const mockPush = vi.fn();
 const mockReplace = vi.fn();
 
 vi.mock('next/navigation', () => ({
+  useParams: () => ({}),
+  usePathname: () => '/',
   useRouter: () => ({
     push: mockPush,
     replace: mockReplace,
@@ -155,6 +157,9 @@ function ConsumerComponent() {
 describe('WorkspaceContext', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete (window as any).__TAURI__;
+    delete (window as any).__TAURI_INTERNALS__;
+    window.history.replaceState(null, '', '/');
     useLayoutStore.setState(INITIAL_LAYOUT_STATE);
     useRequestStore.getState().reset();
     useWorkspaceStore.getState().reset();
@@ -269,6 +274,25 @@ describe('WorkspaceContext', () => {
     expect(mockPush).toHaveBeenCalledWith('/workspace/ws-123/request/req-root');
     expect(useRequestStore.getState().activeRequestId).toBe('req-root');
     expect(useRequestStore.getState().activeRequestDetails?.name).toBe('Root Status');
+  });
+
+  it('updates the desktop hash when selecting a request', async () => {
+    (window as any).__TAURI_INTERNALS__ = {};
+    render(
+      <WorkspaceProvider workspaceId="ws-123">
+        <ConsumerComponent />
+      </WorkspaceProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('is-loading')).toHaveTextContent('ready');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select Root Request' }));
+
+    expect(window.location.hash).toBe('#/workspace/ws-123/request/req-root');
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(useRequestStore.getState().activeRequestId).toBe('req-root');
   });
 
   it('handles item selection without routing when selecting a collection', async () => {
