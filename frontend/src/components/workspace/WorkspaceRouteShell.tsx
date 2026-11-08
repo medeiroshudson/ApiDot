@@ -6,6 +6,7 @@ import { WorkspaceShell } from '@/components/layout/WorkspaceShell';
 import { WorkspaceEditorPane } from '@/components/workspace/WorkspaceEditorPane';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { isDesktop } from '@/lib/desktop/runtime';
 
 export interface WorkspaceRouteShellProps {
   workspaceId: string;
@@ -42,6 +43,15 @@ export function WorkspaceRouteShell({
 
       const authState = useAuthStore.getState();
       if (!authState.isLoading && !authState.isAuthenticated) {
+        if (isDesktop()) {
+          // The desktop shell lives at "/"; remember the route so the login
+          // screen can resume it through the hash.
+          useAuthStore
+            .getState()
+            .setPendingRoute(workspaceId ? { kind: 'workspace', workspaceId } : { kind: 'home' });
+          router.replace('/login');
+          return;
+        }
         const returnUrl = workspaceId ? `/workspace/${encodeURIComponent(workspaceId)}` : '/';
         router.replace(`/login?returnUrl=${encodeURIComponent(returnUrl)}`);
       }

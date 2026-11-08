@@ -512,14 +512,20 @@ describe('Root Redirector (app/page.tsx)', () => {
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
-  it('keeps the redirect behaviour on desktop when the hash has no workspace route', async () => {
+  it('drives the desktop fallback workspace through the hash instead of the web path', async () => {
     (window as any).__TAURI_INTERNALS__ = {};
     useWorkspaceStore.setState({ activeWorkspaceId: 'ws-fallback' });
 
     render(<Home />);
 
     await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith('/workspace/ws-fallback');
+      expect(window.location.hash).toBe('#/workspace/ws-fallback');
     });
+
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(screen.getByTestId('workspace-route-shell')).toHaveAttribute(
+      'data-workspace-id',
+      'ws-fallback'
+    );
   });
 });

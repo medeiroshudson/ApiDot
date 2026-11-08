@@ -15,7 +15,7 @@ export default function Home() {
   const routerRef = useRef(router);
   routerRef.current = router;
   const { t } = useTranslation();
-  const { route } = useAppRoute();
+  const { route, navigate } = useAppRoute();
 
   // On desktop the shell lives at "/" and the active route comes from the hash.
   const desktopRoute = isDesktop() && route.kind !== 'home';
@@ -30,11 +30,19 @@ export default function Home() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
 
-  const executeRedirect = useCallback((targetId: string) => {
-    if (redirectedRef.current) return;
-    redirectedRef.current = true;
-    routerRef.current.replace(`/workspace/${encodeURIComponent(targetId)}`);
-  }, []);
+  const executeRedirect = useCallback(
+    (targetId: string) => {
+      if (redirectedRef.current) return;
+      redirectedRef.current = true;
+      if (isDesktop()) {
+        // The desktop shell lives at "/": drive the workspace through the hash.
+        navigate({ kind: 'workspace', workspaceId: targetId }, { replace: true });
+        return;
+      }
+      routerRef.current.replace(`/workspace/${encodeURIComponent(targetId)}`);
+    },
+    [navigate]
+  );
 
   const resolveAndRedirect = useCallback(async () => {
     try {
