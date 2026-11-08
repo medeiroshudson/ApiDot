@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useTranslation } from '@/hooks/useTranslation';
 import { isDesktop } from '@/lib/desktop/runtime';
+import { toHash } from '@/lib/routing/route';
 import { startDesktopSsoFlow } from '@/lib/desktop/desktopAuth';
 import { LogIn, Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
 import ApiDotLogo from '@assets/api-dot-white.svg';
@@ -29,6 +30,7 @@ export default function LoginPage() {
   const [isWaitingBrowserAuth, setIsWaitingBrowserAuth] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const redirectedRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -56,10 +58,31 @@ export default function LoginPage() {
     return '/';
   };
 
-  // If already authenticated, redirect to returnUrl or "/"
+  /**
+   * Picks the post-login destination. A desktop deep link captured before the
+   * login screen wins over the web-style returnUrl and is consumed once.
+   */
+  const resolveLoginTarget = () => {
+    if (isDesktop()) {
+      const { pendingRoute, setPendingRoute } = useAuthStore.getState();
+      if (pendingRoute) {
+        setPendingRoute(null);
+        return `/${toHash(pendingRoute)}`;
+      }
+    }
+    return getReturnUrl();
+  };
+
+  const redirectAfterLogin = () => {
+    if (redirectedRef.current) return;
+    redirectedRef.current = true;
+    routerRef.current.replace(resolveLoginTarget());
+  };
+
+  // If already authenticated, redirect to the pending route, returnUrl or "/"
   useEffect(() => {
     if (isAuthenticated) {
-      routerRef.current.replace(getReturnUrl());
+      redirectAfterLogin();
     }
   }, [isAuthenticated]);
 
@@ -107,7 +130,7 @@ export default function LoginPage() {
 
       if (result.success && result.user) {
         loginDesktopSso(result.user);
-        routerRef.current.replace(getReturnUrl());
+        redirectAfterLogin();
       } else if (!result.success && result.error && result.error !== 'Authentication cancelled') {
         setError(result.error);
       }
@@ -146,7 +169,7 @@ export default function LoginPage() {
 
     try {
       await loginLocal(email.trim(), password);
-      routerRef.current.replace(getReturnUrl());
+      redirectAfterLogin();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('auth.authFailed');
       setError(message);
