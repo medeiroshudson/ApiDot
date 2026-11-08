@@ -4,6 +4,7 @@ import {
   parseDeepLink,
   parseHashRoute,
   parsePathRoute,
+  toDeepLink,
   toHash,
   toPath,
 } from './route';
@@ -35,6 +36,49 @@ describe('route model', () => {
       expect(toHash(HOME)).toBe('#/');
       expect(toHash(WORKSPACE)).toBe('#/workspace/ws-1');
       expect(toHash(REQUEST)).toBe('#/workspace/ws-1/request/req-1');
+    });
+  });
+
+  describe('toDeepLink', () => {
+    it('serialises every route kind', () => {
+      expect(toDeepLink(HOME)).toBe('apidot://open');
+      expect(toDeepLink(WORKSPACE)).toBe('apidot://workspace/ws-1');
+      expect(toDeepLink(REQUEST)).toBe('apidot://workspace/ws-1/request/req-1');
+    });
+
+    it('encodes ids', () => {
+      const route: AppRoute = {
+        kind: 'request',
+        workspaceId: 'my workspace',
+        requestId: 'a&b/c?',
+      };
+      expect(toDeepLink(route)).toBe(
+        'apidot://workspace/my%20workspace/request/a%26b%2Fc%3F'
+      );
+      expect(toDeepLink({ kind: 'workspace', workspaceId: 'espaço ção' })).toBe(
+        'apidot://workspace/espac%CC%A7o%20%C3%A7%C3%A3o'
+      );
+    });
+
+    it('round-trips through parseDeepLink for resumable routes', () => {
+      const routes: AppRoute[] = [
+        WORKSPACE,
+        REQUEST,
+        { kind: 'workspace', workspaceId: 'my workspace' },
+        { kind: 'request', workspaceId: 'a b', requestId: 'x_y' },
+        { kind: 'request', workspaceId: 'ws%2Fraw', requestId: 'req%20space' },
+      ];
+
+      for (const route of routes) {
+        expect(parseDeepLink(toDeepLink(route))).toEqual(route);
+      }
+    });
+
+    it('serialises home as the bare app opener', () => {
+      // `apidot://open` carries no destination: parseDeepLink treats it as a
+      // plain launch and returns null, so home is intentionally not resumable.
+      expect(toDeepLink(HOME)).toBe('apidot://open');
+      expect(parseDeepLink(toDeepLink(HOME))).toBeNull();
     });
   });
 
