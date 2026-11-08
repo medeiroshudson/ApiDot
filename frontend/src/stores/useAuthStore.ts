@@ -8,6 +8,7 @@ import {
   logout as logoutApi,
 } from '@/lib/authApi';
 import { useI18nStore } from '@/stores/useI18nStore';
+import type { AppRoute } from '@/lib/routing/route';
 
 export const INITIAL_AUTH_STATE = {
   user: null as AuthUser | null,
@@ -23,8 +24,14 @@ export interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   error: string | null;
+  /**
+   * Desktop deep link waiting for a completed sign-in. Not persisted: it only
+   * survives the current login screen.
+   */
+  pendingRoute: AppRoute | null;
 
   setUser: (user: AuthUser | null) => void;
+  setPendingRoute: (route: AppRoute | null) => void;
   checkAuth: () => Promise<AuthUser | null>;
   fetchConfig: () => Promise<AuthConfig>;
   loginLocal: (email: string, password: string) => Promise<AuthUser>;
@@ -35,12 +42,17 @@ export interface AuthState {
 
 export const useAuthStore = create<AuthState>()((set) => ({
   ...INITIAL_AUTH_STATE,
+  pendingRoute: null,
 
   setUser: (user: AuthUser | null) => {
     set({
       user,
       isAuthenticated: !!user,
     });
+  },
+
+  setPendingRoute: (route: AppRoute | null) => {
+    set({ pendingRoute: route });
   },
 
   checkAuth: async (): Promise<AuthUser | null> => {
@@ -153,6 +165,6 @@ export const useAuthStore = create<AuthState>()((set) => ({
   },
 
   reset: () => {
-    set({ ...INITIAL_AUTH_STATE });
+    set({ ...INITIAL_AUTH_STATE, pendingRoute: null });
   },
 }));

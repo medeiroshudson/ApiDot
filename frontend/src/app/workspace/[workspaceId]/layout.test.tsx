@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
 const mockReplace = vi.fn();
 vi.mock('next/navigation', () => ({
   useParams: vi.fn(),
+  usePathname: () => '/',
   useRouter: () => ({
     push: vi.fn(),
     replace: mockReplace,
@@ -34,6 +35,8 @@ vi.mock('@/components/layout/WorkspaceShell', () => ({
 describe('WorkspaceLayout', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete (window as any).__TAURI__;
+    delete (window as any).__TAURI_INTERNALS__;
     useWorkspaceStore.getState().reset();
     useAuthStore.getState().reset();
 
@@ -239,6 +242,38 @@ describe('WorkspaceLayout', () => {
   });
 
   describe('Route Guard and Authentication', () => {
+    it('stores a pending route and redirects to /login on desktop', async () => {
+      (window as any).__TAURI_INTERNALS__ = {};
+      vi.mocked(useParams).mockReturnValue({ workspaceId: 'ws-desktop' });
+      vi.spyOn(global, 'fetch').mockImplementation(async (input: any) => {
+        const url = String(input);
+        if (url.includes('/api/auth/me')) {
+          return {
+            ok: false,
+            status: 401,
+            json: async () => ({ message: 'Unauthorized' }),
+          } as any;
+        }
+        return { ok: true, json: async () => ({}) } as any;
+      });
+
+      render(
+        <WorkspaceLayout params={{ workspaceId: 'ws-desktop' }}>
+          <div>Guarded Content</div>
+        </WorkspaceLayout>
+      );
+
+      await waitFor(() => {
+        expect(mockReplace).toHaveBeenCalledWith('/login');
+      });
+
+      expect(useAuthStore.getState().pendingRoute).toEqual({
+        kind: 'workspace',
+        workspaceId: 'ws-desktop',
+      });
+      expect(mockReplace).not.toHaveBeenCalledWith(expect.stringContaining('returnUrl'));
+    });
+
     it('redirects to /login?returnUrl=... when user is unauthenticated', async () => {
       vi.mocked(useParams).mockReturnValue({ workspaceId: 'ws-protected' });
       vi.spyOn(global, 'fetch').mockImplementation(async (input: any) => {

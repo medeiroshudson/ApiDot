@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useAppRoute } from '@/hooks/useAppRoute';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { MobileDrawer } from '@/components/layout/MobileDrawer';
 import { CollectionTree } from '@/components/layout/CollectionTree';
@@ -119,7 +119,7 @@ function WorkspaceShellContent({
   children,
 }: WorkspaceShellProps): React.JSX.Element {
   const { t } = useTranslation();
-  const router = useRouter();
+  const { navigate } = useAppRoute();
   const [mounted, setMounted] = useState(false);
 
   // Layout Store
@@ -396,9 +396,7 @@ function WorkspaceShellContent({
     );
     setIsImportCurlModalOpen(false);
     setImportCurlTarget(null);
-    router.push(
-      `/workspace/${encodeURIComponent(workspaceId)}/request/${encodeURIComponent(created.id)}`
-    );
+    navigate({ kind: 'request', workspaceId, requestId: created.id });
   };
 
   const handleCopyCurl = async (req: RequestItemNodeDto) => {
@@ -470,9 +468,9 @@ function WorkspaceShellContent({
       if (typeof window !== 'undefined') {
         localStorage.setItem(STORAGE_KEY_ACTIVE_WORKSPACE, id);
       }
-      router.push(`/workspace/${encodeURIComponent(id)}`);
+      navigate({ kind: 'workspace', workspaceId: id });
     },
-    [setActiveWorkspaceId, router]
+    [setActiveWorkspaceId, navigate]
   );
 
   const handleCreateWorkspace = useCallback(
@@ -481,9 +479,9 @@ function WorkspaceShellContent({
       if (typeof window !== 'undefined') {
         localStorage.setItem(STORAGE_KEY_ACTIVE_WORKSPACE, created.id);
       }
-      router.push(`/workspace/${encodeURIComponent(created.id)}`);
+      navigate({ kind: 'workspace', workspaceId: created.id });
     },
-    [createWorkspace, router]
+    [createWorkspace, navigate]
   );
 
   const handleEnvironmentsChange = (updated: EnvironmentGroup[]) => {
@@ -696,7 +694,7 @@ function WorkspaceShellContent({
     });
     setModalOpen('save', false);
     setPendingSaveData(null);
-    router.push(`/workspace/${encodeURIComponent(workspaceId)}/request/${encodeURIComponent(created.id)}`);
+    navigate({ kind: 'request', workspaceId, requestId: created.id });
   };
 
   const renderSidebarContent = (className?: string) => (

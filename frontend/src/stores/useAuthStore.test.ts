@@ -278,5 +278,32 @@ describe('useAuthStore', () => {
 
       expect(useAuthStore.getState()).toMatchObject(INITIAL_AUTH_STATE);
     });
+
+    it('clears the pending route on reset', () => {
+      useAuthStore.getState().setPendingRoute({ kind: 'workspace', workspaceId: 'ws-1' });
+
+      useAuthStore.getState().reset();
+
+      expect(useAuthStore.getState().pendingRoute).toBeNull();
+    });
+  });
+
+  describe('7. pendingRoute', () => {
+    it('starts as null and is not part of the persisted initial state', () => {
+      useAuthStore.setState({ pendingRoute: null });
+
+      expect(useAuthStore.getState().pendingRoute).toBeNull();
+      expect(INITIAL_AUTH_STATE).not.toHaveProperty('pendingRoute');
+    });
+
+    it('stores and clears a route', () => {
+      const route = { kind: 'request' as const, workspaceId: 'ws-1', requestId: 'req-1' };
+
+      useAuthStore.getState().setPendingRoute(route);
+      expect(useAuthStore.getState().pendingRoute).toEqual(route);
+
+      useAuthStore.getState().setPendingRoute(null);
+      expect(useAuthStore.getState().pendingRoute).toBeNull();
+    });
   });
 });

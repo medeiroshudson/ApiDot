@@ -22,10 +22,31 @@ const routerMock = {
 
 vi.mock('next/navigation', () => ({
   useRouter: () => routerMock,
+  useParams: () => ({}),
+  usePathname: () => '/',
+}));
+
+vi.mock('@/components/workspace/WorkspaceRouteShell', () => ({
+  WorkspaceRouteShell: ({
+    workspaceId,
+    requestId,
+  }: {
+    workspaceId: string;
+    requestId?: string;
+  }) => (
+    <div
+      data-testid="workspace-route-shell"
+      data-workspace-id={workspaceId}
+      data-request-id={requestId ?? ''}
+    />
+  ),
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  delete (window as any).__TAURI__;
+  delete (window as any).__TAURI_INTERNALS__;
+  window.history.replaceState(null, '', '/');
   useLayoutStore.setState(INITIAL_LAYOUT_STATE);
   useWorkspaceStore.getState().reset();
   useEnvironmentStore.getState().reset();
@@ -465,5 +486,46 @@ describe('Root Redirector (app/page.tsx)', () => {
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith('/workspace/ws-allowed-1');
     });
+  });
+
+  it('renders the routed workspace shell from the hash on desktop instead of redirecting', () => {
+    (window as any).__TAURI_INTERNALS__ = {};
+    window.history.replaceState(null, '', '/#/workspace/ws-desktop/request/req-desktop');
+
+    render(<Home />);
+
+    const shell = screen.getByTestId('workspace-route-shell');
+    expect(shell).toHaveAttribute('data-workspace-id', 'ws-desktop');
+    expect(shell).toHaveAttribute('data-request-id', 'req-desktop');
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('renders the workspace shell at "/" without a selected request on desktop', () => {
+    (window as any).__TAURI_INTERNALS__ = {};
+    window.history.replaceState(null, '', '/#/workspace/ws-desktop');
+
+    render(<Home />);
+
+    const shell = screen.getByTestId('workspace-route-shell');
+    expect(shell).toHaveAttribute('data-workspace-id', 'ws-desktop');
+    expect(shell).toHaveAttribute('data-request-id', '');
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('drives the desktop fallback workspace through the hash instead of the web path', async () => {
+    (window as any).__TAURI_INTERNALS__ = {};
+    useWorkspaceStore.setState({ activeWorkspaceId: 'ws-fallback' });
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(window.location.hash).toBe('#/workspace/ws-fallback');
+    });
+
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(screen.getByTestId('workspace-route-shell')).toHaveAttribute(
+      'data-workspace-id',
+      'ws-fallback'
+    );
   });
 });

@@ -64,6 +64,7 @@ describe('LoginPage (/login)', () => {
       isAuthenticated: false,
       config: mockConfigEnabled,
       error: null,
+      pendingRoute: null,
     });
   });
 
@@ -423,6 +424,87 @@ describe('LoginPage (/login)', () => {
         expect(screen.getByRole('alert')).toBeInTheDocument();
         expect(screen.getByText('Authentication timed out. Please try again.')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /sign in with sso/i })).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Pending route resume', () => {
+    const pendingRequest = {
+      kind: 'request' as const,
+      workspaceId: 'ws-1',
+      requestId: 'req 9',
+    };
+
+    const submitLocalCredentials = () => {
+      fireEvent.change(screen.getByLabelText(/email|e-?mail/i), {
+        target: { value: 'dev@apidot.dev' },
+      });
+      fireEvent.change(screen.getByLabelText(/password|senha/i), {
+        target: { value: 'secret123' },
+      });
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: /sign in with local credentials|entrar com credenciais locais/i,
+        })
+      );
+    };
+
+    it('keeps the pending route while the login screen is shown', () => {
+      useAuthStore.getState().setPendingRoute(pendingRequest);
+
+      render(<LoginPage />);
+
+      expect(useAuthStore.getState().pendingRoute).toEqual(pendingRequest);
+      expect(mockReplace).not.toHaveBeenCalled();
+    });
+
+    it('navigates to the pending hash route after a desktop login and clears it', async () => {
+      (window as any).__TAURI_INTERNALS__ = {};
+      useAuthStore.getState().setPendingRoute(pendingRequest);
+      useAuthStore.setState({ loginLocal: vi.fn().mockResolvedValue(mockUser) });
+
+      render(<LoginPage />);
+      submitLocalCredentials();
+
+      await waitFor(() => {
+        expect(mockReplace).toHaveBeenCalledWith('/#/workspace/ws-1/request/req%209');
+      });
+
+      expect(useAuthStore.getState().pendingRoute).toBeNull();
+      expect(mockReplace).toHaveBeenCalledTimes(1);
+    });
+
+    it('consumes the pending route once when the session is already authenticated', () => {
+      (window as any).__TAURI_INTERNALS__ = {};
+      useAuthStore.getState().setPendingRoute({ kind: 'workspace', workspaceId: 'ws-1' });
+      useAuthStore.setState({ isAuthenticated: true });
+
+      const { rerender } = render(<LoginPage />);
+
+      expect(mockReplace).toHaveBeenCalledTimes(1);
+      expect(mockReplace).toHaveBeenCalledWith('/#/workspace/ws-1');
+      expect(useAuthStore.getState().pendingRoute).toBeNull();
+
+      rerender(<LoginPage />);
+
+      expect(mockReplace).toHaveBeenCalledTimes(1);
+    });
+
+    it('ignores the pending route on the web and keeps the returnUrl behaviour', async () => {
+      useAuthStore.getState().setPendingRoute({ kind: 'workspace', workspaceId: 'ws-1' });
+      useAuthStore.setState({ loginLocal: vi.fn().mockResolvedValue(mockUser) });
+
+      render(<LoginPage />);
+      submitLocalCredentials();
+
+      await waitFor(() => {
+        expect(mockReplace).toHaveBeenCalledWith('/');
+      });
+
+      expect(mockReplace).toHaveBeenCalledTimes(1);
+      expect(useAuthStore.getState().pendingRoute).toEqual({
+        kind: 'workspace',
+        workspaceId: 'ws-1',
       });
     });
   });

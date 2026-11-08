@@ -14,6 +14,8 @@ const mockPush = vi.fn();
 const mockReplace = vi.fn();
 
 vi.mock('next/navigation', () => ({
+  useParams: () => ({}),
+  usePathname: () => '/',
   useRouter: () => ({
     push: mockPush,
     replace: mockReplace,
@@ -60,6 +62,9 @@ const originalCheckForUpdates = useUpdateStore.getState().checkForUpdates;
 describe('WorkspaceShell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete (window as any).__TAURI__;
+    delete (window as any).__TAURI_INTERNALS__;
+    window.history.replaceState(null, '', '/');
     useLayoutStore.setState(INITIAL_LAYOUT_STATE);
     useWorkspaceStore.getState().reset();
     useEnvironmentStore.getState().reset();
@@ -156,6 +161,28 @@ describe('WorkspaceShell', () => {
     fireEvent.click(otherOption);
 
     expect(mockPush).toHaveBeenCalledWith('/workspace/ws-other');
+  });
+
+  it('updates the desktop hash when switching workspaces', async () => {
+    (window as any).__TAURI_INTERNALS__ = {};
+    render(
+      <WorkspaceShell workspaceId="ws-test">
+        <div>Child Area</div>
+      </WorkspaceShell>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Workspace')).toBeInTheDocument();
+    });
+
+    const switcherBtn = screen.getByRole('button', { name: /workspace: test workspace/i });
+    fireEvent.click(switcherBtn);
+
+    const otherOption = await screen.findByText('Other Workspace');
+    fireEvent.click(otherOption);
+
+    expect(window.location.hash).toBe('#/workspace/ws-other');
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('adjusts sidebar width when PanelSplitter is dragged or resized', async () => {

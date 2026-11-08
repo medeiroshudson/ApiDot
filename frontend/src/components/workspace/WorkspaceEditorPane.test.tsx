@@ -21,6 +21,7 @@ vi.mock('next/navigation', () => ({
     back: vi.fn(),
   }),
   useParams: () => ({}),
+  usePathname: () => '/',
 }));
 
 const mockTree: WorkspaceTreeDto = {
