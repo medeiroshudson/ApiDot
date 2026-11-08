@@ -34,4 +34,5 @@ public class User
 
     public ICollection<WorkspaceMember> WorkspaceMemberships { get; init; } = [];
     public ICollection<AgentDevice> Devices { get; init; } = [];
+    public ICollection<DesktopToken> DesktopTokens { get; init; } = [];
 }

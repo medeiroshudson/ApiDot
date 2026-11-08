@@ -113,6 +113,47 @@ namespace ApiDot.Server.Migrations
                     b.ToTable("Collections");
                 });
 
+            modelBuilder.Entity("ApiDot.Server.Data.Entities.DesktopToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastUsedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TokenPrefix")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("DesktopTokens");
+                });
+
             modelBuilder.Entity("ApiDot.Server.Data.Entities.EnvironmentVariable", b =>
                 {
                     b.Property<Guid>("Id")
@@ -433,6 +474,17 @@ namespace ApiDot.Server.Migrations
                     b.Navigation("Workspace");
                 });
 
+            modelBuilder.Entity("ApiDot.Server.Data.Entities.DesktopToken", b =>
+                {
+                    b.HasOne("ApiDot.Server.Data.Entities.User", "User")
+                        .WithMany("DesktopTokens")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ApiDot.Server.Data.Entities.EnvironmentVariable", b =>
                 {
                     b.HasOne("ApiDot.Server.Data.Entities.Collection", "Collection")
@@ -561,6 +613,8 @@ namespace ApiDot.Server.Migrations
 
             modelBuilder.Entity("ApiDot.Server.Data.Entities.User", b =>
                 {
+                    b.Navigation("DesktopTokens");
+
                     b.Navigation("Devices");
 
                     b.Navigation("WorkspaceMemberships");

@@ -12,6 +12,7 @@ public class ApiDotDbContext(DbContextOptions<ApiDotDbContext> options) : DbCont
     public DbSet<EnvironmentVariable> EnvironmentVariables => Set<EnvironmentVariable>();
     public DbSet<ExecutionHistory> ExecutionHistories => Set<ExecutionHistory>();
     public DbSet<AgentDevice> AgentDevices => Set<AgentDevice>();
+    public DbSet<DesktopToken> DesktopTokens => Set<DesktopToken>();
     public DbSet<User> Users => Set<User>();
     public DbSet<WorkspaceMember> WorkspaceMembers => Set<WorkspaceMember>();
 
