@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useAppRoute } from '@/hooks/useAppRoute';
+import { isDesktop } from '@/lib/desktop/runtime';
+import { WorkspaceRouteShell } from '@/components/workspace/WorkspaceRouteShell';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 export default function Home() {
@@ -12,6 +15,10 @@ export default function Home() {
   const routerRef = useRef(router);
   routerRef.current = router;
   const { t } = useTranslation();
+  const { route } = useAppRoute();
+
+  // On desktop the shell lives at "/" and the active route comes from the hash.
+  const desktopRoute = isDesktop() && route.kind !== 'home';
 
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const fetchWorkspaces = useWorkspaceStore((s) => s.fetchWorkspaces);
@@ -100,6 +107,8 @@ export default function Home() {
 
     async function run() {
       if (!isMounted) return;
+      // Desktop renders the routed shell from the hash instead of redirecting.
+      if (desktopRoute) return;
       await resolveAndRedirect();
     }
 
@@ -108,7 +117,7 @@ export default function Home() {
     return () => {
       isMounted = false;
     };
-  }, [resolveAndRedirect, retryCount]);
+  }, [resolveAndRedirect, retryCount, desktopRoute]);
 
   const handleRetry = () => {
     useWorkspaceStore.setState({ error: null });
@@ -116,6 +125,15 @@ export default function Home() {
     redirectedRef.current = false;
     setRetryCount((prev) => prev + 1);
   };
+
+  if (isDesktop() && route.kind !== 'home') {
+    return (
+      <WorkspaceRouteShell
+        workspaceId={route.workspaceId}
+        requestId={route.kind === 'request' ? route.requestId : undefined}
+      />
+    );
+  }
 
   if (hasError) {
     return (
