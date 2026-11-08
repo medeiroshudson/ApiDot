@@ -12,6 +12,7 @@ import { AutocompleteVariable } from '@/components/request/RequestAutocomplete';
 import { DependencyRequest, interpolateVariables } from '@/lib/variables';
 import { generateCurlCommand } from '@/lib/curl/curlGenerator';
 import { WorkspaceTreeDto } from '@/lib/treeApi';
+import { apiFetch } from '@/lib/api/client';
 import { isDesktop, getSidecarInfo, clearSidecarInfoCache } from '@/lib/desktop/runtime';
 import { executeViaDesktopSidecar } from '@/lib/desktop/desktopExecutor';
 import { useLayoutStore } from '@/stores/useLayoutStore';
@@ -315,7 +316,7 @@ export function WorkspaceEditorPane({
             executionHeaders['X-Device-Id'] = activeDeviceId.trim();
           }
 
-          const res = await fetch('/api/requests/execute', {
+          const res = await apiFetch('/api/requests/execute', {
             method: 'POST',
             headers: executionHeaders,
             body: JSON.stringify({

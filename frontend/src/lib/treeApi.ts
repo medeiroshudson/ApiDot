@@ -1,4 +1,5 @@
 import { useDeviceStore } from '@/stores/useDeviceStore';
+import { apiFetch } from '@/lib/api/client';
 
 export type ExecutionTarget = 'Inherit' | 'Server' | 'Agent';
 export type HttpBodyType = 'None' | 'Json' | 'FormData' | 'Multipart' | 'RawText';
@@ -50,7 +51,7 @@ export interface WorkspaceDto {
 }
 
 export async function fetchWorkspacesApi(): Promise<WorkspaceDto[]> {
-  const res = await fetch('/api/workspaces');
+  const res = await apiFetch('/api/workspaces');
   if (!res.ok) {
     throw new Error('Falha ao listar workspaces');
   }
@@ -58,7 +59,7 @@ export async function fetchWorkspacesApi(): Promise<WorkspaceDto[]> {
 }
 
 export async function createWorkspaceApi(name: string): Promise<WorkspaceDto> {
-  const res = await fetch('/api/workspaces', {
+  const res = await apiFetch('/api/workspaces', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
@@ -152,12 +153,12 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export async function fetchWorkspaceTree(workspaceId: string): Promise<WorkspaceTreeDto> {
-  const res = await fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/tree`);
+  const res = await apiFetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/tree`);
   return handleResponse<WorkspaceTreeDto>(res);
 }
 
 export async function createCollectionApi(data: CreateCollectionRequest): Promise<CollectionNodeDto> {
-  const res = await fetch('/api/collections', {
+  const res = await apiFetch('/api/collections', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -166,7 +167,7 @@ export async function createCollectionApi(data: CreateCollectionRequest): Promis
 }
 
 export async function updateCollectionApi(id: string, data: UpdateCollectionRequest): Promise<CollectionNodeDto> {
-  const res = await fetch(`/api/collections/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/collections/${encodeURIComponent(id)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -175,14 +176,14 @@ export async function updateCollectionApi(id: string, data: UpdateCollectionRequ
 }
 
 export async function deleteCollectionApi(id: string): Promise<void> {
-  const res = await fetch(`/api/collections/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/collections/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
   return handleResponse<void>(res);
 }
 
 export async function createFolderApi(data: CreateFolderRequest): Promise<FolderNodeDto> {
-  const res = await fetch('/api/folders', {
+  const res = await apiFetch('/api/folders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -191,7 +192,7 @@ export async function createFolderApi(data: CreateFolderRequest): Promise<Folder
 }
 
 export async function updateFolderApi(id: string, data: UpdateFolderRequest): Promise<FolderNodeDto> {
-  const res = await fetch(`/api/folders/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/folders/${encodeURIComponent(id)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -200,14 +201,14 @@ export async function updateFolderApi(id: string, data: UpdateFolderRequest): Pr
 }
 
 export async function deleteFolderApi(id: string): Promise<void> {
-  const res = await fetch(`/api/folders/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/folders/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
   return handleResponse<void>(res);
 }
 
 export async function createRequestApi(data: CreateRequestItemRequest): Promise<RequestItemNodeDto> {
-  const res = await fetch('/api/requests', {
+  const res = await apiFetch('/api/requests', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -216,7 +217,7 @@ export async function createRequestApi(data: CreateRequestItemRequest): Promise<
 }
 
 export async function updateRequestApi(id: string, data: UpdateRequestItemRequest): Promise<RequestItemNodeDto> {
-  const res = await fetch(`/api/requests/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/requests/${encodeURIComponent(id)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -225,14 +226,14 @@ export async function updateRequestApi(id: string, data: UpdateRequestItemReques
 }
 
 export async function duplicateRequestApi(id: string): Promise<RequestItemNodeDto> {
-  const res = await fetch(`/api/requests/${encodeURIComponent(id)}/duplicate`, {
+  const res = await apiFetch(`/api/requests/${encodeURIComponent(id)}/duplicate`, {
     method: 'POST',
   });
   return handleResponse<RequestItemNodeDto>(res);
 }
 
 export async function deleteRequestApi(id: string): Promise<void> {
-  const res = await fetch(`/api/requests/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/requests/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
   return handleResponse<void>(res);
@@ -248,7 +249,7 @@ export interface ImportOpenApiCollectionRequest {
 export async function importOpenApiCollection(
   data: ImportOpenApiCollectionRequest
 ): Promise<CollectionNodeDto> {
-  const res = await fetch('/api/collections/import-openapi', {
+  const res = await apiFetch('/api/collections/import-openapi', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -292,7 +293,7 @@ export async function executeRequest(
     headers['X-Device-Id'] = activeDeviceId.trim();
   }
 
-  return fetch('/api/requests/execute', {
+  return apiFetch('/api/requests/execute', {
     method: 'POST',
     headers,
     body: JSON.stringify(request),

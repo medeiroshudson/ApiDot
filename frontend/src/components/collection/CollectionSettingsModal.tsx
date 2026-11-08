@@ -20,6 +20,7 @@ import {
   FolderGit2,
 } from 'lucide-react';
 import { ExecutionTarget } from '../request/TargetSelector';
+import { apiFetch } from '@/lib/api/client';
 import { Select } from '@/components/common/Select';
 import { CollectionNodeDto, FolderNodeDto, RequestItemNodeDto } from '@/lib/treeApi';
 import { CodeEditor } from '../common/CodeEditor';
@@ -341,7 +342,7 @@ export function CollectionSettingsModal({
           specContent: trimmedContent || undefined,
         });
       } else {
-        const res = await fetch(`/api/collections/${collection.id}/sync`, {
+        const res = await apiFetch(`/api/collections/${collection.id}/sync`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

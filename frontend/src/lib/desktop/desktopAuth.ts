@@ -1,5 +1,6 @@
 import { AuthUser } from '@/lib/authApi';
 import { getSidecarInfo } from '@/lib/desktop/runtime';
+import { getApiBase } from '@/lib/api/base';
 
 export interface PollSessionOptions {
   signal?: AbortSignal;
@@ -248,7 +249,7 @@ export async function startDesktopSsoFlow(
     const defaultBase = typeof window !== 'undefined' && window.location?.origin
       ? window.location.origin
       : 'https://apidot.hmedeiros.dev';
-    const base = (options.serverUrl || defaultBase).replace(/\/+$/, '');
+    const base = (options.serverUrl || getApiBase() || defaultBase).replace(/\/+$/, '');
 
     const resolveState = options.getState ?? fetchDesktopSidecarAuthState;
     const state = await resolveState(port, secret, options.signal);
@@ -286,7 +287,7 @@ export async function startDesktopSsoFlow(
     }
 
     const exchange = options.exchangeToken ?? exchangeDesktopToken;
-    const user = await exchange(token, options.serverUrl);
+    const user = await exchange(token, options.serverUrl || getApiBase() || undefined);
 
     return {
       success: true,
