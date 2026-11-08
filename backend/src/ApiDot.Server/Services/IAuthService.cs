@@ -57,4 +57,25 @@ public interface IAuthService
         string token,
         HttpContext httpContext,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Issues a long-lived opaque bearer token for the desktop client and persists only its hash.
+    /// </summary>
+    Task<(string RawToken, DateTimeOffset ExpiresAtUtc)> IssueDesktopTokenAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Resolves the owning user for a raw bearer token. Revoked and expired tokens are rejected.
+    /// </summary>
+    Task<User?> ValidateDesktopTokenAsync(
+        string rawToken,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Revokes the token matching the raw value. Returns false when no active token matches.
+    /// </summary>
+    Task<bool> RevokeDesktopTokenAsync(
+        string rawToken,
+        CancellationToken cancellationToken = default);
 }

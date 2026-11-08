@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using ApiDot.Server.Models;
 using ApiDot.Server.Security;
@@ -14,6 +15,9 @@ namespace ApiDot.Server.Endpoints;
 public static class AuthEndpoints
 {
     private static readonly string[] SupportedLocales = ["en-US", "pt-BR"];
+
+    private const string DesktopAccessTokenHeader = "X-Desktop-Access-Token";
+    private const string DesktopAccessTokenExpiresHeader = "X-Desktop-Access-Token-Expires";
 
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
@@ -119,6 +123,13 @@ public static class AuthEndpoints
                     detail: errorMessage ?? "Invalid or expired exchange token.",
                     extensions: new Dictionary<string, object?> { ["message"] = errorMessage ?? "Invalid or expired exchange token." });
             }
+
+            // The desktop webview cannot rely on the session cookie, so the exchange also
+            // hands back a long-lived opaque bearer token. The JSON body stays unchanged.
+            var (desktopAccessToken, desktopAccessTokenExpiresAt) = await authService.IssueDesktopTokenAsync(user.Id, ct);
+            httpContext.Response.Headers[DesktopAccessTokenHeader] = desktopAccessToken;
+            httpContext.Response.Headers[DesktopAccessTokenExpiresHeader] =
+                desktopAccessTokenExpiresAt.ToString("o", CultureInfo.InvariantCulture);
 
             return Results.Ok(user);
         }).RequireRateLimiting("auth");

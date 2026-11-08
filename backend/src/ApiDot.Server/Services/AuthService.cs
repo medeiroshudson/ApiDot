@@ -481,4 +481,89 @@ public class AuthService(
         var userDto = await BuildUserDtoAsync(user, cancellationToken);
         return (true, userDto, null);
     }
+
+    private static readonly TimeSpan DesktopTokenLifetime = TimeSpan.FromDays(30);
+    private static readonly TimeSpan DesktopTokenLastUsedInterval = TimeSpan.FromHours(1);
+
+    public async Task<(string RawToken, DateTimeOffset ExpiresAtUtc)> IssueDesktopTokenAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var rawToken = DesktopTokenHelper.CreateRawToken();
+        var now = DateTimeOffset.UtcNow;
+        var expiresAt = now.Add(DesktopTokenLifetime);
+
+        dbContext.DesktopTokens.Add(new DesktopToken
+        {
+            UserId = userId,
+            TokenHash = DesktopTokenHelper.ComputeHash(rawToken),
+            TokenPrefix = DesktopTokenHelper.Prefix(rawToken),
+            CreatedAtUtc = now.UtcDateTime,
+            ExpiresAtUtc = expiresAt.UtcDateTime
+        });
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return (rawToken, expiresAt);
+    }
+
+    public async Task<User?> ValidateDesktopTokenAsync(
+        string rawToken,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(rawToken))
+        {
+            return null;
+        }
+
+        var tokenHash = DesktopTokenHelper.ComputeHash(rawToken);
+
+        var token = await dbContext.DesktopTokens
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken);
+
+        if (token?.User == null || token.RevokedAtUtc != null)
+        {
+            return null;
+        }
+
+        var now = DateTime.UtcNow;
+        if (token.ExpiresAtUtc <= now)
+        {
+            return null;
+        }
+
+        // Writing on every request would turn token validation into a write hotspot.
+        if (token.LastUsedAtUtc == null || now - token.LastUsedAtUtc.Value >= DesktopTokenLastUsedInterval)
+        {
+            token.LastUsedAtUtc = now;
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return token.User;
+    }
+
+    public async Task<bool> RevokeDesktopTokenAsync(
+        string rawToken,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(rawToken))
+        {
+            return false;
+        }
+
+        var tokenHash = DesktopTokenHelper.ComputeHash(rawToken);
+
+        var token = await dbContext.DesktopTokens
+            .FirstOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken);
+
+        if (token == null || token.RevokedAtUtc != null)
+        {
+            return false;
+        }
+
+        token.RevokedAtUtc = DateTime.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
 }
