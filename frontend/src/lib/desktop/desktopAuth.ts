@@ -1,6 +1,7 @@
 import { AuthUser } from '@/lib/authApi';
 import { getSidecarInfo } from '@/lib/desktop/runtime';
 import { getApiBase } from '@/lib/api/base';
+import { persistDeviceCredential } from '@/lib/api/session';
 
 export interface PollSessionOptions {
   signal?: AbortSignal;
@@ -186,9 +187,10 @@ export async function exchangeDesktopToken(token: string, baseUrl?: string): Pro
   const base = (baseUrl || '').replace(/\/+$/, '');
   const url = `${base}/api/auth/desktop-exchange`;
 
+  // The one-time token travels in the body, so the exchange does not need the
+  // cookie session (and the desktop CORS policy does not allow credentials).
   const res = await fetch(url, {
     method: 'POST',
-    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
     },
@@ -208,7 +210,16 @@ export async function exchangeDesktopToken(token: string, baseUrl?: string): Pro
     throw new Error(message);
   }
 
-  return (await res.json()) as AuthUser;
+  const user = (await res.json()) as AuthUser;
+
+  // A successful exchange also returns the device credential in response
+  // headers. Persisting it here keeps SSO and local login on one path.
+  await persistDeviceCredential(res, {
+    userId: user.id,
+    serverUrl: base || null,
+  });
+
+  return user;
 }
 
 /**

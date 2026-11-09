@@ -28,6 +28,8 @@ import type { Locale } from '@/i18n';
 import { AgentDeviceDto } from '@/lib/deviceApi';
 import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
 import { API_BASE_STORAGE_KEY, getApiBase, normalizeApiBase, setApiBase } from '@/lib/api/base';
+import { getSession, patchSession } from '@/lib/api/session';
+import { saveDesktopSession } from '@/lib/desktop/session';
 
 export type SettingsTab = 'agents' | 'general';
 
@@ -361,6 +363,16 @@ export function GlobalSettingsModal({
     setServerUrlError(null);
     setApiBase(normalized);
     setServerUrl(normalized);
+
+    // Keep the persisted desktop session pointing at the same server so boot
+    // hydration and the sidecar connect use the newly saved URL.
+    const session = getSession();
+    if (session) {
+      const updated = patchSession({ serverUrl: normalized });
+      if (updated) {
+        void saveDesktopSession(updated);
+      }
+    }
   };
 
   if (!isOpen) return null;

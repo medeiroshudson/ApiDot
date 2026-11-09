@@ -14,6 +14,14 @@ import {
   getApiBase,
   setApiBase,
 } from '@/lib/api/base';
+import { clearSessionMemory, getSession, setSession } from '@/lib/api/session';
+import { saveDesktopSession } from '@/lib/desktop/session';
+
+vi.mock('@/lib/desktop/session', () => ({
+  loadDesktopSession: vi.fn().mockResolvedValue(null),
+  saveDesktopSession: vi.fn().mockResolvedValue(undefined),
+  clearDesktopSession: vi.fn().mockResolvedValue(undefined),
+}));
 
 const mockDevices: AgentDeviceDto[] = [
   {
@@ -67,6 +75,7 @@ describe('GlobalSettingsModal', () => {
     delete (window as any).__TAURI__;
     delete (window as any).__TAURI_INTERNALS__;
     localStorage.clear();
+    clearSessionMemory();
 
     Object.assign(navigator, {
       clipboard: {
@@ -696,5 +705,34 @@ describe('GlobalSettingsModal', () => {
       expect(getApiBase()).toBe('https://stored.example.com');
       expect(localStorage.getItem(API_BASE_STORAGE_KEY)).toBe('https://stored.example.com');
     });
+
+    it('persists the new server URL into the desktop session', async () => {
+      (window as any).__TAURI__ = {};
+      setSession({
+        deviceId: 'device-1',
+        deviceKey: 'key-1',
+        accessToken: 'tok-1',
+        serverUrl: 'https://old.example.com',
+      });
+
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
+
+      fireEvent.change(screen.getByLabelText(/server url/i), {
+        target: { value: ' https://new.example.com/ ' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /save|salvar/i }));
+
+      await waitFor(() => {
+        expect(saveDesktopSession).toHaveBeenCalled();
+      });
+
+      expect(getSession()?.serverUrl).toBe('https://new.example.com');
+      expect(vi.mocked(saveDesktopSession).mock.calls.at(-1)?.[0]).toMatchObject({
+        deviceKey: 'key-1',
+        accessToken: 'tok-1',
+        serverUrl: 'https://new.example.com',
+      });
+    });
   });
+
 });

@@ -4,10 +4,13 @@ import {
   loginLocal,
   getCurrentUser,
   logout,
+  revokeDeviceToken,
   patchUserLocale,
   AuthConfig,
   AuthUser,
 } from './authApi';
+import { getSession, setSession } from './api/session';
+import { setAccessToken } from './api/authToken';
 
 describe('authApi', () => {
   const originalFetch = global.fetch;
@@ -88,6 +91,53 @@ describe('authApi', () => {
         body: JSON.stringify({ email: 'user@example.com', password: 'secret123' }),
       });
       expect(result).toEqual(mockUser);
+    });
+
+    it('persists the device credential on the desktop after local login', async () => {
+      const invoke = vi.fn().mockResolvedValue(undefined);
+      (window as any).__TAURI__ = { core: { invoke } };
+
+      const mockUser: AuthUser = {
+        id: 'usr-123',
+        email: 'user@example.com',
+        displayName: 'Test User',
+        isRoot: true,
+        workspaces: [{ id: 'ws-1', name: 'Default', role: 'Owner' }],
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({
+          'X-Desktop-Access-Token': 'tok-local',
+          'X-Desktop-Access-Token-Expires': '2026-12-09T00:00:00Z',
+          'X-Desktop-Device-Id': 'dev-local',
+          'X-Desktop-Device-Key': 'key-local',
+        }),
+        json: async () => mockUser,
+      } as unknown as Response);
+
+      await loginLocal('user@example.com', 'secret123');
+
+      expect(getSession()).toMatchObject({
+        userId: 'usr-123',
+        deviceId: 'dev-local',
+        deviceKey: 'key-local',
+        accessToken: 'tok-local',
+      });
+      expect(invoke).toHaveBeenCalledWith(
+        'save_session',
+        expect.objectContaining({
+          session: expect.objectContaining({
+            access_token: 'tok-local',
+            device_id: 'dev-local',
+          }),
+        })
+      );
+
+      delete (window as any).__TAURI__;
+      setSession(null);
+      setAccessToken(null);
     });
 
     it('throws error when login fails with 401 problem details', async () => {
@@ -214,6 +264,30 @@ describe('authApi', () => {
       await expect(patchUserLocale('invalid')).rejects.toThrow(
         'Failed to update locale preference'
       );
+    });
+  });
+
+  describe('revokeDeviceToken', () => {
+    it('sends DELETE to /api/auth/device-token', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+      } as Response);
+
+      await revokeDeviceToken();
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/auth/device-token', {
+        method: 'DELETE',
+      });
+    });
+
+    it('treats an already invalid token as revoked', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+      } as Response);
+
+      await expect(revokeDeviceToken()).resolves.toBeUndefined();
     });
   });
 });

@@ -6,6 +6,8 @@ import {
   openExternalBrowser,
 } from './desktopAuth';
 import * as runtime from './runtime';
+import { getAccessToken, setAccessToken } from '@/lib/api/authToken';
+import { getSession, setSession } from '@/lib/api/session';
 
 describe('desktopAuth', () => {
   beforeEach(() => {
@@ -236,13 +238,58 @@ describe('desktopAuth', () => {
 
       expect(global.fetch).toHaveBeenCalledWith('https://api.apidot.dev/api/auth/desktop-exchange', {
         method: 'POST',
-        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ token: 'desktop-token-xyz' }),
       });
       expect(user).toEqual(mockUser);
+    });
+
+    it('persists the device credential headers in the desktop session', async () => {
+      const invoke = vi.fn().mockResolvedValue(undefined);
+      (window as any).__TAURI__ = { core: { invoke } };
+
+      const mockUser = { id: 'u100', email: 'user@apidot.dev', displayName: 'Dev' };
+      const headers = new Headers({
+        'X-Desktop-Access-Token': 'device-token-abc',
+        'X-Desktop-Access-Token-Expires': '2026-12-09T00:00:00.0000000Z',
+        'X-Desktop-Device-Id': '11111111-1111-1111-1111-111111111111',
+        'X-Desktop-Device-Key': 'machine-key-1',
+      });
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers,
+        json: async () => mockUser,
+      } as unknown as Response);
+
+      await exchangeDesktopToken('desktop-token-xyz', 'https://api.apidot.dev');
+
+      expect(getAccessToken()).toBe('device-token-abc');
+      expect(getSession()).toMatchObject({
+        userId: 'u100',
+        deviceId: '11111111-1111-1111-1111-111111111111',
+        deviceKey: 'machine-key-1',
+        accessToken: 'device-token-abc',
+        expiresAt: '2026-12-09T00:00:00.0000000Z',
+        serverUrl: 'https://api.apidot.dev',
+      });
+      expect(invoke).toHaveBeenCalledWith('save_session', {
+        session: {
+          user_id: 'u100',
+          device_id: '11111111-1111-1111-1111-111111111111',
+          device_key: 'machine-key-1',
+          access_token: 'device-token-abc',
+          expires_at: '2026-12-09T00:00:00.0000000Z',
+          server_url: 'https://api.apidot.dev',
+        },
+      });
+
+      delete (window as any).__TAURI__;
+      setSession(null);
+      setAccessToken(null);
     });
 
     it('throws error when server responds with 401 ProblemDetails', async () => {

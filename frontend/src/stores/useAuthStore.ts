@@ -8,6 +8,7 @@ import {
   logout as logoutApi,
 } from '@/lib/authApi';
 import { useI18nStore } from '@/stores/useI18nStore';
+import { revokeDeviceSession } from '@/lib/desktop/deviceSession';
 import type { AppRoute } from '@/lib/routing/route';
 
 export const INITIAL_AUTH_STATE = {
@@ -145,6 +146,10 @@ export const useAuthStore = create<AuthState>()((set) => ({
   logout: async (): Promise<void> => {
     set({ isLoading: true, error: null });
     try {
+      // Desktop: revoke the device token, close the sidecar WebSocket and
+      // forget the local session before the cookie logout. On the web the
+      // device steps are no-ops.
+      await revokeDeviceSession();
       await logoutApi();
       set({
         user: null,
