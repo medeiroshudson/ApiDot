@@ -6,6 +6,7 @@ using ApiDot.Server.Data.Entities;
 using ApiDot.Server.Enums;
 using ApiDot.Server.Models;
 using ApiDot.Server.Security;
+using DeviceTokenHelper = ApiDot.Server.Security.DeviceTokenHelper;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
@@ -481,4 +482,179 @@ public class AuthService(
         var userDto = await BuildUserDtoAsync(user, cancellationToken);
         return (true, userDto, null);
     }
+
+    private static readonly TimeSpan RestDeviceTokenLifetime = TimeSpan.FromDays(30);
+    private static readonly TimeSpan DeviceLastUsedInterval = TimeSpan.FromHours(1);
+    private const int DeviceKeyMaxLength = 64;
+    private const int DeviceNameMaxLength = 200;
+    private const int DeviceOsMaxLength = 128;
+    private const int DeviceVersionMaxLength = 64;
+
+    public async Task<(DeviceTokenIssueStatus Status, IssuedDeviceToken? Token)> IssueDeviceTokenAsync(
+        Guid userId,
+        string? deviceKey,
+        string? name,
+        string? os,
+        string? version,
+        DeviceScope scopes,
+        TimeSpan? lifetime,
+        CancellationToken ct = default)
+    {
+        var normalizedKey = NormalizeDeviceKey(deviceKey);
+
+        AgentDevice? device = null;
+        if (normalizedKey != null)
+        {
+            device = await dbContext.AgentDevices
+                .TagWith(ScopeMarker)
+                .Where(d => d.UserId == userId && d.DeviceKey == normalizedKey && !d.IsRevoked)
+                .OrderByDescending(d => d.CreatedAtUtc)
+                .FirstOrDefaultAsync(ct);
+
+            if (device == null)
+            {
+                // A key that only matches revoked rows must never be silently re-registered:
+                // operator revocation has to survive the next login.
+                var revokedMatch = await dbContext.AgentDevices
+                    .TagWith(ScopeMarker)
+                    .AnyAsync(d => d.UserId == userId && d.DeviceKey == normalizedKey, ct);
+
+                if (revokedMatch)
+                {
+                    return (DeviceTokenIssueStatus.DeviceRevoked, null);
+                }
+            }
+        }
+
+        var rawToken = DeviceTokenHelper.CreateRawToken();
+        var now = DateTime.UtcNow;
+        var effectiveLifetime = lifetime
+            ?? (scopes.HasFlag(DeviceScope.Rest) ? RestDeviceTokenLifetime : null);
+        var expiresAtUtc = effectiveLifetime.HasValue ? now.Add(effectiveLifetime.Value) : (DateTime?)null;
+
+        if (device != null)
+        {
+            // Rotation keeps the row id so collection targets and history stay valid.
+            device.TokenHash = DeviceTokenHelper.ComputeHash(rawToken);
+            device.TokenPrefix = DeviceTokenHelper.Prefix(rawToken);
+            device.Scopes = scopes;
+            device.ExpiresAtUtc = expiresAtUtc;
+        }
+        else
+        {
+            device = new AgentDevice
+            {
+                Name = Truncate(name, DeviceNameMaxLength) ?? "Desktop",
+                DeviceKey = normalizedKey ?? GenerateDeviceKey(),
+                Scopes = scopes,
+                ExpiresAtUtc = expiresAtUtc,
+                CreatedAtUtc = now,
+                TokenHash = DeviceTokenHelper.ComputeHash(rawToken),
+                TokenPrefix = DeviceTokenHelper.Prefix(rawToken),
+                IsRevoked = false,
+                UserId = userId
+            };
+
+            dbContext.AgentDevices.Add(device);
+        }
+
+        var trimmedName = Truncate(name, DeviceNameMaxLength);
+        if (trimmedName != null)
+        {
+            device.Name = trimmedName;
+        }
+
+        var trimmedOs = Truncate(os, DeviceOsMaxLength);
+        if (trimmedOs != null)
+        {
+            device.LastConnectedOs = trimmedOs;
+        }
+
+        var trimmedVersion = Truncate(version, DeviceVersionMaxLength);
+        if (trimmedVersion != null)
+        {
+            device.AgentVersion = trimmedVersion;
+        }
+
+        await dbContext.SaveChangesAsync(ct);
+
+        return (
+            DeviceTokenIssueStatus.Issued,
+            new IssuedDeviceToken(
+                rawToken,
+                device.Id,
+                device.DeviceKey!,
+                expiresAtUtc.HasValue ? ToUtcDateTimeOffset(expiresAtUtc.Value) : null));
+    }
+
+    public async Task<AgentDevice?> ValidateDeviceTokenAsync(
+        string rawToken,
+        DeviceScope requiredScope,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(rawToken))
+        {
+            return null;
+        }
+
+        var tokenHash = DeviceTokenHelper.ComputeHash(rawToken);
+
+        var device = await dbContext.AgentDevices
+            .TagWith(ScopeMarker)
+            .Include(d => d.User)
+            .FirstOrDefaultAsync(d => d.TokenHash == tokenHash, ct);
+
+        if (device == null || device.IsRevoked)
+        {
+            return null;
+        }
+
+        var now = DateTime.UtcNow;
+        if (device.ExpiresAtUtc.HasValue && device.ExpiresAtUtc.Value <= now)
+        {
+            return null;
+        }
+
+        if (!device.Scopes.HasFlag(requiredScope))
+        {
+            return null;
+        }
+
+        // Writing on every request would turn validation into a write hotspot.
+        if (device.LastUsedAtUtc == null || now - device.LastUsedAtUtc.Value >= DeviceLastUsedInterval)
+        {
+            device.LastUsedAtUtc = now;
+            await dbContext.SaveChangesAsync(ct);
+        }
+
+        return device;
+    }
+
+    private static string? NormalizeDeviceKey(string? deviceKey)
+    {
+        if (string.IsNullOrWhiteSpace(deviceKey))
+        {
+            return null;
+        }
+
+        var trimmed = deviceKey.Trim();
+        return trimmed.Length <= DeviceKeyMaxLength ? trimmed : trimmed[..DeviceKeyMaxLength];
+    }
+
+    private static string GenerateDeviceKey() =>
+        Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
+
+    private static string? Truncate(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
+    }
+
+    private static DateTimeOffset ToUtcDateTimeOffset(DateTime value) =>
+        new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
 }

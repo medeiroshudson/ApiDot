@@ -1,8 +1,21 @@
 using ApiDot.Server.Data.Entities;
+using ApiDot.Server.Enums;
 using ApiDot.Server.Models;
 using Microsoft.AspNetCore.Http;
 
 namespace ApiDot.Server.Services;
+
+public enum DeviceTokenIssueStatus
+{
+    Issued,
+    DeviceRevoked
+}
+
+public sealed record IssuedDeviceToken(
+    string RawToken,
+    Guid DeviceId,
+    string DeviceKey,
+    DateTimeOffset? ExpiresAtUtc);
 
 public interface IAuthService
 {
@@ -57,4 +70,28 @@ public interface IAuthService
         string token,
         HttpContext httpContext,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Issues (or rotates) the unified device credential. Reuses the latest non-revoked
+    /// device for <paramref name="deviceKey"/>; a key that only matches a revoked row
+    /// yields <see cref="DeviceTokenIssueStatus.DeviceRevoked"/>.
+    /// </summary>
+    Task<(DeviceTokenIssueStatus Status, IssuedDeviceToken? Token)> IssueDeviceTokenAsync(
+        Guid userId,
+        string? deviceKey,
+        string? name,
+        string? os,
+        string? version,
+        DeviceScope scopes,
+        TimeSpan? lifetime,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Resolves the device behind a raw token. Rejects revoked, expired and
+    /// out-of-scope tokens, and refreshes <c>LastUsedAtUtc</c> at most once per hour.
+    /// </summary>
+    Task<AgentDevice?> ValidateDeviceTokenAsync(
+        string rawToken,
+        DeviceScope requiredScope,
+        CancellationToken ct = default);
 }
