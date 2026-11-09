@@ -94,4 +94,12 @@ public interface IAuthService
         string rawToken,
         DeviceScope requiredScope,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Clears the hash, prefix and expiry of the presented token on logout without
+    /// revoking the device, so the row and its device key stay reusable.
+    /// </summary>
+    Task<bool> ClearDeviceTokenAsync(
+        string rawToken,
+        CancellationToken ct = default);
 }

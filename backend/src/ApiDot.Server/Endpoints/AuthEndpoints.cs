@@ -274,6 +274,32 @@ public static class AuthEndpoints
             return Results.Ok(new { message = "Logged out successfully" });
         });
 
+        group.MapDelete("/device-token", async (
+            HttpContext httpContext,
+            IAuthService authService,
+            CancellationToken ct) =>
+        {
+            // The group is anonymous, so the device scheme is authenticated explicitly
+            // instead of relying on the fallback policy.
+            var result = await httpContext.AuthenticateAsync(DeviceTokenAuthenticationHandler.SchemeName);
+            if (!result.Succeeded)
+            {
+                return Results.Unauthorized();
+            }
+
+            var rawToken = DeviceTokenAuthenticationHandler.ExtractBearerToken(
+                httpContext.Request.Headers.Authorization.ToString());
+
+            if (string.IsNullOrWhiteSpace(rawToken))
+            {
+                return Results.Unauthorized();
+            }
+
+            // Idempotent: clearing an already cleared token still returns 204.
+            await authService.ClearDeviceTokenAsync(rawToken, ct);
+            return Results.NoContent();
+        });
+
         return app;
     }
 

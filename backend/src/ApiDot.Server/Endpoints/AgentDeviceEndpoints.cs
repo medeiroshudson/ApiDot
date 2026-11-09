@@ -1,5 +1,6 @@
 using ApiDot.Server.Data;
 using ApiDot.Server.Data.Entities;
+using ApiDot.Server.Enums;
 using ApiDot.Server.Models;
 using ApiDot.Server.Security;
 using DeviceTokenHelper = ApiDot.Server.Models.DeviceTokenHelper;
@@ -124,6 +125,10 @@ public static class AgentDeviceEndpoints
                 TokenPrefix = tokenPrefix,
                 CreatedAtUtc = DateTime.UtcNow,
                 IsRevoked = false,
+                // Headless devices issued here are agent-only and never expire; the
+                // desktop credential is created by the login endpoints instead.
+                Scopes = DeviceScope.Ws,
+                ExpiresAtUtc = null,
                 UserId = assignedUserId
             };
 

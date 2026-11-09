@@ -630,6 +630,36 @@ public class AuthService(
         return device;
     }
 
+    public async Task<bool> ClearDeviceTokenAsync(
+        string rawToken,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(rawToken))
+        {
+            return false;
+        }
+
+        var tokenHash = DeviceTokenHelper.ComputeHash(rawToken);
+
+        var device = await dbContext.AgentDevices
+            .TagWith(ScopeMarker)
+            .FirstOrDefaultAsync(d => d.TokenHash == tokenHash, ct);
+
+        if (device == null)
+        {
+            return false;
+        }
+
+        // Logout is not revocation: the row survives so collection targets and history
+        // keep referencing it, and the next login with the same key can reuse it.
+        device.TokenHash = string.Empty;
+        device.TokenPrefix = string.Empty;
+        device.ExpiresAtUtc = null;
+
+        await dbContext.SaveChangesAsync(ct);
+        return true;
+    }
+
     private static string? NormalizeDeviceKey(string? deviceKey)
     {
         if (string.IsNullOrWhiteSpace(deviceKey))
