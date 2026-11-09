@@ -7,6 +7,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { isDesktop } from '@/lib/desktop/runtime';
 import { toHash } from '@/lib/routing/route';
 import { startDesktopSsoFlow } from '@/lib/desktop/desktopAuth';
+import { apiUrl } from '@/lib/api/base';
 import { LogIn, Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
 import ApiDotLogo from '@assets/api-dot-white.svg';
 
@@ -233,12 +234,12 @@ export default function LoginPage() {
               </button>
             ) : (
               <a
-                href={`/api/auth/login${getReturnUrl() !== '/' ? `?returnUrl=${encodeURIComponent(getReturnUrl())}` : ''}`}
+                href={apiUrl(`/api/auth/login${getReturnUrl() !== '/' ? `?returnUrl=${encodeURIComponent(getReturnUrl())}` : ''}`)}
                 role="button"
                 onKeyDown={(e) => {
                   if (e.key === ' ' || e.key === 'Spacebar') {
                     e.preventDefault();
-                    window.location.href = `/api/auth/login${getReturnUrl() !== '/' ? `?returnUrl=${encodeURIComponent(getReturnUrl())}` : ''}`;
+                    window.location.href = apiUrl(`/api/auth/login${getReturnUrl() !== '/' ? `?returnUrl=${encodeURIComponent(getReturnUrl())}` : ''}`);
                   }
                 }}
                 aria-label={t('auth.ssoSignIn')}

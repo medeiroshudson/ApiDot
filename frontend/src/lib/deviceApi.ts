@@ -1,3 +1,5 @@
+import { apiFetch } from '@/lib/api/client';
+
 export interface AgentDeviceDto {
   id: string;
   name: string;
@@ -62,17 +64,17 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export async function fetchDevices(): Promise<AgentDeviceDto[]> {
-  const res = await fetch('/api/agent/devices');
+  const res = await apiFetch('/api/agent/devices');
   return handleResponse<AgentDeviceDto[]>(res);
 }
 
 export async function getDevice(id: string): Promise<AgentDeviceDto> {
-  const res = await fetch(`/api/agent/devices/${encodeURIComponent(id)}`);
+  const res = await apiFetch(`/api/agent/devices/${encodeURIComponent(id)}`);
   return handleResponse<AgentDeviceDto>(res);
 }
 
 export async function createDevice(name: string): Promise<CreateAgentDeviceResponse> {
-  const res = await fetch('/api/agent/devices', {
+  const res = await apiFetch('/api/agent/devices', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
@@ -81,14 +83,14 @@ export async function createDevice(name: string): Promise<CreateAgentDeviceRespo
 }
 
 export async function revokeDevice(id: string): Promise<AgentDeviceDto> {
-  const res = await fetch(`/api/agent/devices/${encodeURIComponent(id)}/revoke`, {
+  const res = await apiFetch(`/api/agent/devices/${encodeURIComponent(id)}/revoke`, {
     method: 'POST',
   });
   return handleResponse<AgentDeviceDto>(res);
 }
 
 export async function regenerateToken(id: string): Promise<RegenerateDeviceTokenResponse> {
-  const res = await fetch(`/api/agent/devices/${encodeURIComponent(id)}/regenerate-token`, {
+  const res = await apiFetch(`/api/agent/devices/${encodeURIComponent(id)}/regenerate-token`, {
     method: 'POST',
   });
   return handleResponse<RegenerateDeviceTokenResponse>(res);

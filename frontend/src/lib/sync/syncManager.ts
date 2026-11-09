@@ -5,6 +5,8 @@ import {
   PendingMutation,
   StorageAdapters,
 } from '@/lib/storage/offlineStorage';
+import { apiUrl, getApiBase, normalizeApiBase } from '@/lib/api/base';
+import { apiFetch } from '@/lib/api/client';
 
 export interface SyncConflict {
   id: string;
@@ -76,17 +78,25 @@ export async function processSyncQueue(
     };
   }
 
-  const baseUrl = options?.baseUrl ? options.baseUrl.replace(/\/+$/, '') : '';
-  const url = `${baseUrl}/api/sync/batch`;
+  const baseUrl =
+    options?.baseUrl !== undefined ? normalizeApiBase(options.baseUrl) : undefined;
+  const path = '/api/sync/batch';
+  // An explicit baseUrl keeps precedence over the runtime base. Without one the
+  // URL goes through apiUrl so the configured server origin applies.
+  const url = baseUrl !== undefined ? `${baseUrl}${path}` : apiUrl(path);
+  const useApiFetch = options?.fetchFn === undefined && baseUrl === undefined;
 
   try {
-    const response = await fetchImpl(url, {
+    const requestInit: RequestInit = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ mutations }),
-    });
+    };
+    const response = useApiFetch
+      ? await apiFetch(path, requestInit)
+      : await fetchImpl(url, requestInit);
 
     if (!response.ok) {
       let errorMessage = `Sync batch failed with HTTP ${response.status}`;
@@ -246,7 +256,8 @@ export function startSyncListener(options?: SyncOptions): () => void {
       if (options.checkHealth) {
         const fetchImpl =
           options.fetchFn || (typeof fetch !== 'undefined' ? fetch : globalThis.fetch);
-        const baseUrl = options.baseUrl ? options.baseUrl.replace(/\/+$/, '') : '';
+        const baseUrl =
+          options.baseUrl !== undefined ? normalizeApiBase(options.baseUrl) : getApiBase();
         try {
           const res = await fetchImpl(`${baseUrl}/health`);
           if (res.ok) {

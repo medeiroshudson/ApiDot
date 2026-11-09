@@ -23,6 +23,7 @@ import { WorkspaceModal } from '@/components/workspace/WorkspaceModal';
 import { GlobalSettingsModal } from '@/components/settings/GlobalSettingsModal';
 import { CurlImportModal } from '@/components/request/CurlImportModal';
 import { ParsedCurlRequest } from '@/lib/curl/curlParser';
+import { apiFetch } from '@/lib/api/client';
 import { generateCurlCommand } from '@/lib/curl/curlGenerator';
 import { interpolateVariables } from '@/lib/variables';
 import {
@@ -498,7 +499,7 @@ function WorkspaceShellContent({
   ) => {
     setSyncingCollectionId(item.id);
     try {
-      const res = await fetch(`/api/collections/${encodeURIComponent(item.id)}/sync`, {
+      const res = await apiFetch(`/api/collections/${encodeURIComponent(item.id)}/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -570,7 +571,7 @@ function WorkspaceShellContent({
     }
 
     if (data.specUrl !== undefined || data.specContent !== undefined) {
-      const res = await fetch(`/api/collections/${encodeURIComponent(editingCollection.id)}/openapi`, {
+      const res = await apiFetch(`/api/collections/${encodeURIComponent(editingCollection.id)}/openapi`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

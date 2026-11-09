@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { ApiBaseBootstrap } from '@/components/api/ApiBaseBootstrap';
 import { DeepLinkBridge } from '@/components/desktop/DeepLinkBridge';
 import './globals.css';
 
@@ -16,6 +17,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className="min-h-screen bg-neutral-950 text-neutral-100 antialiased font-sans">
         {children}
+        <ApiBaseBootstrap />
         <DeepLinkBridge />
       </body>
     </html>

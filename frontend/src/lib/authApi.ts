@@ -1,3 +1,5 @@
+import { apiFetch } from '@/lib/api/client';
+
 export interface AuthConfig {
   oidcEnabled: boolean;
   localAuthEnabled: boolean;
@@ -53,12 +55,12 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export async function getAuthConfig(): Promise<AuthConfig> {
-  const res = await fetch('/api/auth/config');
+  const res = await apiFetch('/api/auth/config');
   return handleResponse<AuthConfig>(res);
 }
 
 export async function loginLocal(email: string, password: string): Promise<AuthUser> {
-  const res = await fetch('/api/auth/local', {
+  const res = await apiFetch('/api/auth/local', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -67,7 +69,7 @@ export async function loginLocal(email: string, password: string): Promise<AuthU
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
-  const res = await fetch('/api/auth/me');
+  const res = await apiFetch('/api/auth/me');
   if (res.status === 401) {
     return null;
   }
@@ -75,14 +77,14 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 }
 
 export async function logout(): Promise<void> {
-  const res = await fetch('/api/auth/logout', {
+  const res = await apiFetch('/api/auth/logout', {
     method: 'POST',
   });
   await handleResponse<{ message?: string }>(res);
 }
 
 export async function patchUserLocale(locale: string): Promise<void> {
-  const res = await fetch('/api/auth/me/locale', {
+  const res = await apiFetch('/api/auth/me/locale', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ locale }),
