@@ -37,9 +37,15 @@ function loadRootDotEnv() {
 
 loadRootDotEnv();
 
+// The desktop bundle ships the Next app as static files (no Node server).
+// Set NEXT_DESKTOP_EXPORT=1 to emit a trimmed static export; the default
+// remains the standalone server build used by Docker and local development.
+const isDesktopExport = process.env.NEXT_DESKTOP_EXPORT === '1';
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  output: 'standalone',
+  output: isDesktopExport ? 'export' : 'standalone',
+  ...(isDesktopExport ? { images: { unoptimized: true } } : {}),
   reactCompiler: true,
   turbopack: {
     root: path.resolve(__dirname, '..'),
@@ -58,6 +64,12 @@ const nextConfig: NextConfig = {
     return config;
   },
   async rewrites() {
+    // Static export has no server to apply rewrites; the desktop shell talks to
+    // the agent over its own transport instead of /api proxies.
+    if (isDesktopExport) {
+      return [];
+    }
+
     return [
       {
         source: '/api/:path*',

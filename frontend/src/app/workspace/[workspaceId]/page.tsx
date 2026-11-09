@@ -6,8 +6,14 @@ export interface WorkspacePageRouteProps {
 }
 
 export function generateStaticParams() {
-  // The desktop build exports only the static routes and renders the shell from
-  // the hash; the web build resolves params at runtime.
+  if (process.env.NEXT_DESKTOP_EXPORT === '1') {
+    // Static export requires at least one generated path per dynamic route. The
+    // desktop shell never loads these HTML files (it renders from the URL hash),
+    // so one placeholder path keeps the export valid.
+    return [{ workspaceId: '_' }];
+  }
+
+  // The web build resolves params at runtime.
   return [];
 }
 
