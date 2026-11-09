@@ -8,6 +8,7 @@ import {
 } from './session';
 import { getAccessToken, setAccessToken } from './authToken';
 import { saveDesktopSession } from '@/lib/desktop/session';
+import { connectSidecar } from '@/lib/desktop/sidecarConnection';
 
 vi.mock('@/lib/desktop/session', () => ({
   loadDesktopSession: vi.fn().mockResolvedValue(null),
@@ -15,9 +16,16 @@ vi.mock('@/lib/desktop/session', () => ({
   clearDesktopSession: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/lib/desktop/sidecarConnection', () => ({
+  connectSidecar: vi.fn().mockResolvedValue(true),
+  disconnectSidecar: vi.fn().mockResolvedValue(true),
+}));
+
 describe('api/session', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.mocked(connectSidecar).mockClear();
+    vi.mocked(connectSidecar).mockResolvedValue(true);
     setSession(null);
     setAccessToken(null);
     delete (window as any).__TAURI__;
@@ -92,6 +100,7 @@ describe('api/session', () => {
     expect(getSession()).toBeNull();
     expect(getAccessToken()).toBeNull();
     expect(save).not.toHaveBeenCalled();
+    expect(connectSidecar).not.toHaveBeenCalled();
   });
 
   it('persists the four credential headers in the desktop app', async () => {
@@ -123,6 +132,43 @@ describe('api/session', () => {
     });
     expect(getAccessToken()).toBe('tok-1');
     expect(save).toHaveBeenCalledWith(session);
+    expect(connectSidecar).toHaveBeenCalledWith('https://api.example.com', 'tok-1');
+  });
+
+  it('skips the sidecar connection when no server URL is known', async () => {
+    (window as any).__TAURI__ = {};
+
+    const session = await persistDeviceCredential({
+      headers: new Headers({
+        'X-Desktop-Access-Token': 'tok-1',
+        'X-Desktop-Device-Id': 'dev-1',
+      }),
+    } as Response);
+
+    expect(session).toMatchObject({ accessToken: 'tok-1' });
+    expect(getAccessToken()).toBe('tok-1');
+    expect(connectSidecar).not.toHaveBeenCalled();
+  });
+
+  it('does not fail the login when /connect fails', async () => {
+    (window as any).__TAURI__ = {};
+    vi.mocked(connectSidecar).mockResolvedValueOnce(false);
+
+    const response = {
+      headers: new Headers({
+        'X-Desktop-Access-Token': 'tok-1',
+        'X-Desktop-Device-Id': 'dev-1',
+      }),
+    } as Response;
+
+    const session = await persistDeviceCredential(response, {
+      serverUrl: 'https://api.example.com',
+    });
+
+    expect(connectSidecar).toHaveBeenCalledWith('https://api.example.com', 'tok-1');
+    expect(session).toMatchObject({ accessToken: 'tok-1' });
+    expect(getAccessToken()).toBe('tok-1');
+    expect(getSession()).toMatchObject({ serverUrl: 'https://api.example.com' });
   });
 
   it('ignores a desktop response without a token header', async () => {

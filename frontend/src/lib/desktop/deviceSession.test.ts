@@ -4,7 +4,7 @@ import { revokeDeviceToken } from '@/lib/authApi';
 import { setAccessToken } from '@/lib/api/authToken';
 import { clearSessionMemory } from '@/lib/api/session';
 import { clearDesktopSession } from './session';
-import { disconnectSidecar } from './sidecarConnection';
+import { connectSidecar, disconnectSidecar } from './sidecarConnection';
 
 vi.mock('@/lib/authApi', () => ({
   revokeDeviceToken: vi.fn(),
@@ -60,6 +60,7 @@ describe('desktop/deviceSession', () => {
     expect(order(vi.mocked(clearSessionMemory))).toBeLessThan(
       order(vi.mocked(clearDesktopSession))
     );
+    expect(connectSidecar).not.toHaveBeenCalled();
   });
 
   it('skips revocation without a token but still disconnects and clears', async () => {
@@ -92,5 +93,6 @@ describe('desktop/deviceSession', () => {
     expect(clearSessionMemory).toHaveBeenCalledTimes(1);
     expect(clearDesktopSession).toHaveBeenCalledTimes(1);
     expect(disconnectSidecar).toHaveBeenCalledTimes(1);
+    expect(connectSidecar).not.toHaveBeenCalled();
   });
 });

@@ -9,6 +9,7 @@
 
 import { isDesktop } from '@/lib/desktop/runtime';
 import { saveDesktopSession } from '@/lib/desktop/session';
+import { connectSidecar } from '@/lib/desktop/sidecarConnection';
 import { setAccessToken } from './authToken';
 
 export interface DesktopSession {
@@ -84,6 +85,11 @@ export interface PersistDeviceCredentialOptions {
  * `X-Desktop-*` headers and the session stays empty. In the desktop app the
  * four headers are merged into the in-memory session, the bearer token is
  * applied to the API client and the session is written to disk.
+ *
+ * A fresh login also opens the sidecar WebSocket: without this the machine only
+ * becomes a dispatch target on the next boot. The connection is awaited after
+ * the session is saved and its failure is non-fatal (`connectSidecar` logs and
+ * resolves `false`), so a sidecar that is not ready never breaks the login.
  */
 export async function persistDeviceCredential(
   response: Response,
@@ -116,6 +122,10 @@ export async function persistDeviceCredential(
 
   if (next) {
     await saveDesktopSession(next);
+
+    if (next.serverUrl) {
+      await connectSidecar(next.serverUrl, token);
+    }
   }
 
   return next;
