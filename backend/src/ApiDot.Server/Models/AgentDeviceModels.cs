@@ -16,6 +16,9 @@ public class AgentDeviceDto
     public string? AgentVersion { get; set; }
     public bool IsRevoked { get; set; }
     public bool IsOnline { get; set; }
+
+    /// <summary>Numeric device scope flags: bit 1 = ws, bit 2 = rest.</summary>
+    public int Scopes { get; set; }
 }
 
 public class CreateAgentDeviceRequest
@@ -88,6 +91,7 @@ public static class AgentDeviceMappingExtensions
             LastConnectedOs = entity.LastConnectedOs,
             AgentVersion = entity.AgentVersion,
             IsRevoked = entity.IsRevoked,
-            IsOnline = isOnline
+            IsOnline = isOnline,
+            Scopes = (int)entity.Scopes
         };
 }
