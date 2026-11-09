@@ -27,12 +27,14 @@ pub struct DesktopSession {
 
 /// Returns the session file path (`~/.apidot/session.json` by default).
 ///
-/// Supports the `APIDOT_SESSION_PATH` environment variable so tests never
-/// touch the real user profile.
+/// `APIDOT_SESSION_PATH` is honoured only in debug builds, so tests never touch
+/// the real user profile while a release build can never be redirected outside it.
 fn session_file_path() -> PathBuf {
-    if let Ok(custom_path) = std::env::var(SESSION_PATH_ENV) {
-        if !custom_path.trim().is_empty() {
-            return PathBuf::from(custom_path);
+    if cfg!(debug_assertions) {
+        if let Ok(custom_path) = std::env::var(SESSION_PATH_ENV) {
+            if !custom_path.trim().is_empty() {
+                return PathBuf::from(custom_path);
+            }
         }
     }
 
