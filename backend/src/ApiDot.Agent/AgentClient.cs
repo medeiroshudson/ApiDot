@@ -24,11 +24,28 @@ public class AgentClient : IDisposable
     private readonly Lazy<SocketsHttpHandler> _defaultHandler;
     private readonly Lazy<SocketsHttpHandler> _insecureHandler;
     private bool _disposed;
+    private volatile bool _isUnauthorized;
+    private string? _lastConnectionError;
 
     public string ServerUrl { get; }
     public string Token { get; }
     public string AgentName { get; }
     public bool IgnoreSsl { get; }
+
+    /// <summary>
+    /// True once the hub closed the connection with <see cref="WebSocketCloseStatus.PolicyViolation"/>,
+    /// which means the device token is unknown, revoked, expired or missing the required scope.
+    /// </summary>
+    public bool IsUnauthorized => _isUnauthorized;
+
+    /// <summary>Last connection error observed, or the close reason for a terminal rejection.</summary>
+    public string? LastConnectionError => Volatile.Read(ref _lastConnectionError);
+
+    /// <summary>Test seam that replaces the real connect step and returns a ready socket.</summary>
+    internal Func<Uri, CancellationToken, Task<WebSocket>>? WebSocketConnector { get; set; }
+
+    /// <summary>Delay between reconnect attempts. Overridable so retry tests stay fast.</summary>
+    internal TimeSpan ReconnectDelay { get; set; } = TimeSpan.FromSeconds(3);
 
     public AgentClient(
         string serverUrl,
@@ -210,20 +227,53 @@ public class AgentClient : IDisposable
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            using var clientWebSocket = new ClientWebSocket();
-            // The Authorization header is the only channel used to send the token;
-            // query strings leak into logs through the URL.
-            clientWebSocket.Options.SetRequestHeader("Authorization", $"Bearer {Token}");
-            if (IgnoreSsl)
-            {
-                clientWebSocket.Options.RemoteCertificateValidationCallback = delegate { return true; };
-            }
-
+            WebSocket clientWebSocket;
             try
             {
-                Console.WriteLine($"Connecting to {hubUri.GetLeftPart(UriPartial.Path)} as '{AgentName}'...");
-                await clientWebSocket.ConnectAsync(hubUri, cancellationToken);
+                if (WebSocketConnector is { } connector)
+                {
+                    clientWebSocket = await connector(hubUri, cancellationToken);
+                }
+                else
+                {
+                    var concreteSocket = new ClientWebSocket();
+                    // The Authorization header is the only channel used to send the token;
+                    // query strings leak into logs through the URL.
+                    concreteSocket.Options.SetRequestHeader("Authorization", $"Bearer {Token}");
+                    if (IgnoreSsl)
+                    {
+                        concreteSocket.Options.RemoteCertificateValidationCallback = delegate { return true; };
+                    }
+
+                    Console.WriteLine($"Connecting to {hubUri.GetLeftPart(UriPartial.Path)} as '{AgentName}'...");
+                    await concreteSocket.ConnectAsync(hubUri, cancellationToken);
+                    clientWebSocket = concreteSocket;
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                Volatile.Write(ref _lastConnectionError, ex.Message);
+                Console.Error.WriteLine($"Connection error: {ex.Message}. Reconnecting in {ReconnectDelay.TotalSeconds:0.#} seconds...");
+                try
+                {
+                    await Task.Delay(ReconnectDelay, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                continue;
+            }
+
+            using (clientWebSocket)
+            try
+            {
                 Console.WriteLine("Connected to hub. Waiting for dispatches...");
+                Volatile.Write(ref _lastConnectionError, null);
 
                 var buffer = new byte[1024 * 64];
                 using var ms = new MemoryStream();
@@ -237,6 +287,20 @@ public class AgentClient : IDisposable
                         result = await clientWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
+                            var closeStatus = result.CloseStatus ?? clientWebSocket.CloseStatus;
+                            var closeDescription = result.CloseStatusDescription ?? clientWebSocket.CloseStatusDescription;
+                            if (closeStatus == WebSocketCloseStatus.PolicyViolation)
+                            {
+                                // Unknown, revoked, expired or wrong-scope device token:
+                                // retrying cannot succeed, so stop the loop.
+                                _isUnauthorized = true;
+                                Volatile.Write(
+                                    ref _lastConnectionError,
+                                    string.IsNullOrWhiteSpace(closeDescription)
+                                        ? "The server rejected the device token."
+                                        : closeDescription);
+                            }
+
                             await _sendLock.WaitAsync(cancellationToken);
                             try
                             {
@@ -271,6 +335,12 @@ public class AgentClient : IDisposable
                         }
                     }
                 }
+
+                if (_isUnauthorized)
+                {
+                    Console.Error.WriteLine($"Device token rejected by the hub: {LastConnectionError}");
+                    break;
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -278,10 +348,18 @@ public class AgentClient : IDisposable
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Connection error: {ex.Message}. Reconnecting in 3 seconds...");
+                if (_isUnauthorized)
+                {
+                    // The close frame was a terminal rejection; a failed close handshake
+                    // must not turn it back into a reconnect loop.
+                    break;
+                }
+
+                Volatile.Write(ref _lastConnectionError, ex.Message);
+                Console.Error.WriteLine($"Connection error: {ex.Message}. Reconnecting in {ReconnectDelay.TotalSeconds:0.#} seconds...");
                 try
                 {
-                    await Task.Delay(3000, cancellationToken);
+                    await Task.Delay(ReconnectDelay, cancellationToken);
                 }
                 catch (OperationCanceledException)
                 {

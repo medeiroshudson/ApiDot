@@ -14,6 +14,205 @@ using Microsoft.Extensions.Hosting;
 
 namespace ApiDot.Agent.Commands;
 
+public sealed record SidecarConnectRequest(string? ServerUrl = null, string? Token = null);
+
+public sealed record SidecarAgentStatusDto(
+    bool Connected,
+    string? ServerUrl,
+    string? DeviceName,
+    string? LastConnectionError,
+    bool Unauthorized);
+
+/// <summary>
+/// Owns the single outbound hub connection used by the sidecar. The CLI auto-connect
+/// path and the <c>/connect</c>, <c>/disconnect</c> and <c>/agent-status</c> endpoints
+/// share this manager so a second connect replaces the first instead of stacking clients.
+/// The device token only lives in memory for the lifetime of the connection.
+/// </summary>
+public sealed class SidecarConnectionManager
+{
+    private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(2);
+
+    private readonly object _gate = new();
+    private CancellationTokenSource? _cts;
+    private Task? _task;
+    private string? _serverUrl;
+    private string? _deviceName;
+    private bool _isConnected;
+    private bool _isUnauthorized;
+    private string? _lastError;
+
+    public async Task ConnectAsync(string serverUrl, string token, string? agentName, bool ignoreSsl)
+    {
+        // A second connect must not leave the previous client running.
+        await StopAsync().ConfigureAwait(false);
+
+        var cts = new CancellationTokenSource();
+        var deviceName = string.IsNullOrWhiteSpace(agentName) ? Environment.MachineName : agentName;
+        var options = new AgentCliOptions
+        {
+            Command = AgentCommandType.Sidecar,
+            ServerUrl = serverUrl,
+            Token = token,
+            AgentName = agentName,
+            IgnoreSsl = ignoreSsl
+        };
+
+        lock (_gate)
+        {
+            _cts = cts;
+            _serverUrl = serverUrl;
+            _deviceName = deviceName;
+            _isConnected = true;
+            _isUnauthorized = false;
+            _lastError = null;
+        }
+
+        var starter = SidecarCommand.WebSocketStarter;
+        var task = Task.Run(() => starter is null
+            ? RunClientAsync(serverUrl, token, agentName, ignoreSsl, cts)
+            : RunStarterAsync(starter, options, cts));
+
+        lock (_gate)
+        {
+            if (ReferenceEquals(_cts, cts))
+            {
+                _task = task;
+            }
+        }
+    }
+
+    public Task DisconnectAsync() => StopAsync();
+
+    public async Task StopAsync()
+    {
+        CancellationTokenSource? cts;
+        Task? task;
+
+        lock (_gate)
+        {
+            cts = _cts;
+            task = _task;
+            _cts = null;
+            _task = null;
+            _isConnected = false;
+            _serverUrl = null;
+            _deviceName = null;
+        }
+
+        if (cts is null)
+        {
+            return;
+        }
+
+        cts.Cancel();
+
+        var completed = task is null || task.IsCompleted;
+        if (task is not null && !completed)
+        {
+            completed = await Task.WhenAny(task, Task.Delay(StopTimeout)).ConfigureAwait(false) == task;
+        }
+
+        if (completed)
+        {
+            cts.Dispose();
+        }
+    }
+
+    public SidecarAgentStatusDto GetStatus()
+    {
+        lock (_gate)
+        {
+            return new SidecarAgentStatusDto(_isConnected, _serverUrl, _deviceName, _lastError, _isUnauthorized);
+        }
+    }
+
+    private async Task RunStarterAsync(
+        Func<AgentCliOptions, CancellationToken, Task> starter,
+        AgentCliOptions options,
+        CancellationTokenSource cts)
+    {
+        try
+        {
+            await starter(options, cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            // Expected on disconnect or replacement.
+        }
+        catch (Exception ex)
+        {
+            RecordError(cts, ex.Message);
+        }
+        finally
+        {
+            MarkStopped(cts);
+        }
+    }
+
+    private async Task RunClientAsync(
+        string serverUrl,
+        string token,
+        string? agentName,
+        bool ignoreSsl,
+        CancellationTokenSource cts)
+    {
+        var client = new AgentClient(serverUrl, token, agentName, ignoreSsl);
+        try
+        {
+            await client.StartAsync(cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            // Expected on disconnect or replacement.
+        }
+        catch (Exception ex)
+        {
+            RecordError(cts, ex.Message);
+        }
+        finally
+        {
+            if (client.IsUnauthorized)
+            {
+                lock (_gate)
+                {
+                    // Ignore a late terminal report from a connection that was already replaced.
+                    if (ReferenceEquals(_cts, cts))
+                    {
+                        _isUnauthorized = true;
+                        _lastError = client.LastConnectionError ?? "The server rejected the device token.";
+                    }
+                }
+            }
+
+            client.Dispose();
+            MarkStopped(cts);
+        }
+    }
+
+    private void RecordError(CancellationTokenSource cts, string message)
+    {
+        lock (_gate)
+        {
+            if (ReferenceEquals(_cts, cts))
+            {
+                _lastError = message;
+            }
+        }
+    }
+
+    private void MarkStopped(CancellationTokenSource cts)
+    {
+        lock (_gate)
+        {
+            if (ReferenceEquals(_cts, cts))
+            {
+                _isConnected = false;
+            }
+        }
+    }
+}
+
 public static class SidecarCommand
 {
     public const string SecretHeaderName = "X-ApiDot-Sidecar-Secret";
@@ -104,7 +303,8 @@ public static class SidecarCommand
         string? secret,
         bool defaultIgnoreSsl = false,
         string[]? builderArgs = null,
-        string? serverUrl = null)
+        string? serverUrl = null,
+        SidecarConnectionManager? connectionManager = null)
     {
         var builder = WebApplication.CreateSlimBuilder(builderArgs ?? []);
 
@@ -117,6 +317,7 @@ public static class SidecarCommand
 
         var app = builder.Build();
         var sessionState = new SidecarSessionState();
+        connectionManager ??= new SidecarConnectionManager();
         var allowedOrigins = ParseAllowedOrigins(app.Configuration["APIDOT_DESKTOP_ORIGINS"]);
 
         app.Use(async (context, next) =>
@@ -143,7 +344,10 @@ public static class SidecarCommand
 
             var requiresSecret = context.Request.Path.StartsWithSegments("/execute")
                 || context.Request.Path.StartsWithSegments("/auth/session")
-                || context.Request.Path.StartsWithSegments("/auth/state");
+                || context.Request.Path.StartsWithSegments("/auth/state")
+                || context.Request.Path.StartsWithSegments("/connect")
+                || context.Request.Path.StartsWithSegments("/disconnect")
+                || context.Request.Path.StartsWithSegments("/agent-status");
 
             if (requiresSecret)
             {
@@ -224,6 +428,28 @@ public static class SidecarCommand
             return Results.Ok(payload);
         });
 
+        app.MapPost("/connect", async (SidecarConnectRequest request) =>
+        {
+            if (request == null
+                || !Uri.TryCreate(request.ServerUrl, UriKind.Absolute, out var serverUri)
+                || (serverUri.Scheme != Uri.UriSchemeHttp && serverUri.Scheme != Uri.UriSchemeHttps)
+                || string.IsNullOrWhiteSpace(request.Token))
+            {
+                return Results.BadRequest();
+            }
+
+            await connectionManager.ConnectAsync(request.ServerUrl!, request.Token, agentName: null, defaultIgnoreSsl);
+            return Results.NoContent();
+        });
+
+        app.MapPost("/disconnect", async () =>
+        {
+            await connectionManager.DisconnectAsync();
+            return Results.NoContent();
+        });
+
+        app.MapGet("/agent-status", () => Results.Ok(connectionManager.GetStatus()));
+
         return app;
     }
 
@@ -249,7 +475,13 @@ public static class SidecarCommand
                 secret = Guid.NewGuid().ToString("N");
             }
 
-            await using var app = BuildWebApplication(options.Port, secret, options.IgnoreSsl, serverUrl: options.ServerUrl);
+            var connectionManager = new SidecarConnectionManager();
+            await using var app = BuildWebApplication(
+                options.Port,
+                secret,
+                options.IgnoreSsl,
+                serverUrl: options.ServerUrl,
+                connectionManager: connectionManager);
             await app.StartAsync(cancellationToken);
 
             var actualPort = GetBoundPort(app);
@@ -276,33 +508,23 @@ public static class SidecarCommand
                 else
                 {
                     Console.WriteLine("Starting background WebSocket connection to hub...");
-                    if (WebSocketStarter != null)
-                    {
-                        _ = WebSocketStarter(options, cancellationToken);
-                    }
-                    else
-                    {
-                        _ = Task.Run(async () =>
-                        {
-                            try
-                            {
-                                using var client = new AgentClient(options.ServerUrl, options.Token, options.AgentName, options.IgnoreSsl);
-                                await client.StartAsync(cancellationToken);
-                            }
-                            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                            {
-                                // Normal shutdown
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.Error.WriteLine($"WebSocket client background error: {ex.Message}");
-                            }
-                        }, cancellationToken);
-                    }
+                    await connectionManager.ConnectAsync(
+                        options.ServerUrl,
+                        options.Token,
+                        options.AgentName,
+                        options.IgnoreSsl);
                 }
             }
 
-            await app.WaitForShutdownAsync(cancellationToken);
+            try
+            {
+                await app.WaitForShutdownAsync(cancellationToken);
+            }
+            finally
+            {
+                await connectionManager.StopAsync();
+            }
+
             return 0;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
