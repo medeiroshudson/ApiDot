@@ -2,6 +2,7 @@ using System.Net.WebSockets;
 using System.Text.Json;
 using ApiDot.Core.Models;
 using ApiDot.Server.Data;
+using ApiDot.Server.Enums;
 using ApiDot.Server.Models;
 using ApiDot.Server.WebSockets;
 using Microsoft.AspNetCore.Http;
@@ -118,7 +119,14 @@ public class AgentWebSocketHandler : IAgentWebSocketHandler
             var device = await db.AgentDevices
                 .FirstOrDefaultAsync(d => d.TokenHash == tokenHash, effectiveToken);
 
-            if (device is null || device.IsRevoked)
+            // The same credential drives the REST UI, so only tokens granted the ws scope
+            // (and still inside their lifetime) may open the agent channel.
+            var isExpired = device?.ExpiresAtUtc is { } expiresAt && expiresAt <= DateTime.UtcNow;
+
+            if (device is null
+                || device.IsRevoked
+                || isExpired
+                || !device.Scopes.HasFlag(DeviceScope.Ws))
             {
                 using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
                 using var rejectedSocket = await context.WebSockets.AcceptWebSocketAsync();
