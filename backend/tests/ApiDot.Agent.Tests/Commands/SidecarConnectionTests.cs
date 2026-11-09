@@ -11,9 +11,25 @@ using Xunit;
 namespace ApiDot.Agent.Tests.Commands;
 
 [Collection("SidecarConnectionTests")]
-public class SidecarConnectionTests
+public class SidecarConnectionTests : IDisposable
 {
     private const string Secret = "secret-123";
+
+    private readonly Func<bool> _originalServiceCheck;
+
+    public SidecarConnectionTests()
+    {
+        // The endpoint consults the real service state, which is installed on some
+        // developer machines. Keep the connection tests hermetic and let the
+        // service-active case opt in explicitly.
+        _originalServiceCheck = SidecarCommand.IsServiceActiveCheck;
+        SidecarCommand.IsServiceActiveCheck = () => false;
+    }
+
+    public void Dispose()
+    {
+        SidecarCommand.IsServiceActiveCheck = _originalServiceCheck;
+    }
 
     private sealed class StarterRecorder
     {
@@ -136,6 +152,36 @@ public class SidecarConnectionTests
             SidecarCommand.WebSocketStarter = null;
         }
     }
+
+    [Fact]
+    public async Task Connect_WhenTheServiceIsActive_DoesNotStartASecondConnection()
+    {
+        var recorder = new StarterRecorder();
+        SidecarCommand.WebSocketStarter = recorder.RunAsync;
+        var originalCheck = SidecarCommand.IsServiceActiveCheck;
+        SidecarCommand.IsServiceActiveCheck = () => true;
+
+        try
+        {
+            await using var host = await StartedSidecar.StartAsync();
+
+            var response = await ConnectAsync(host.Client, "https://hub.example.com", "token-123");
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            var payload = await response.Content.ReadFromJsonAsync<ServiceActiveResponse>();
+            payload.Should().NotBeNull();
+            payload!.Connected.Should().BeFalse();
+            payload.Reason.Should().Be("service-active");
+            recorder.Starts.Should().Be(0);
+        }
+        finally
+        {
+            SidecarCommand.IsServiceActiveCheck = originalCheck;
+            SidecarCommand.WebSocketStarter = null;
+        }
+    }
+
+    private sealed record ServiceActiveResponse(bool Connected, string Reason);
 
     [Fact]
     public async Task Connect_Twice_ReplacesTheFirstConnection()

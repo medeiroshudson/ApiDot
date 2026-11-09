@@ -438,6 +438,13 @@ public static class SidecarCommand
                 return Results.BadRequest();
             }
 
+            // The system service already owns this machine's agent connection. Opening a
+            // second WebSocket from the sidecar would duplicate the dispatch channel.
+            if (IsServiceActiveCheck())
+            {
+                return Results.Ok(new { connected = false, reason = "service-active" });
+            }
+
             await connectionManager.ConnectAsync(request.ServerUrl!, request.Token, agentName: null, defaultIgnoreSsl);
             return Results.NoContent();
         });
