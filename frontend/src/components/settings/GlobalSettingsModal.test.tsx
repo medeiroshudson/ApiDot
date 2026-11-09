@@ -16,6 +16,7 @@ import {
 } from '@/lib/api/base';
 import { clearSessionMemory, getSession, setSession } from '@/lib/api/session';
 import { saveDesktopSession } from '@/lib/desktop/session';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 vi.mock('@/lib/desktop/session', () => ({
   loadDesktopSession: vi.fn().mockResolvedValue(null),
@@ -735,4 +736,87 @@ describe('GlobalSettingsModal', () => {
     });
   });
 
+  describe('Device scopes and current device', () => {
+    const scopedDevices: AgentDeviceDto[] = [
+      { ...mockDevices[0], scopes: 3 },
+      { ...mockDevices[1], scopes: 1 },
+      { ...mockDevices[2], scopes: undefined },
+    ];
+
+    it('shows Desktop and Agent badges from the scope bits', () => {
+      useDeviceStore.setState({ devices: scopedDevices });
+
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="agents" />);
+
+      expect(screen.getByTestId('scope-desktop-device-1')).toBeInTheDocument();
+      expect(screen.getByTestId('scope-agent-device-1')).toBeInTheDocument();
+
+      expect(screen.queryByTestId('scope-desktop-device-2')).not.toBeInTheDocument();
+      expect(screen.getByTestId('scope-agent-device-2')).toBeInTheDocument();
+
+      // Legacy rows without scopes show no badge instead of a guessed one.
+      expect(screen.queryByTestId('scope-desktop-device-3')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('scope-agent-device-3')).not.toBeInTheDocument();
+    });
+
+    it('marks the device of the current session', () => {
+      useDeviceStore.setState({ devices: scopedDevices });
+      setSession({ deviceId: 'device-1', deviceKey: 'key-1' });
+
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="agents" />);
+
+      expect(screen.getByTestId('current-device-badge-device-1')).toBeInTheDocument();
+      expect(screen.queryByTestId('current-device-badge-device-2')).not.toBeInTheDocument();
+    });
+
+    it('runs the logout path when the current device is revoked', async () => {
+      useDeviceStore.setState({ devices: scopedDevices });
+      setSession({ deviceId: 'device-1', deviceKey: 'key-1' });
+
+      const revokeSpy = vi
+        .spyOn(useDeviceStore.getState(), 'revokeDevice')
+        .mockResolvedValueOnce({ ...mockDevices[0], scopes: 3, isRevoked: true });
+      const logoutSpy = vi
+        .spyOn(useAuthStore.getState(), 'logout')
+        .mockResolvedValue(undefined);
+
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="agents" />);
+
+      const revokeButtons = screen.getAllByRole('button', { name: /revoke|revogar/i });
+      await act(async () => {
+        fireEvent.click(revokeButtons[0]);
+      });
+
+      await waitFor(() => {
+        expect(logoutSpy).toHaveBeenCalledTimes(1);
+      });
+      expect(revokeSpy).toHaveBeenCalledWith('device-1');
+      expect(revokeSpy.mock.invocationCallOrder[0]).toBeLessThan(
+        logoutSpy.mock.invocationCallOrder[0]
+      );
+    });
+
+    it('does not log out when another device is revoked', async () => {
+      useDeviceStore.setState({ devices: scopedDevices });
+      setSession({ deviceId: 'device-1', deviceKey: 'key-1' });
+
+      vi.spyOn(useDeviceStore.getState(), 'revokeDevice').mockResolvedValueOnce({
+        ...mockDevices[1],
+        scopes: 1,
+        isRevoked: true,
+      });
+      const logoutSpy = vi
+        .spyOn(useAuthStore.getState(), 'logout')
+        .mockResolvedValue(undefined);
+
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="agents" />);
+
+      const revokeButtons = screen.getAllByRole('button', { name: /revoke|revogar/i });
+      await act(async () => {
+        fireEvent.click(revokeButtons[1]);
+      });
+
+      expect(logoutSpy).not.toHaveBeenCalled();
+    });
+  });
 });

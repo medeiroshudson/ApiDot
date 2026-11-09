@@ -30,6 +30,7 @@ import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
 import { API_BASE_STORAGE_KEY, getApiBase, normalizeApiBase, setApiBase } from '@/lib/api/base';
 import { getSession, patchSession } from '@/lib/api/session';
 import { saveDesktopSession } from '@/lib/desktop/session';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 export type SettingsTab = 'agents' | 'general';
 
@@ -238,6 +239,9 @@ export function GlobalSettingsModal({
     return 'http://localhost:5000';
   }, []);
 
+  // Device id of this machine (from the desktop session), if signed in.
+  const currentDeviceId = getSession()?.deviceId ?? null;
+
   const copyToClipboard = async (text: string, onSuccess: () => void) => {
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
@@ -322,6 +326,18 @@ export function GlobalSettingsModal({
       await revokeDevice(device.id);
       if (activeDeviceId === device.id) {
         setActiveDeviceId(null);
+      }
+
+      // Revoking this machine also ends the UI session: the token is gone, so
+      // the logout path revokes (idempotent), disconnects the sidecar and
+      // clears the local session.
+      const session = getSession();
+      if (session?.deviceId && session.deviceId.toLowerCase() === device.id.toLowerCase()) {
+        try {
+          await useAuthStore.getState().logout();
+        } catch {
+          // The session is already unusable; logout errors must not keep it.
+        }
       }
     } catch (err: unknown) {
       const message =
@@ -915,6 +931,16 @@ export function GlobalSettingsModal({
                         const isThisActive = activeDeviceId === device.id;
                         const isBusy = actionInProgressId === device.id;
 
+                        // Scopes are optional for legacy rows: no value means no
+                        // scope badge, never a guessed one.
+                        const scopes = typeof device.scopes === 'number' ? device.scopes : 0;
+                        const hasDesktopScope = (scopes & 2) === 2;
+                        const hasAgentScope = (scopes & 1) === 1;
+                        const isCurrentDevice = Boolean(
+                          currentDeviceId &&
+                            currentDeviceId.toLowerCase() === device.id.toLowerCase()
+                        );
+
                         return (
                           <div
                             key={device.id}
@@ -944,6 +970,32 @@ export function GlobalSettingsModal({
                                   <span className="font-semibold text-white text-xs">
                                     {device.name}
                                   </span>
+
+                                  {/* Device scopes (bit 2 = desktop UI, bit 1 = agent) */}
+                                  {hasDesktopScope && (
+                                    <span
+                                      data-testid={`scope-desktop-${device.id}`}
+                                      className="px-2 py-0.5 rounded text-[11px] font-medium bg-sky-500/10 text-sky-400 border border-sky-500/20"
+                                    >
+                                      {t('settings.deviceScopeDesktop')}
+                                    </span>
+                                  )}
+                                  {hasAgentScope && (
+                                    <span
+                                      data-testid={`scope-agent-${device.id}`}
+                                      className="px-2 py-0.5 rounded text-[11px] font-medium bg-violet-500/10 text-violet-300 border border-violet-500/20"
+                                    >
+                                      {t('settings.deviceScopeAgent')}
+                                    </span>
+                                  )}
+                                  {isCurrentDevice && (
+                                    <span
+                                      data-testid={`current-device-badge-${device.id}`}
+                                      className="px-2 py-0.5 rounded text-[11px] font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20"
+                                    >
+                                      {t('settings.currentDeviceBadge')}
+                                    </span>
+                                  )}
 
                                   {/* Status indicator */}
                                   {device.isRevoked ? (
