@@ -12,10 +12,6 @@ namespace ApiDot.Server.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropIndex(
-                name: "IX_AgentDevices_TokenHash",
-                table: "AgentDevices");
-
-            migrationBuilder.DropIndex(
                 name: "IX_AgentDevices_UserId",
                 table: "AgentDevices");
 
@@ -50,11 +46,6 @@ namespace ApiDot.Server.Migrations
             migrationBuilder.Sql("UPDATE \"AgentDevices\" SET \"Scopes\" = 1 WHERE \"Scopes\" = 0;");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AgentDevices_TokenHash",
-                table: "AgentDevices",
-                column: "TokenHash");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_AgentDevices_UserId_DeviceKey",
                 table: "AgentDevices",
                 columns: new[] { "UserId", "DeviceKey" });
@@ -63,10 +54,6 @@ namespace ApiDot.Server.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropIndex(
-                name: "IX_AgentDevices_TokenHash",
-                table: "AgentDevices");
-
             migrationBuilder.DropIndex(
                 name: "IX_AgentDevices_UserId_DeviceKey",
                 table: "AgentDevices");
@@ -86,12 +73,6 @@ namespace ApiDot.Server.Migrations
             migrationBuilder.DropColumn(
                 name: "Scopes",
                 table: "AgentDevices");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AgentDevices_TokenHash",
-                table: "AgentDevices",
-                column: "TokenHash",
-                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_AgentDevices_UserId",

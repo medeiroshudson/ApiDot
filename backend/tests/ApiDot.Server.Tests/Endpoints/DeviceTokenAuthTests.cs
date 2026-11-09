@@ -167,7 +167,7 @@ public class DeviceTokenAuthTests : IClassFixture<WebApplicationFactory<Program>
     [Fact]
     public async Task Legacy_Row_With_Ws_Scope_Cannot_Use_Rest_Endpoints()
     {
-        var rawToken = DeviceTokenHelper.CreateRawToken();
+        var rawToken = DeviceCredentialHelper.CreateRawToken();
 
         using (var scope = _factory.Services.CreateScope())
         {
@@ -175,8 +175,8 @@ public class DeviceTokenAuthTests : IClassFixture<WebApplicationFactory<Program>
             db.AgentDevices.Add(new AgentDevice
             {
                 Name = "Legacy Agent",
-                TokenHash = DeviceTokenHelper.ComputeHash(rawToken),
-                TokenPrefix = DeviceTokenHelper.Prefix(rawToken),
+                TokenHash = DeviceCredentialHelper.ComputeHash(rawToken),
+                TokenPrefix = DeviceCredentialHelper.Prefix(rawToken),
                 Scopes = DeviceScope.Ws,
                 DeviceKey = null,
                 ExpiresAtUtc = null
@@ -196,7 +196,7 @@ public class DeviceTokenAuthTests : IClassFixture<WebApplicationFactory<Program>
     {
         var client = _factory.CreateClient();
         var response = await client.SendAsync(
-            RequestWithBearer(HttpMethod.Get, "/api/workspaces", DeviceTokenHelper.CreateRawToken()));
+            RequestWithBearer(HttpMethod.Get, "/api/workspaces", DeviceCredentialHelper.CreateRawToken()));
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }

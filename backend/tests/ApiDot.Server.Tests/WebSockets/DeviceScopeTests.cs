@@ -62,12 +62,12 @@ public class DeviceScopeTests : IClassFixture<WebApplicationFactory<Program>>, I
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
 
-        var rawToken = DeviceTokenHelper.CreateRawToken();
+        var rawToken = DeviceCredentialHelper.CreateRawToken();
         var device = new AgentDevice
         {
             Name = $"Scope Test {scopes}",
-            TokenHash = DeviceTokenHelper.ComputeHash(rawToken),
-            TokenPrefix = DeviceTokenHelper.Prefix(rawToken),
+            TokenHash = DeviceCredentialHelper.ComputeHash(rawToken),
+            TokenPrefix = DeviceCredentialHelper.Prefix(rawToken),
             Scopes = scopes,
             DeviceKey = deviceKey,
             ExpiresAtUtc = expiresAtUtc

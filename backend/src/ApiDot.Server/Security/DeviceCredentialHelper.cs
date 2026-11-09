@@ -7,10 +7,11 @@ namespace ApiDot.Server.Security;
 /// Creation and hashing rules for the unified device credential.
 /// The raw token is returned to the client exactly once; only the SHA-256 hash is stored.
 /// </summary>
-public static class DeviceTokenHelper
+public static class DeviceCredentialHelper
 {
     public const int RawTokenByteLength = 32;
     public const int PrefixLength = 8;
+    private const string RevokedMarkerPrefix = "revoked:";
 
     /// <summary>Generates a raw token as 32 random bytes encoded as lowercase hex (64 chars).</summary>
     public static string CreateRawToken() =>
@@ -31,4 +32,12 @@ public static class DeviceTokenHelper
 
         return rawToken.Length <= PrefixLength ? rawToken : rawToken[..PrefixLength];
     }
+
+    /// <summary>
+    /// Unique value written to <c>TokenHash</c> on logout. It keeps the column's unique
+    /// index satisfied across many logged-out devices while never matching a real token
+    /// hash (40 chars, never 64 hex characters).
+    /// </summary>
+    public static string CreateRevokedMarker() =>
+        RevokedMarkerPrefix + Guid.NewGuid().ToString("N");
 }

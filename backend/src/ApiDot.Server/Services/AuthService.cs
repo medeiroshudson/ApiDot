@@ -6,7 +6,6 @@ using ApiDot.Server.Data.Entities;
 using ApiDot.Server.Enums;
 using ApiDot.Server.Models;
 using ApiDot.Server.Security;
-using DeviceTokenHelper = ApiDot.Server.Security.DeviceTokenHelper;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
@@ -526,7 +525,7 @@ public class AuthService(
             }
         }
 
-        var rawToken = DeviceTokenHelper.CreateRawToken();
+        var rawToken = DeviceCredentialHelper.CreateRawToken();
         var now = DateTime.UtcNow;
         var effectiveLifetime = lifetime
             ?? (scopes.HasFlag(DeviceScope.Rest) ? RestDeviceTokenLifetime : null);
@@ -535,8 +534,8 @@ public class AuthService(
         if (device != null)
         {
             // Rotation keeps the row id so collection targets and history stay valid.
-            device.TokenHash = DeviceTokenHelper.ComputeHash(rawToken);
-            device.TokenPrefix = DeviceTokenHelper.Prefix(rawToken);
+            device.TokenHash = DeviceCredentialHelper.ComputeHash(rawToken);
+            device.TokenPrefix = DeviceCredentialHelper.Prefix(rawToken);
             device.Scopes = scopes;
             device.ExpiresAtUtc = expiresAtUtc;
         }
@@ -549,8 +548,8 @@ public class AuthService(
                 Scopes = scopes,
                 ExpiresAtUtc = expiresAtUtc,
                 CreatedAtUtc = now,
-                TokenHash = DeviceTokenHelper.ComputeHash(rawToken),
-                TokenPrefix = DeviceTokenHelper.Prefix(rawToken),
+                TokenHash = DeviceCredentialHelper.ComputeHash(rawToken),
+                TokenPrefix = DeviceCredentialHelper.Prefix(rawToken),
                 IsRevoked = false,
                 UserId = userId
             };
@@ -597,7 +596,7 @@ public class AuthService(
             return null;
         }
 
-        var tokenHash = DeviceTokenHelper.ComputeHash(rawToken);
+        var tokenHash = DeviceCredentialHelper.ComputeHash(rawToken);
 
         var device = await dbContext.AgentDevices
             .TagWith(ScopeMarker)
@@ -639,7 +638,7 @@ public class AuthService(
             return false;
         }
 
-        var tokenHash = DeviceTokenHelper.ComputeHash(rawToken);
+        var tokenHash = DeviceCredentialHelper.ComputeHash(rawToken);
 
         var device = await dbContext.AgentDevices
             .TagWith(ScopeMarker)
@@ -651,8 +650,9 @@ public class AuthService(
         }
 
         // Logout is not revocation: the row survives so collection targets and history
-        // keep referencing it, and the next login with the same key can reuse it.
-        device.TokenHash = string.Empty;
+        // keep referencing it, and the next login with the same key can reuse it. The
+        // unique marker keeps the TokenHash unique index satisfied across devices.
+        device.TokenHash = DeviceCredentialHelper.CreateRevokedMarker();
         device.TokenPrefix = string.Empty;
         device.ExpiresAtUtc = null;
 

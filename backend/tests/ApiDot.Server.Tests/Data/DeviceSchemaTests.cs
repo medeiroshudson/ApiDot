@@ -116,6 +116,29 @@ public class DeviceSchemaTests
         }
     }
 
+    [Fact]
+    public async Task TokenHash_Index_Remains_Unique()
+    {
+        var dbName = "DeviceIndexTest_" + Guid.NewGuid() + ".db";
+
+        try
+        {
+            using var context = new ApiDotDbContext(BuildOptions(dbName));
+            await context.Database.EnsureCreatedAsync();
+
+            var uniqueIndexes = await context.Database
+                .SqlQueryRaw<string>(
+                    "SELECT name AS \"Value\" FROM pragma_index_list('AgentDevices') WHERE \"unique\" = 1")
+                .ToListAsync();
+
+            uniqueIndexes.Should().Contain("IX_AgentDevices_TokenHash");
+        }
+        finally
+        {
+            TryDelete(dbName);
+        }
+    }
+
     private static void TryDelete(string dbName)
     {
         try

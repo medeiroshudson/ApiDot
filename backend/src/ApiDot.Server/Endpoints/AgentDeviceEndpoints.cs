@@ -3,7 +3,6 @@ using ApiDot.Server.Data.Entities;
 using ApiDot.Server.Enums;
 using ApiDot.Server.Models;
 using ApiDot.Server.Security;
-using DeviceTokenHelper = ApiDot.Server.Models.DeviceTokenHelper;
 using ApiDot.Server.WebSockets;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;

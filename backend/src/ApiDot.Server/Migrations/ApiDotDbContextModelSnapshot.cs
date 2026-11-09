@@ -81,7 +81,8 @@ namespace ApiDot.Server.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TokenHash");
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
 
                     b.HasIndex("UserId", "DeviceKey");
 

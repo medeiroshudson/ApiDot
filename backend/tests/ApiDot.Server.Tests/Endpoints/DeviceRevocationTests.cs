@@ -120,7 +120,8 @@ public class DeviceRevocationTests : IClassFixture<WebApplicationFactory<Program
         {
             var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
             var device = await db.AgentDevices.SingleAsync(d => d.Id == deviceId);
-            device.TokenHash.Should().BeEmpty();
+            device.TokenHash.Should().StartWith("revoked:");
+            device.TokenHash.Should().HaveLength(40);
             device.TokenPrefix.Should().BeEmpty();
             device.ExpiresAtUtc.Should().BeNull();
             device.IsRevoked.Should().BeFalse();

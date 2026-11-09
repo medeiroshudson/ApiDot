@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ApiDot.Server.Migrations
 {
     [DbContext(typeof(ApiDotDbContext))]
-    [Migration("20261109200414_AddDeviceScopes")]
+    [Migration("20261109201414_AddDeviceScopes")]
     partial class AddDeviceScopes
     {
         /// <inheritdoc />
@@ -84,7 +84,8 @@ namespace ApiDot.Server.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TokenHash");
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
 
                     b.HasIndex("UserId", "DeviceKey");
 
