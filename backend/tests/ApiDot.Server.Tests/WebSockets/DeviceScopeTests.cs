@@ -95,6 +95,27 @@ public class DeviceScopeTests : IClassFixture<WebApplicationFactory<Program>>, I
         result.CloseStatusDescription.Should().Be(PolicyViolationMessage);
     }
 
+    /// <summary>
+    /// The server registers the agent only after accepting the socket, so a completed
+    /// client handshake does not guarantee the hub already reflects the new state.
+    /// </summary>
+    private static async Task WaitForAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow.Add(timeout);
+        while (!condition())
+        {
+            if (DateTime.UtcNow >= deadline)
+            {
+                throw new TimeoutException(
+                    $"Agent hub state did not reach the expected value within {timeout.TotalSeconds:0.#}s.");
+            }
+
+            await Task.Delay(20);
+        }
+    }
+
+    private static readonly TimeSpan AgentStateTimeout = TimeSpan.FromSeconds(2);
+
     [Fact]
     public async Task Rest_Only_Token_Cannot_Open_The_Agent_WebSocket()
     {
@@ -104,6 +125,7 @@ public class DeviceScopeTests : IClassFixture<WebApplicationFactory<Program>>, I
         using var socket = await ConnectAsync(rawToken);
         await AssertClosedWithPolicyViolationAsync(socket);
 
+        await WaitForAsync(() => !hub.IsAgentOnline(device.Id), AgentStateTimeout);
         hub.IsAgentOnline(device.Id).Should().BeFalse();
     }
 
@@ -115,6 +137,7 @@ public class DeviceScopeTests : IClassFixture<WebApplicationFactory<Program>>, I
 
         using var socket = await ConnectAsync(rawToken);
         socket.State.Should().Be(WebSocketState.Open);
+        await WaitForAsync(() => hub.IsAgentOnline(device.Id), AgentStateTimeout);
         hub.IsAgentOnline(device.Id).Should().BeTrue();
 
         await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None);
@@ -128,6 +151,7 @@ public class DeviceScopeTests : IClassFixture<WebApplicationFactory<Program>>, I
 
         using var socket = await ConnectAsync(rawToken);
         socket.State.Should().Be(WebSocketState.Open);
+        await WaitForAsync(() => hub.IsAgentOnline(device.Id), AgentStateTimeout);
         hub.IsAgentOnline(device.Id).Should().BeTrue();
 
         await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None);
@@ -144,6 +168,7 @@ public class DeviceScopeTests : IClassFixture<WebApplicationFactory<Program>>, I
         using var socket = await ConnectAsync(rawToken);
         await AssertClosedWithPolicyViolationAsync(socket);
 
+        await WaitForAsync(() => !hub.IsAgentOnline(device.Id), AgentStateTimeout);
         hub.IsAgentOnline(device.Id).Should().BeFalse();
     }
 }
