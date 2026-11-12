@@ -62,9 +62,7 @@ export async function getAuthConfig(): Promise<AuthConfig> {
 }
 
 export async function loginLocal(email: string, password: string): Promise<AuthUser> {
-  // The stored device key identifies this machine, so the server updates the
-  // existing device row instead of creating another one. Without a key the
-  // body stays exactly `{ email, password }`, which is the web request.
+  // The stored key reuses this machine's device row; without it the body is the web request.
   const deviceKey = getSession()?.deviceKey;
   const body = deviceKey ? { email, password, deviceKey } : { email, password };
 

@@ -353,7 +353,6 @@ describe('LoginPage (/login)', () => {
       const ssoButton = screen.getByRole('button', { name: /sign in with sso/i });
       fireEvent.click(ssoButton);
 
-      // The handler awaits the Server URL persistence before starting the flow.
       await waitFor(() => {
         expect(desktopAuth.startDesktopSsoFlow).toHaveBeenCalledWith({
           returnUrl: '/',
@@ -408,7 +407,6 @@ describe('LoginPage (/login)', () => {
       const ssoButton = screen.getByRole('button', { name: /sign in with sso/i });
       fireEvent.click(ssoButton);
 
-      // The handler awaits the Server URL persistence before starting the flow.
       await waitFor(() => {
         expect(screen.getByText(/waiting for authentication in your browser\.\.\./i)).toBeInTheDocument();
       });

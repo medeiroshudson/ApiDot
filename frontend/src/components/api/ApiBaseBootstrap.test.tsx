@@ -130,8 +130,7 @@ describe('ApiBaseBootstrap', () => {
 
     renderWithChild();
 
-    // The route may only render once the token is in the client, so the request
-    // it issues afterwards cannot race the hydration.
+    // The route renders with the token already in the client.
     await waitFor(() => {
       expect(connectSidecar).toHaveBeenCalledWith(sessionFixture.serverUrl, 'tok-1');
     });

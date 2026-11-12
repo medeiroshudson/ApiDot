@@ -17,20 +17,10 @@ import type { AuthUser } from '@/lib/authApi';
  * Restores the persisted API base and, in the desktop app, the device session
  * before the rest of the app starts issuing requests.
  *
- * Boot sequence with a stored session:
- * 1. hydrate the in-memory session and bearer token;
- * 2. `GET /api/auth/me` so a stale token surfaces as a 401 instead of an
- *    endless WebSocket reconnect loop, and so the auth store already knows the
- *    user is signed in when the routes mount;
- * 3. on success, ask the sidecar to open its agent WebSocket.
- *
- * The children stay unmounted until the boot sequence above has been
- * attempted, so a route never issues a request with an empty base and no
- * bearer token. The gate is desktop-only: on the web `ready` starts `true` and
- * the children render immediately, which keeps that build unchanged.
- *
- * A 401 on any authenticated request is routed to one handler that ends the
- * session, closes the sidecar connection and sends the user to the login page.
+ * Children stay unmounted on desktop until the boot sequence has been
+ * attempted, so no route requests with an empty base and no bearer token. The
+ * web build renders immediately. A 401 on an authenticated request ends the
+ * session, closes the sidecar and sends the user to the login page.
  */
 export function ApiBaseBootstrap({ children }: { children: React.ReactNode }): React.ReactNode {
   const router = useRouter();
@@ -99,10 +89,8 @@ export function ApiBaseBootstrap({ children }: { children: React.ReactNode }): R
             return;
           }
 
-          // The token is valid, so the app is signed in: publishing the user
-          // keeps the login screen from asking again and lets a deep link
-          // parked before hydration resume. A malformed body is logged and
-          // ignored; the boot continues with the sidecar connection.
+          // Signed in before the routes mount: the login screen does not ask again and a
+          // deep link parked during hydration resumes. A malformed body is ignored.
           try {
             const user = (await res.json()) as AuthUser;
             useAuthStore.getState().setUser(user);
@@ -119,17 +107,14 @@ export function ApiBaseBootstrap({ children }: { children: React.ReactNode }): R
           console.error('Failed to validate the desktop session at boot:', err);
         }
       } finally {
-        // Whatever happened above, the UI must not stay behind the gate: a
-        // failed hydration falls back to the login screen instead of a blank
-        // window. A cancelled effect leaves the unmount alone.
+        // Failed hydration falls back to the login screen, never a blank window.
         if (!cancelled) {
           setReady(true);
         }
       }
     };
 
-    // A rejected hydration must not become an unhandled rejection: the gate is
-    // already released by the `finally` above.
+    // The gate is already released in `finally`; log instead of rethrowing.
     void hydrate().catch((err) => {
       console.error('Failed to hydrate the desktop session at boot:', err);
     });

@@ -189,8 +189,7 @@ export async function exchangeDesktopToken(token: string, baseUrl?: string): Pro
 
   // The one-time token travels in the body, so the exchange does not need the
   // cookie session (and the desktop CORS policy does not allow credentials).
-  // The stored device key reuses this machine's device row, exactly as the
-  // local login does; without one the body stays `{ token }`.
+  // Reuses this machine's device row, as the local login does.
   const deviceKey = getSession()?.deviceKey;
   const res = await fetch(url, {
     method: 'POST',

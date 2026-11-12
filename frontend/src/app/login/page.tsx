@@ -13,11 +13,7 @@ import { saveDesktopSession } from '@/lib/desktop/session';
 import { LogIn, Lock, Mail, AlertCircle, Loader2, Server } from 'lucide-react';
 import ApiDotLogo from '@assets/api-dot-white.svg';
 
-/**
- * Reads the Server URL to prefill the desktop field: the API base already in
- * memory wins, and a session restored at boot is the fallback (the base is
- * empty until the first sign-in on a fresh install).
- */
+/** Prefers the base in memory, then the session's URL: it is empty before the first sign-in. */
 function initialServerUrl(): string {
   if (!isDesktop()) {
     return '';
@@ -127,14 +123,7 @@ export default function LoginPage() {
 
   const isOidcEnabled = config === null || config.oidcEnabled === true;
 
-  /**
-   * Validates and persists the Server URL from the login screen before the
-   * request that depends on it. Returns the normalized base, or null when the
-   * value is invalid: the caller must then abort instead of hitting the
-   * relative `tauri://localhost` origin.
-   *
-   * An empty value stays empty, which keeps relative URLs (web parity).
-   */
+  /** Persists the Server URL before the request that depends on it; null means invalid. */
   const persistServerUrl = async (): Promise<string | null> => {
     if (!isDesktop()) {
       return '';
@@ -150,8 +139,6 @@ export default function LoginPage() {
     setServerUrlError(null);
     setApiBase(normalized);
 
-    // The stored session carries the URL into the next boot and lets the
-    // sidecar and the device credential use the same server.
     const updated = patchSession({ serverUrl: normalized });
     if (updated) {
       await saveDesktopSession(updated);
@@ -164,8 +151,7 @@ export default function LoginPage() {
     if (isWaitingBrowserAuth) return;
     setError(null);
 
-    // Persist before opening the browser so the login URL and the exchange use
-    // the URL typed here instead of the webview origin.
+    // Persist first, or the SSO URL falls back to the webview origin.
     const base = await persistServerUrl();
     if (base === null) {
       return;
@@ -228,7 +214,6 @@ export default function LoginPage() {
     try {
       const base = await persistServerUrl();
       if (base === null) {
-        // The inline field error explains the abort; no request is issued.
         return;
       }
 
