@@ -128,7 +128,7 @@ If you prefer to run ApiDot directly on your machine or contribute to its develo
 | Command | What it starts |
 |---|---|
 | `npm run dev` | the whole stack in containers, with hot reload |
-| `npm run dev:local` | backend `:5000` + web `:3000` on the host |
+| `npm run dev:local` | backend `:5181` + web `:3000` on the host |
 | `npm run dev:desktop` | backend + Tauri; Tauri starts the web dev server |
 | `npm run build` | backend + web |
 | `npm run build:desktop` | the desktop bundle |
