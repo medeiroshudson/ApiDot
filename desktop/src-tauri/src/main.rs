@@ -89,6 +89,21 @@ fn main() {
                 }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run({
+            // A quit request (AppleEvent, Cmd+Q) never reaches `on_window_event`, so the
+            // sidecar must also be stopped from the app-level run loop. `stop_sidecar` is
+            // idempotent (`child.take()`), so handling both exit events is safe.
+            let sidecar_manager = sidecar_manager.clone();
+            move |_app_handle, event| {
+                if let tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit = event {
+                    let manager = sidecar_manager.clone();
+                    tauri::async_runtime::block_on(async move {
+                        let mut mgr = manager.lock().await;
+                        let _ = mgr.stop_sidecar().await;
+                    });
+                }
+            }
+        });
 }
