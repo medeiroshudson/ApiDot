@@ -85,13 +85,14 @@ describe('Tauri v2 Desktop Configuration', () => {
     expect(pkg.devDependencies?.['@tauri-apps/cli']).toBeDefined();
   });
 
-  it('validates root package.json automation scripts for desktop', () => {
+  it('validates the root development interface', () => {
     expect(fs.existsSync(rootPackageJsonPath)).toBe(true);
 
     const content = fs.readFileSync(rootPackageJsonPath, 'utf-8');
     const rootPkg = JSON.parse(content);
 
-    expect(rootPkg.scripts?.['desktop:dev']).toBeDefined();
-    expect(rootPkg.scripts?.['desktop:build']).toBeDefined();
+    for (const script of ['dev', 'dev:local', 'dev:desktop', 'build', 'build:desktop', 'test', 'check']) {
+      expect(rootPkg.scripts?.[script]).toBeDefined();
+    }
   });
 });
