@@ -25,6 +25,16 @@ function run() {
   assert.strictEqual(tauriConf.identifier, 'dev.hmedeiros.apidot');
   assert.strictEqual(tauriConf.build?.devUrl, 'http://localhost:3000');
   assert.strictEqual(tauriConf.build?.frontendDist, '../../frontend/out');
+  assert(
+    typeof tauriConf.build?.beforeDevCommand === 'object' &&
+      tauriConf.build.beforeDevCommand?.script === 'npm run dev' &&
+      tauriConf.build.beforeDevCommand?.cwd === '../../frontend',
+    'beforeDevCommand must run the frontend dev server via { script: "npm run dev", cwd: "../../frontend" }'
+  );
+  assert(
+    !fs.existsSync(path.join(desktopDir, 'dev-server.js')),
+    'desktop/dev-server.js must not exist: Tauri starts the dev server through beforeDevCommand'
+  );
   assert(Array.isArray(tauriConf.app?.windows), 'app.windows must be an array');
   assert.strictEqual(tauriConf.app.windows[0]?.title, 'ApiDot');
   assert.strictEqual(tauriConf.app.windows[0]?.width, 1280);
@@ -129,6 +139,7 @@ function run() {
   assert.strictEqual(pkgJson.name, 'apidot-desktop');
   assert.strictEqual(pkgJson.version, '0.5.1');
   assert(pkgJson.scripts?.dev?.includes('tauri dev'), 'scripts.dev must contain tauri dev');
+  assert(pkgJson.scripts?.dev?.includes('prepare.js --dev'), 'scripts.dev must run prepare.js in dev mode');
   assert(pkgJson.scripts?.build?.includes('tauri build'), 'scripts.build must contain tauri build');
   assert(pkgJson.dependencies?.['@tauri-apps/api'], 'missing @tauri-apps/api');
   assert(pkgJson.devDependencies?.['@tauri-apps/cli'], 'missing @tauri-apps/cli');
@@ -137,8 +148,9 @@ function run() {
   // 6. root package.json
   assert(fs.existsSync(rootPkgPath), 'root package.json must exist');
   const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, 'utf-8'));
-  assert(rootPkg.scripts?.['desktop:dev'], 'missing desktop:dev script');
-  assert(rootPkg.scripts?.['desktop:build'], 'missing desktop:build script');
+  for (const script of ['dev', 'dev:local', 'dev:desktop', 'build', 'build:desktop', 'test', 'check']) {
+    assert(rootPkg.scripts?.[script], `missing root script: ${script}`);
+  }
   console.log('✓ root package.json scripts verified');
 
   // 7. desktop/prepare.js

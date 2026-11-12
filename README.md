@@ -123,36 +123,19 @@ If you prefer to run ApiDot directly on your machine or contribute to its develo
 - [Node.js 20+](https://nodejs.org/) & `npm`
 - [Docker](https://www.docker.com/) (optional, for containerized workflows)
 
-### Option A: Running with Hot Reload (Docker Compose Dev)
-```bash
-docker compose -f docker-compose.dev.yml up --build
-```
+### Run It
 
-### Option B: Running Manually
+| Command | What it starts |
+|---|---|
+| `npm run dev` | the whole stack in containers, with hot reload |
+| `npm run dev:local` | backend `:5000` + web `:3000` on the host |
+| `npm run dev:desktop` | backend + Tauri; Tauri starts the web dev server |
+| `npm run build` | backend + web |
+| `npm run build:desktop` | the desktop bundle |
+| `npm test` | backend + web + desktop validators |
+| `npm run check` | build + test |
 
-#### 1. Backend Server (`ApiDot.Server`)
-```bash
-cd backend
-dotnet run --project src/ApiDot.Server
-```
-*The server API and WebSocket hub will listen at `http://localhost:5001` (or `http://localhost:5000`).*
-
-#### 2. Frontend Web Client (`Next.js`)
-```bash
-cd frontend
-npm install
-npm run dev
-```
-*The web interface will be available at `http://localhost:3000`.*
-
-#### 3. Run Tests
-```bash
-# Backend unit & integration tests
-dotnet test backend/ApiDot.sln
-
-# Frontend tests
-npm --prefix frontend test
-```
+Granular work stays in the package: `dotnet watch --project backend/src/ApiDot.Server`, `npm --prefix frontend run dev`, `npm --prefix desktop run dev`. With a compose backend on `:5001`, run `APIDOT_API_BASE=http://127.0.0.1:5001 npm run dev:desktop`.
 
 ---
 

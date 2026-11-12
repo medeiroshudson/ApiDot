@@ -3,9 +3,11 @@
   "private": true,
   "scripts": {
     "dev": "docker compose -f docker-compose.dev.yml up --build --watch",
-    "down": "docker compose -f docker-compose.dev.yml down",
-    "desktop:prepare": "node desktop/prepare.js",
-    "desktop:dev": "npm --prefix desktop run dev",
-    "desktop:build": "npm --prefix desktop run build"
+    "dev:local": "node tools/dev.mjs backend frontend",
+    "dev:desktop": "node tools/dev.mjs backend desktop",
+    "build": "dotnet build backend/ApiDot.sln -c Release && npm --prefix frontend run build",
+    "build:desktop": "npm --prefix desktop run build",
+    "test": "dotnet test backend/ApiDot.sln -c Release && npm --prefix frontend test && npm --prefix desktop test",
+    "check": "npm run build && npm run test"
   }
 }
