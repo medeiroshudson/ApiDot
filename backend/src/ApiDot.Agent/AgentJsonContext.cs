@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using ApiDot.Agent.Commands;
 using ApiDot.Agent.Configuration;
 using ApiDot.Core.Enums;
 using ApiDot.Core.Models;
@@ -19,6 +20,8 @@ namespace ApiDot.Agent;
 [JsonSerializable(typeof(Dictionary<string, string[]>))]
 [JsonSerializable(typeof(DesktopSessionDto))]
 [JsonSerializable(typeof(DesktopAuthStateDto))]
+[JsonSerializable(typeof(SidecarConnectRequest))]
+[JsonSerializable(typeof(SidecarAgentStatusDto))]
 public partial class AgentJsonContext : JsonSerializerContext
 {
 }

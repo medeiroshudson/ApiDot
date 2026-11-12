@@ -1,4 +1,6 @@
 import { apiFetch } from '@/lib/api/client';
+import { getApiBase } from '@/lib/api/base';
+import { persistDeviceCredential } from '@/lib/api/session';
 
 export interface AuthConfig {
   oidcEnabled: boolean;
@@ -65,7 +67,16 @@ export async function loginLocal(email: string, password: string): Promise<AuthU
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
-  return handleResponse<AuthUser>(res);
+  const user = await handleResponse<AuthUser>(res);
+
+  // Self-hosted deployments receive the same device credential headers as the
+  // SSO exchange; on the web the helper is a no-op.
+  await persistDeviceCredential(res, {
+    userId: user.id,
+    serverUrl: getApiBase() || null,
+  });
+
+  return user;
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
@@ -81,6 +92,24 @@ export async function logout(): Promise<void> {
     method: 'POST',
   });
   await handleResponse<{ message?: string }>(res);
+}
+
+/**
+ * Revokes the presented device token (logout, not operator revocation).
+ *
+ * The server clears the token hash and keeps the device row reusable. A 401
+ * means the token was already invalid: there is nothing left to revoke.
+ */
+export async function revokeDeviceToken(): Promise<void> {
+  const res = await apiFetch('/api/auth/device-token', {
+    method: 'DELETE',
+  });
+
+  if (res.status === 401 || res.status === 204) {
+    return;
+  }
+
+  await handleResponse<void>(res);
 }
 
 export async function patchUserLocale(locale: string): Promise<void> {

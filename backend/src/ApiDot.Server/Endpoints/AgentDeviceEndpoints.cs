@@ -123,6 +123,7 @@ public static class AgentDeviceEndpoints
                 TokenPrefix = tokenPrefix,
                 CreatedAtUtc = DateTime.UtcNow,
                 IsRevoked = false,
+                ExpiresAtUtc = null,
                 UserId = assignedUserId
             };
 

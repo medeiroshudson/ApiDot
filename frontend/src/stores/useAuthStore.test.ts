@@ -6,6 +6,7 @@ import {
   INITIAL_AUTH_STATE,
 } from './useAuthStore';
 import { useI18nStore } from './useI18nStore';
+import { revokeDeviceSession } from '@/lib/desktop/deviceSession';
 
 vi.mock('@/lib/authApi', async () => {
   return {
@@ -13,8 +14,14 @@ vi.mock('@/lib/authApi', async () => {
     loginLocal: vi.fn(),
     getCurrentUser: vi.fn(),
     logout: vi.fn(),
+    revokeDeviceToken: vi.fn(),
   };
 });
+
+vi.mock('@/lib/desktop/deviceSession', () => ({
+  revokeDeviceSession: vi.fn().mockResolvedValue(undefined),
+  endDeviceSession: vi.fn().mockResolvedValue(undefined),
+}));
 
 const mockUser: AuthUser = {
   id: 'usr-123',
@@ -242,6 +249,26 @@ describe('useAuthStore', () => {
       expect(state.isAuthenticated).toBe(false);
       expect(state.isLoading).toBe(false);
       expect(state.error).toBeNull();
+    });
+
+    it('signs the desktop session out before the cookie logout', async () => {
+      useAuthStore.setState({
+        user: mockUser,
+        isAuthenticated: true,
+        isLoading: false,
+        error: null,
+      });
+
+      vi.mocked(authApi.logout).mockResolvedValueOnce();
+      vi.mocked(revokeDeviceSession).mockResolvedValueOnce();
+
+      await useAuthStore.getState().logout();
+
+      expect(revokeDeviceSession).toHaveBeenCalledTimes(1);
+      expect(authApi.logout).toHaveBeenCalledTimes(1);
+      expect(
+        vi.mocked(revokeDeviceSession).mock.invocationCallOrder[0]
+      ).toBeLessThan(vi.mocked(authApi.logout).mock.invocationCallOrder[0]);
     });
 
     it('clears user state even when logout request throws error', async () => {

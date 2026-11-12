@@ -370,6 +370,7 @@ const enUS = {
     statusOnline: 'Online',
     statusOffline: 'Offline',
     activeDeviceBadge: 'Active',
+    currentDeviceBadge: 'This device',
     deviceActive: 'Active Device',
     useAsActive: 'Use as Active',
     setActiveDevice: 'Set this device as default execution target',

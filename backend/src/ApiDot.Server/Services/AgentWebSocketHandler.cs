@@ -118,7 +118,13 @@ public class AgentWebSocketHandler : IAgentWebSocketHandler
             var device = await db.AgentDevices
                 .FirstOrDefaultAsync(d => d.TokenHash == tokenHash, effectiveToken);
 
-            if (device is null || device.IsRevoked)
+            // The same credential drives the REST UI and the agent channel, so a device
+            // that is revoked or past its lifetime cannot open the WebSocket either.
+            var isExpired = device?.ExpiresAtUtc is { } expiresAt && expiresAt <= DateTime.UtcNow;
+
+            if (device is null
+                || device.IsRevoked
+                || isExpired)
             {
                 using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
                 using var rejectedSocket = await context.WebSockets.AcceptWebSocketAsync();

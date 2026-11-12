@@ -28,6 +28,9 @@ import type { Locale } from '@/i18n';
 import { AgentDeviceDto } from '@/lib/deviceApi';
 import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
 import { API_BASE_STORAGE_KEY, getApiBase, normalizeApiBase, setApiBase } from '@/lib/api/base';
+import { getSession, patchSession } from '@/lib/api/session';
+import { saveDesktopSession } from '@/lib/desktop/session';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 export type SettingsTab = 'agents' | 'general';
 
@@ -236,6 +239,9 @@ export function GlobalSettingsModal({
     return 'http://localhost:5000';
   }, []);
 
+  // Device id of this machine (from the desktop session), if signed in.
+  const currentDeviceId = getSession()?.deviceId ?? null;
+
   const copyToClipboard = async (text: string, onSuccess: () => void) => {
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
@@ -321,6 +327,18 @@ export function GlobalSettingsModal({
       if (activeDeviceId === device.id) {
         setActiveDeviceId(null);
       }
+
+      // Revoking this machine also ends the UI session: the token is gone, so
+      // the logout path revokes (idempotent), disconnects the sidecar and
+      // clears the local session.
+      const session = getSession();
+      if (session?.deviceId && session.deviceId.toLowerCase() === device.id.toLowerCase()) {
+        try {
+          await useAuthStore.getState().logout();
+        } catch {
+          // The session is already unusable; logout errors must not keep it.
+        }
+      }
     } catch (err: unknown) {
       const message =
         err instanceof Error
@@ -361,6 +379,16 @@ export function GlobalSettingsModal({
     setServerUrlError(null);
     setApiBase(normalized);
     setServerUrl(normalized);
+
+    // Keep the persisted desktop session pointing at the same server so boot
+    // hydration and the sidecar connect use the newly saved URL.
+    const session = getSession();
+    if (session) {
+      const updated = patchSession({ serverUrl: normalized });
+      if (updated) {
+        void saveDesktopSession(updated);
+      }
+    }
   };
 
   if (!isOpen) return null;
@@ -903,6 +931,11 @@ export function GlobalSettingsModal({
                         const isThisActive = activeDeviceId === device.id;
                         const isBusy = actionInProgressId === device.id;
 
+                        const isCurrentDevice = Boolean(
+                          currentDeviceId &&
+                            currentDeviceId.toLowerCase() === device.id.toLowerCase()
+                        );
+
                         return (
                           <div
                             key={device.id}
@@ -932,6 +965,15 @@ export function GlobalSettingsModal({
                                   <span className="font-semibold text-white text-xs">
                                     {device.name}
                                   </span>
+
+                                  {isCurrentDevice && (
+                                    <span
+                                      data-testid={`current-device-badge-${device.id}`}
+                                      className="px-2 py-0.5 rounded text-[11px] font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20"
+                                    >
+                                      {t('settings.currentDeviceBadge')}
+                                    </span>
+                                  )}
 
                                   {/* Status indicator */}
                                   {device.isRevoked ? (

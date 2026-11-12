@@ -6,7 +6,7 @@
     "prepare": "node prepare.js",
     "icon": "tauri icon app-icon.svg",
     "dev": "node prepare.js --dev && tauri dev",
-    "build": "node prepare.js && tauri build",
+    "build": "npm --prefix ../frontend run build:desktop && node prepare.js && tauri build",
     "test": "node validate-config.js && node validate-sidecar.js && node validate-storage.js && node validate-menu.js && node validate-assets.js && node validate-icons.js"
   },
   "dependencies": {

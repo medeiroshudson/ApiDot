@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using ApiDot.Server.Models;
 using ApiDot.Server.Security;
@@ -14,6 +15,12 @@ namespace ApiDot.Server.Endpoints;
 public static class AuthEndpoints
 {
     private static readonly string[] SupportedLocales = ["en-US", "pt-BR"];
+
+    private const string DesktopAccessTokenHeader = "X-Desktop-Access-Token";
+    private const string DesktopAccessTokenExpiresHeader = "X-Desktop-Access-Token-Expires";
+    private const string DesktopDeviceIdHeader = "X-Desktop-Device-Id";
+    private const string DesktopDeviceKeyHeader = "X-Desktop-Device-Key";
+    private static readonly TimeSpan DeviceTokenLifetime = TimeSpan.FromDays(30);
 
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
@@ -120,6 +127,23 @@ public static class AuthEndpoints
                     extensions: new Dictionary<string, object?> { ["message"] = errorMessage ?? "Invalid or expired exchange token." });
             }
 
+            // The desktop webview cannot rely on the session cookie, so the exchange also
+            // hands back a long-lived device credential. The JSON body stays unchanged.
+            var tokenProblem = await IssueDeviceTokenOrProblemAsync(
+                httpContext,
+                authService,
+                user.Id,
+                request.DeviceKey,
+                request.DeviceName,
+                request.DeviceOs,
+                request.AgentVersion,
+                ct);
+
+            if (tokenProblem != null)
+            {
+                return tokenProblem;
+            }
+
             return Results.Ok(user);
         }).RequireRateLimiting("auth");
 
@@ -161,6 +185,23 @@ public static class AuthEndpoints
                     title: "Unauthorized",
                     detail: errorMessage ?? "Invalid email or password.",
                     extensions: new Dictionary<string, object?> { ["message"] = errorMessage ?? "Invalid email or password." });
+            }
+
+            // Local deployments without OIDC keep a working desktop: the same credential
+            // is issued here as on the SSO exchange, and the cookie sign-in is unchanged.
+            var tokenProblem = await IssueDeviceTokenOrProblemAsync(
+                httpContext,
+                authService,
+                userDto.Id,
+                request.DeviceKey,
+                request.DeviceName,
+                request.DeviceOs,
+                request.AgentVersion,
+                ct);
+
+            if (tokenProblem != null)
+            {
+                return tokenProblem;
             }
 
             return Results.Ok(userDto);
@@ -232,7 +273,74 @@ public static class AuthEndpoints
             return Results.Ok(new { message = "Logged out successfully" });
         });
 
+        group.MapDelete("/device-token", async (
+            HttpContext httpContext,
+            IAuthService authService,
+            CancellationToken ct) =>
+        {
+            // The group is anonymous, so the device scheme is authenticated explicitly
+            // instead of relying on the fallback policy.
+            var result = await httpContext.AuthenticateAsync(DeviceTokenAuthenticationHandler.SchemeName);
+            if (!result.Succeeded)
+            {
+                return Results.Unauthorized();
+            }
+
+            var rawToken = DeviceTokenAuthenticationHandler.ExtractBearerToken(
+                httpContext.Request.Headers.Authorization.ToString());
+
+            if (string.IsNullOrWhiteSpace(rawToken))
+            {
+                return Results.Unauthorized();
+            }
+
+            // Idempotent: clearing an already cleared token still returns 204.
+            await authService.ClearDeviceTokenAsync(rawToken, ct);
+            return Results.NoContent();
+        });
+
         return app;
+    }
+
+    private static async Task<IResult?> IssueDeviceTokenOrProblemAsync(
+        HttpContext httpContext,
+        IAuthService authService,
+        Guid userId,
+        string? deviceKey,
+        string? deviceName,
+        string? deviceOs,
+        string? agentVersion,
+        CancellationToken ct)
+    {
+        var (status, token) = await authService.IssueDeviceTokenAsync(
+            userId,
+            deviceKey,
+            deviceName,
+            deviceOs,
+            agentVersion,
+            DeviceTokenLifetime,
+            ct);
+
+        if (status == DeviceTokenIssueStatus.DeviceRevoked || token == null)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Forbidden",
+                detail: "device_revoked: the device key was revoked by an operator. Sign in again to register a new device.",
+                extensions: new Dictionary<string, object?> { ["code"] = "device_revoked" });
+        }
+
+        var headers = httpContext.Response.Headers;
+        headers[DesktopAccessTokenHeader] = token.RawToken;
+        if (token.ExpiresAtUtc.HasValue)
+        {
+            headers[DesktopAccessTokenExpiresHeader] =
+                token.ExpiresAtUtc.Value.ToString("o", CultureInfo.InvariantCulture);
+        }
+        headers[DesktopDeviceIdHeader] = token.DeviceId.ToString();
+        headers[DesktopDeviceKeyHeader] = token.DeviceKey;
+
+        return null;
     }
 
     private static bool IsLocalUrl(string? url) =>

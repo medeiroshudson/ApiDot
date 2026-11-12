@@ -6,10 +6,14 @@ import {
   openExternalBrowser,
 } from './desktopAuth';
 import * as runtime from './runtime';
+import { clearSidecarInfoCache } from './runtime';
+import { getAccessToken, setAccessToken } from '@/lib/api/authToken';
+import { getSession, setSession } from '@/lib/api/session';
 
 describe('desktopAuth', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearSidecarInfoCache();
     delete (window as any).__TAURI_INTERNALS__;
     delete (window as any).__TAURI__;
   });
@@ -236,13 +240,123 @@ describe('desktopAuth', () => {
 
       expect(global.fetch).toHaveBeenCalledWith('https://api.apidot.dev/api/auth/desktop-exchange', {
         method: 'POST',
-        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ token: 'desktop-token-xyz' }),
       });
       expect(user).toEqual(mockUser);
+    });
+
+    it('persists the device credential and connects the sidecar after a desktop exchange', async () => {
+      const invoke = vi.fn().mockImplementation(async (cmd: string) => {
+        if (cmd === 'get_sidecar_info') {
+          return { port: 43210, secret: 'sidecar-secret' };
+        }
+        return undefined;
+      });
+      (window as any).__TAURI__ = { core: { invoke } };
+
+      const mockUser = { id: 'u100', email: 'user@apidot.dev', displayName: 'Dev' };
+      const headers = new Headers({
+        'X-Desktop-Access-Token': 'device-token-abc',
+        'X-Desktop-Access-Token-Expires': '2026-12-09T00:00:00.0000000Z',
+        'X-Desktop-Device-Id': '11111111-1111-1111-1111-111111111111',
+        'X-Desktop-Device-Key': 'machine-key-1',
+      });
+
+      const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('/api/auth/desktop-exchange')) {
+          return {
+            ok: true,
+            status: 200,
+            headers,
+            json: async () => mockUser,
+          } as unknown as Response;
+        }
+        return { ok: true, status: 204 } as Response;
+      });
+      global.fetch = fetchMock;
+
+      await exchangeDesktopToken('desktop-token-xyz', 'https://api.apidot.dev');
+
+      expect(getAccessToken()).toBe('device-token-abc');
+      expect(getSession()).toMatchObject({
+        userId: 'u100',
+        deviceId: '11111111-1111-1111-1111-111111111111',
+        deviceKey: 'machine-key-1',
+        accessToken: 'device-token-abc',
+        expiresAt: '2026-12-09T00:00:00.0000000Z',
+        serverUrl: 'https://api.apidot.dev',
+      });
+      expect(invoke).toHaveBeenCalledWith('save_session', {
+        session: {
+          user_id: 'u100',
+          device_id: '11111111-1111-1111-1111-111111111111',
+          device_key: 'machine-key-1',
+          access_token: 'device-token-abc',
+          expires_at: '2026-12-09T00:00:00.0000000Z',
+          server_url: 'https://api.apidot.dev',
+        },
+      });
+      expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:43210/connect', {
+        method: 'POST',
+        headers: {
+          'X-ApiDot-Sidecar-Secret': 'sidecar-secret',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          serverUrl: 'https://api.apidot.dev',
+          token: 'device-token-abc',
+        }),
+      });
+
+      delete (window as any).__TAURI__;
+      setSession(null);
+      setAccessToken(null);
+    });
+
+    it('does not fail the login when the sidecar /connect call fails', async () => {
+      const invoke = vi.fn().mockImplementation(async (cmd: string) => {
+        if (cmd === 'get_sidecar_info') {
+          return { port: 43210, secret: 'sidecar-secret' };
+        }
+        return undefined;
+      });
+      (window as any).__TAURI__ = { core: { invoke } };
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const mockUser = { id: 'u100', email: 'user@apidot.dev', displayName: 'Dev' };
+      const headers = new Headers({
+        'X-Desktop-Access-Token': 'device-token-abc',
+        'X-Desktop-Device-Id': '11111111-1111-1111-1111-111111111111',
+      });
+
+      const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('/api/auth/desktop-exchange')) {
+          return {
+            ok: true,
+            status: 200,
+            headers,
+            json: async () => mockUser,
+          } as unknown as Response;
+        }
+        return { ok: false, status: 500 } as Response;
+      });
+      global.fetch = fetchMock;
+
+      const user = await exchangeDesktopToken('desktop-token-xyz', 'https://api.apidot.dev');
+
+      expect(user).toEqual(mockUser);
+      expect(getAccessToken()).toBe('device-token-abc');
+      expect(getSession()).toMatchObject({
+        serverUrl: 'https://api.apidot.dev',
+        accessToken: 'device-token-abc',
+      });
+
+      delete (window as any).__TAURI__;
+      setSession(null);
+      setAccessToken(null);
     });
 
     it('throws error when server responds with 401 ProblemDetails', async () => {

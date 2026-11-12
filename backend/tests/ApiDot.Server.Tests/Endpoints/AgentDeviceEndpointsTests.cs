@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Net.WebSockets;
 using ApiDot.Server.Data;
-using ApiDot.Server.Data.Entities;
 using ApiDot.Server.Models;
 using ApiDot.Server.Tests.WebSockets;
 using ApiDot.Server.WebSockets;
@@ -341,5 +340,31 @@ public class AgentDeviceEndpointsTests : IClassFixture<WebApplicationFactory<Pro
 
         var notFoundRes = await client.GetAsync($"/api/agent/devices/{Guid.NewGuid()}");
         notFoundRes.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Device_Dtos_Carry_Identity_Without_Scope_Flags()
+    {
+        EnsureDatabaseCreated();
+        var client = _factory.CreateClient();
+
+        var createRes = await client.PostAsJsonAsync("/api/agent/devices", new CreateAgentDeviceRequest { Name = "Listing Device" });
+        createRes.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = await createRes.Content.ReadFromJsonAsync<CreateAgentDeviceResponse>();
+        created.Should().NotBeNull();
+        created!.Device.Should().NotBeNull();
+        created.Device!.Id.Should().Be(created.Id);
+
+        var listRes = await client.GetAsync("/api/agent/devices");
+        listRes.StatusCode.Should().Be(HttpStatusCode.OK);
+        var devices = await listRes.Content.ReadFromJsonAsync<List<AgentDeviceDto>>();
+        devices.Should().NotBeNull();
+        var listed = devices!.Single(d => d.Id == created.Id);
+        listed.Name.Should().Be("Listing Device");
+        listed.IsRevoked.Should().BeFalse();
+
+        // The DTO no longer exposes any scope information.
+        var rawJson = await listRes.Content.ReadAsStringAsync();
+        rawJson.Should().NotContain("scopes");
     }
 }

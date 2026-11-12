@@ -76,6 +76,28 @@ builder.Services.AddSessionCookieHardening();
 builder.Services.AddServerServices(builder.Configuration);
 builder.Services.AddServerHttpClients(builder.Configuration);
 
+const string DesktopCorsPolicy = "desktop";
+
+// The desktop webview runs on a WebKit origin (tauri://localhost) and sends the device
+// token itself, so credentials are never enabled for these origins.
+static string[] ResolveDesktopOrigins(IConfiguration configuration) =>
+    (configuration["APIDOT_DESKTOP_ORIGINS"]
+        ?? "tauri://localhost,https://tauri.localhost,http://tauri.localhost,http://localhost:3000")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(DesktopCorsPolicy, policy =>
+        policy.WithOrigins(ResolveDesktopOrigins(builder.Configuration))
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .WithExposedHeaders(
+                "X-Desktop-Access-Token",
+                "X-Desktop-Access-Token-Expires",
+                "X-Desktop-Device-Id",
+                "X-Desktop-Device-Key"));
+});
+
 const string AuthRateLimitPolicy = "auth";
 
 static int ResolveAuthRateLimitPermit(IServiceProvider services)
@@ -103,6 +125,7 @@ var app = builder.Build();
 app.ApplyDatabaseMigrations();
 
 app.UseForwardedHeaders();
+app.UseCors(DesktopCorsPolicy);
 app.UseExceptionHandler();
 app.UseWebSockets(new WebSocketOptions
 {

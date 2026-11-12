@@ -1,4 +1,5 @@
 pub mod menu;
+pub mod session;
 pub mod sidecar;
 pub mod storage;
 
@@ -7,6 +8,7 @@ pub use menu::{
     create_settings_item, ABOUT_AUTHORS, ABOUT_COMMENTS, ABOUT_COPYRIGHT, ABOUT_LICENSE,
     ABOUT_NAME, ABOUT_WEBSITE, OPEN_SETTINGS_ACCELERATOR, OPEN_SETTINGS_EVENT, OPEN_SETTINGS_ID,
 };
+pub use session::{clear_session, load_session, save_session, DesktopSession};
 pub use sidecar::{
     get_sidecar_info, parse_sidecar_port, resolve_sidecar_binary_path, SidecarInfo, SidecarManager,
     SidecarState,

@@ -372,6 +372,7 @@ const ptBR = {
     statusOnline: 'Online',
     statusOffline: 'Offline',
     activeDeviceBadge: 'Ativo',
+    currentDeviceBadge: 'Este dispositivo',
     deviceActive: 'Dispositivo Ativo',
     useAsActive: 'Usar como Ativo',
     setActiveDevice: 'Definir este dispositivo como padrão de execução',

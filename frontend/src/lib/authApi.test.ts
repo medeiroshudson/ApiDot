@@ -4,10 +4,15 @@ import {
   loginLocal,
   getCurrentUser,
   logout,
+  revokeDeviceToken,
   patchUserLocale,
   AuthConfig,
   AuthUser,
 } from './authApi';
+import { getSession, setSession } from './api/session';
+import { setAccessToken } from './api/authToken';
+import { setApiBase } from './api/base';
+import { clearSidecarInfoCache } from './desktop/runtime';
 
 describe('authApi', () => {
   const originalFetch = global.fetch;
@@ -87,7 +92,82 @@ describe('authApi', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: 'user@example.com', password: 'secret123' }),
       });
+      expect(global.fetch).toHaveBeenCalledTimes(1);
       expect(result).toEqual(mockUser);
+    });
+
+    it('persists the device credential on the desktop after local login', async () => {
+      const invoke = vi.fn().mockImplementation(async (cmd: string) => {
+        if (cmd === 'get_sidecar_info') {
+          return { port: 43210, secret: 'sidecar-secret' };
+        }
+        return undefined;
+      });
+      (window as any).__TAURI__ = { core: { invoke } };
+      setApiBase('https://api.example.com');
+      clearSidecarInfoCache();
+
+      const mockUser: AuthUser = {
+        id: 'usr-123',
+        email: 'user@example.com',
+        displayName: 'Test User',
+        isRoot: true,
+        workspaces: [{ id: 'ws-1', name: 'Default', role: 'Owner' }],
+      };
+
+      const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('/api/auth/local')) {
+          return {
+            ok: true,
+            status: 200,
+            headers: new Headers({
+              'X-Desktop-Access-Token': 'tok-local',
+              'X-Desktop-Access-Token-Expires': '2026-12-09T00:00:00Z',
+              'X-Desktop-Device-Id': 'dev-local',
+              'X-Desktop-Device-Key': 'key-local',
+            }),
+            json: async () => mockUser,
+          } as unknown as Response;
+        }
+        return { ok: true, status: 204 } as Response;
+      });
+      global.fetch = fetchMock;
+
+      await loginLocal('user@example.com', 'secret123');
+
+      expect(getSession()).toMatchObject({
+        userId: 'usr-123',
+        deviceId: 'dev-local',
+        deviceKey: 'key-local',
+        accessToken: 'tok-local',
+        serverUrl: 'https://api.example.com',
+      });
+      expect(invoke).toHaveBeenCalledWith(
+        'save_session',
+        expect.objectContaining({
+          session: expect.objectContaining({
+            access_token: 'tok-local',
+            device_id: 'dev-local',
+          }),
+        })
+      );
+      expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:43210/connect', {
+        method: 'POST',
+        headers: {
+          'X-ApiDot-Sidecar-Secret': 'sidecar-secret',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          serverUrl: 'https://api.example.com',
+          token: 'tok-local',
+        }),
+      });
+
+      delete (window as any).__TAURI__;
+      setApiBase(null);
+      clearSidecarInfoCache();
+      setSession(null);
+      setAccessToken(null);
     });
 
     it('throws error when login fails with 401 problem details', async () => {
@@ -214,6 +294,30 @@ describe('authApi', () => {
       await expect(patchUserLocale('invalid')).rejects.toThrow(
         'Failed to update locale preference'
       );
+    });
+  });
+
+  describe('revokeDeviceToken', () => {
+    it('sends DELETE to /api/auth/device-token', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+      } as Response);
+
+      await revokeDeviceToken();
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/auth/device-token', {
+        method: 'DELETE',
+      });
+    });
+
+    it('treats an already invalid token as revoked', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+      } as Response);
+
+      await expect(revokeDeviceToken()).resolves.toBeUndefined();
     });
   });
 });

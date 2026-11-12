@@ -30,6 +30,13 @@ namespace ApiDot.Server.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("DeviceKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ExpiresAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("IsRevoked")
                         .HasColumnType("INTEGER");
 
@@ -46,6 +53,9 @@ namespace ApiDot.Server.Migrations
 
                     b.Property<string>("LastConnectedOs")
                         .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastUsedAtUtc")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
@@ -71,7 +81,7 @@ namespace ApiDot.Server.Migrations
                     b.HasIndex("TokenHash")
                         .IsUnique();
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId", "DeviceKey");
 
                     b.ToTable("AgentDevices");
                 });

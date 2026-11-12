@@ -236,7 +236,7 @@ function run() {
   assert(workflowContent.includes('actions/setup-dotnet'), 'desktop-release.yml missing actions/setup-dotnet');
   assert(workflowContent.includes("dotnet-version: '9.0.x'"), 'desktop-release.yml must use .NET 9.0.x');
   assert(workflowContent.includes('actions/setup-node'), 'desktop-release.yml missing actions/setup-node');
-  assert(workflowContent.includes('node-version: 20'), 'desktop-release.yml must use Node 20');
+  assert(workflowContent.includes('node-version: 22'), 'desktop-release.yml must use Node 22');
   assert(workflowContent.includes('rustup target add'), 'desktop-release.yml must configure rustup target');
   assert(workflowContent.includes('libwebkit2gtk-4.1-dev'), 'desktop-release.yml must install Linux webkit prerequisites');
   assert(workflowContent.includes('dotnet publish'), 'desktop-release.yml must compile Agent Native AOT');

@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use apidot_desktop::session::*;
 use apidot_desktop::sidecar::*;
 use apidot_desktop::storage::*;
 use tauri::Manager;
@@ -46,6 +47,9 @@ fn main() {
             fs_load_storage,
             fs_list_storage,
             fs_delete_storage,
+            load_session,
+            save_session,
+            clear_session,
         ])
         .on_menu_event(|app, event| {
             if event.id().as_ref() == "open_settings" {

@@ -72,10 +72,10 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Set up Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -95,6 +95,11 @@ jobs:
       - name: Publish Native AOT Agent
         run: |
           dotnet publish backend/src/ApiDot.Agent/ApiDot.Agent.csproj -c Release -r ${{ matrix.rid }} -p:PublishAot=true -p:InvariantGlobalization=true --self-contained -o ./agent-publish
+
+      - name: Build frontend static export
+        run: |
+          npm --prefix frontend ci
+          npm --prefix frontend run build:desktop
 
       - name: Prepare Desktop Environment
         shell: bash
