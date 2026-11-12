@@ -10,6 +10,8 @@ import { isDesktop } from '@/lib/desktop/runtime';
 import { endDeviceSession } from '@/lib/desktop/deviceSession';
 import { loadDesktopSession } from '@/lib/desktop/session';
 import { connectSidecar } from '@/lib/desktop/sidecarConnection';
+import { useAuthStore } from '@/stores/useAuthStore';
+import type { AuthUser } from '@/lib/authApi';
 
 /**
  * Restores the persisted API base and, in the desktop app, the device session
@@ -18,7 +20,8 @@ import { connectSidecar } from '@/lib/desktop/sidecarConnection';
  * Boot sequence with a stored session:
  * 1. hydrate the in-memory session and bearer token;
  * 2. `GET /api/auth/me` so a stale token surfaces as a 401 instead of an
- *    endless WebSocket reconnect loop;
+ *    endless WebSocket reconnect loop, and so the auth store already knows the
+ *    user is signed in when the routes mount;
  * 3. on success, ask the sidecar to open its agent WebSocket.
  *
  * The children stay unmounted until the boot sequence above has been
@@ -94,6 +97,17 @@ export function ApiBaseBootstrap({ children }: { children: React.ReactNode }): R
           // cleared the session and closed the sidecar connection.
           if (res.status === 401 || !res.ok) {
             return;
+          }
+
+          // The token is valid, so the app is signed in: publishing the user
+          // keeps the login screen from asking again and lets a deep link
+          // parked before hydration resume. A malformed body is logged and
+          // ignored; the boot continues with the sidecar connection.
+          try {
+            const user = (await res.json()) as AuthUser;
+            useAuthStore.getState().setUser(user);
+          } catch (err) {
+            console.error('Failed to parse the desktop session user:', err);
           }
 
           const serverUrl = session.serverUrl || getApiBase();

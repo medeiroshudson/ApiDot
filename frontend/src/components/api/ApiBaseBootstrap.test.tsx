@@ -14,6 +14,7 @@ import {
   connectSidecar,
   disconnectSidecar,
 } from '@/lib/desktop/sidecarConnection';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 const routerMock = vi.hoisted(() => ({ replace: vi.fn() }));
 
@@ -57,11 +58,16 @@ describe('ApiBaseBootstrap', () => {
     setSession(null);
     setAccessToken(null);
     setUnauthorizedHandler(null);
+    useAuthStore.getState().reset();
     delete (window as any).__TAURI__;
     delete (window as any).__TAURI_INTERNALS__;
     vi.clearAllMocks();
     vi.mocked(loadDesktopSession).mockResolvedValue(null);
-    fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 } as Response);
+    fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => null,
+    } as unknown as Response);
     vi.stubGlobal('fetch', fetchMock);
   });
 
@@ -70,6 +76,7 @@ describe('ApiBaseBootstrap', () => {
     setSession(null);
     setAccessToken(null);
     setUnauthorizedHandler(null);
+    useAuthStore.getState().reset();
     delete (window as any).__TAURI__;
     delete (window as any).__TAURI_INTERNALS__;
     vi.unstubAllGlobals();
@@ -138,6 +145,54 @@ describe('ApiBaseBootstrap', () => {
     expect(getAccessToken()).toBe('tok-1');
     expect(getSession()).toMatchObject({ deviceId: 'dev-1', deviceKey: 'key-1' });
     expect(routerMock.replace).not.toHaveBeenCalled();
+  });
+
+  it('populates the auth store from the hydrated session', async () => {
+    (window as any).__TAURI__ = {};
+    vi.mocked(loadDesktopSession).mockResolvedValue(sessionFixture);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: 'u1',
+        email: 'u1@example.com',
+        displayName: 'User One',
+        isRoot: false,
+        workspaces: [],
+      }),
+    } as unknown as Response);
+
+    renderWithChild();
+
+    await waitFor(() => {
+      expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    });
+
+    expect(useAuthStore.getState().user?.id).toBe('u1');
+    expect(screen.getByText('app content')).toBeInTheDocument();
+  });
+
+  it('still boots when the session user body is malformed', async () => {
+    (window as any).__TAURI__ = {};
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(loadDesktopSession).mockResolvedValue(sessionFixture);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError('Unexpected token <');
+      },
+    } as unknown as Response);
+
+    renderWithChild();
+
+    await waitFor(() => {
+      expect(connectSidecar).toHaveBeenCalled();
+    });
+
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(screen.getByText('app content')).toBeInTheDocument();
+    consoleError.mockRestore();
   });
 
   it('clears and disconnects when the stored token is rejected', async () => {
