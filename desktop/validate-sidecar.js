@@ -74,6 +74,24 @@ function run() {
     'main.rs missing close event detection for graceful shutdown'
   );
   assert(mainRs.includes('stop_sidecar'), 'main.rs missing stop_sidecar call in window event hook');
+
+  // A quit request (AppleEvent, Cmd+Q) bypasses the window events, so the sidecar
+  // must also be stopped from the app-level run loop.
+  const runCallbackIdx = mainRs.indexOf('.run(');
+  assert(runCallbackIdx !== -1, 'main.rs missing app run callback');
+  const runCallback = mainRs.slice(runCallbackIdx);
+  assert(
+    runCallback.includes('RunEvent::ExitRequested') || runCallback.includes('RunEvent::Exit'),
+    'main.rs missing RunEvent::Exit or RunEvent::ExitRequested in the app run callback'
+  );
+  assert(
+    runCallback.includes('stop_sidecar'),
+    'main.rs missing stop_sidecar call in the app run callback'
+  );
+  assert(
+    mainRs.includes('on_window_event') && mainRs.indexOf('on_window_event') < runCallbackIdx,
+    'main.rs missing the window-event shutdown hook'
+  );
   console.log('✓ desktop/src-tauri/src/main.rs verified');
 
   // 3. Check lib.rs
