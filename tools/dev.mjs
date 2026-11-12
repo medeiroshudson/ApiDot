@@ -20,7 +20,6 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const targets = args.filter((arg) => !arg.startsWith('--'));
-// macOS Control Center already listens on :5000, so the local API defaults to :5181.
 const defaultApiPort = 5181;
 const apiBase = (process.env.APIDOT_API_BASE || `http://127.0.0.1:${defaultApiPort}`).replace(/\/+$/, '');
 

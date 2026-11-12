@@ -75,8 +75,6 @@ function run() {
   );
   assert(mainRs.includes('stop_sidecar'), 'main.rs missing stop_sidecar call in window event hook');
 
-  // A quit request (AppleEvent, Cmd+Q) bypasses the window events, so the sidecar
-  // must also be stopped from the app-level run loop.
   const runCallbackIdx = mainRs.indexOf('.run(');
   assert(runCallbackIdx !== -1, 'main.rs missing app run callback');
   const runCallback = mainRs.slice(runCallbackIdx);
