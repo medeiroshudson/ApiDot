@@ -372,8 +372,6 @@ const ptBR = {
     statusOnline: 'Online',
     statusOffline: 'Offline',
     activeDeviceBadge: 'Ativo',
-    deviceScopeDesktop: 'Desktop',
-    deviceScopeAgent: 'Agente',
     currentDeviceBadge: 'Este dispositivo',
     deviceActive: 'Dispositivo Ativo',
     useAsActive: 'Usar como Ativo',

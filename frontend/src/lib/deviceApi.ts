@@ -9,11 +9,6 @@ export interface AgentDeviceDto {
   lastConnectedHostname?: string | null;
   lastConnectedOs?: string | null;
   agentVersion?: string | null;
-  /**
-   * Device scope flags: bit 1 = agent WebSocket, bit 2 = REST/desktop UI.
-   * Absent on legacy rows; consumers must tolerate the missing value.
-   */
-  scopes?: number;
   isRevoked: boolean;
   isOnline: boolean;
 }

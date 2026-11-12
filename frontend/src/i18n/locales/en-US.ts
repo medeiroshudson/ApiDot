@@ -370,8 +370,6 @@ const enUS = {
     statusOnline: 'Online',
     statusOffline: 'Offline',
     activeDeviceBadge: 'Active',
-    deviceScopeDesktop: 'Desktop',
-    deviceScopeAgent: 'Agent',
     currentDeviceBadge: 'This device',
     deviceActive: 'Active Device',
     useAsActive: 'Use as Active',

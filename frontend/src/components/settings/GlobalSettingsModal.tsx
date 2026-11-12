@@ -931,11 +931,6 @@ export function GlobalSettingsModal({
                         const isThisActive = activeDeviceId === device.id;
                         const isBusy = actionInProgressId === device.id;
 
-                        // Scopes are optional for legacy rows: no value means no
-                        // scope badge, never a guessed one.
-                        const scopes = typeof device.scopes === 'number' ? device.scopes : 0;
-                        const hasDesktopScope = (scopes & 2) === 2;
-                        const hasAgentScope = (scopes & 1) === 1;
                         const isCurrentDevice = Boolean(
                           currentDeviceId &&
                             currentDeviceId.toLowerCase() === device.id.toLowerCase()
@@ -971,23 +966,6 @@ export function GlobalSettingsModal({
                                     {device.name}
                                   </span>
 
-                                  {/* Device scopes (bit 2 = desktop UI, bit 1 = agent) */}
-                                  {hasDesktopScope && (
-                                    <span
-                                      data-testid={`scope-desktop-${device.id}`}
-                                      className="px-2 py-0.5 rounded text-[11px] font-medium bg-sky-500/10 text-sky-400 border border-sky-500/20"
-                                    >
-                                      {t('settings.deviceScopeDesktop')}
-                                    </span>
-                                  )}
-                                  {hasAgentScope && (
-                                    <span
-                                      data-testid={`scope-agent-${device.id}`}
-                                      className="px-2 py-0.5 rounded text-[11px] font-medium bg-violet-500/10 text-violet-300 border border-violet-500/20"
-                                    >
-                                      {t('settings.deviceScopeAgent')}
-                                    </span>
-                                  )}
                                   {isCurrentDevice && (
                                     <span
                                       data-testid={`current-device-badge-${device.id}`}
