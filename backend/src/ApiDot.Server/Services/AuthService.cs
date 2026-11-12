@@ -482,7 +482,6 @@ public class AuthService(
         return (true, userDto, null);
     }
 
-    private static readonly TimeSpan RestDeviceTokenLifetime = TimeSpan.FromDays(30);
     private static readonly TimeSpan DeviceLastUsedInterval = TimeSpan.FromHours(1);
     private const int DeviceKeyMaxLength = 64;
     private const int DeviceNameMaxLength = 200;
@@ -495,7 +494,6 @@ public class AuthService(
         string? name,
         string? os,
         string? version,
-        DeviceScope scopes,
         TimeSpan? lifetime,
         CancellationToken ct = default)
     {
@@ -527,16 +525,13 @@ public class AuthService(
 
         var rawToken = DeviceCredentialHelper.CreateRawToken();
         var now = DateTime.UtcNow;
-        var effectiveLifetime = lifetime
-            ?? (scopes.HasFlag(DeviceScope.Rest) ? RestDeviceTokenLifetime : null);
-        var expiresAtUtc = effectiveLifetime.HasValue ? now.Add(effectiveLifetime.Value) : (DateTime?)null;
+        var expiresAtUtc = lifetime.HasValue ? now.Add(lifetime.Value) : (DateTime?)null;
 
         if (device != null)
         {
             // Rotation keeps the row id so collection targets and history stay valid.
             device.TokenHash = DeviceCredentialHelper.ComputeHash(rawToken);
             device.TokenPrefix = DeviceCredentialHelper.Prefix(rawToken);
-            device.Scopes = scopes;
             device.ExpiresAtUtc = expiresAtUtc;
         }
         else
@@ -545,7 +540,6 @@ public class AuthService(
             {
                 Name = Truncate(name, DeviceNameMaxLength) ?? "Desktop",
                 DeviceKey = normalizedKey ?? GenerateDeviceKey(),
-                Scopes = scopes,
                 ExpiresAtUtc = expiresAtUtc,
                 CreatedAtUtc = now,
                 TokenHash = DeviceCredentialHelper.ComputeHash(rawToken),
@@ -588,7 +582,6 @@ public class AuthService(
 
     public async Task<AgentDevice?> ValidateDeviceTokenAsync(
         string rawToken,
-        DeviceScope requiredScope,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(rawToken))
@@ -610,11 +603,6 @@ public class AuthService(
 
         var now = DateTime.UtcNow;
         if (device.ExpiresAtUtc.HasValue && device.ExpiresAtUtc.Value <= now)
-        {
-            return null;
-        }
-
-        if (!device.Scopes.HasFlag(requiredScope))
         {
             return null;
         }

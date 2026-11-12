@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace ApiDot.Server.Migrations
 {
     /// <inheritdoc />
-    public partial class AddDeviceScopes : Migration
+    public partial class AddDeviceCredentials : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -34,17 +34,6 @@ namespace ApiDot.Server.Migrations
                 type: "TEXT",
                 nullable: true);
 
-            migrationBuilder.AddColumn<int>(
-                name: "Scopes",
-                table: "AgentDevices",
-                type: "INTEGER",
-                nullable: false,
-                defaultValue: 0);
-
-            // Devices created before the unified credential keep connecting over the
-            // WebSocket, so their backfilled scope must be Ws rather than the default 0.
-            migrationBuilder.Sql("UPDATE \"AgentDevices\" SET \"Scopes\" = 1 WHERE \"Scopes\" = 0;");
-
             migrationBuilder.CreateIndex(
                 name: "IX_AgentDevices_UserId_DeviceKey",
                 table: "AgentDevices",
@@ -68,10 +57,6 @@ namespace ApiDot.Server.Migrations
 
             migrationBuilder.DropColumn(
                 name: "LastUsedAtUtc",
-                table: "AgentDevices");
-
-            migrationBuilder.DropColumn(
-                name: "Scopes",
                 table: "AgentDevices");
 
             migrationBuilder.CreateIndex(

@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using ApiDot.Server.Enums;
 
 namespace ApiDot.Server.Data.Entities;
 
@@ -40,11 +39,6 @@ public class AgentDevice
     /// </summary>
     [MaxLength(64)]
     public string? DeviceKey { get; set; }
-
-    /// <summary>
-    /// Capabilities accepted for this device. Legacy rows are backfilled to <see cref="DeviceScope.Ws"/>.
-    /// </summary>
-    public DeviceScope Scopes { get; set; } = DeviceScope.Ws;
 
     /// <summary>Null means the token does not expire.</summary>
     public DateTime? ExpiresAtUtc { get; set; }

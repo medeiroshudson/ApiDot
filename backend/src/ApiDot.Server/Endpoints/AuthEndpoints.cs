@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Security.Claims;
-using ApiDot.Server.Enums;
 using ApiDot.Server.Models;
 using ApiDot.Server.Security;
 using ApiDot.Server.Services;
@@ -319,7 +318,6 @@ public static class AuthEndpoints
             deviceName,
             deviceOs,
             agentVersion,
-            DeviceScope.Rest | DeviceScope.Ws,
             DeviceTokenLifetime,
             ct);
 

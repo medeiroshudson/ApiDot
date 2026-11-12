@@ -1,5 +1,4 @@
 using ApiDot.Server.Data.Entities;
-using ApiDot.Server.Enums;
 using ApiDot.Server.Models;
 using Microsoft.AspNetCore.Http;
 
@@ -82,17 +81,15 @@ public interface IAuthService
         string? name,
         string? os,
         string? version,
-        DeviceScope scopes,
         TimeSpan? lifetime,
         CancellationToken ct = default);
 
     /// <summary>
-    /// Resolves the device behind a raw token. Rejects revoked, expired and
-    /// out-of-scope tokens, and refreshes <c>LastUsedAtUtc</c> at most once per hour.
+    /// Resolves the device behind a raw token. Rejects revoked and expired tokens, and
+    /// refreshes <c>LastUsedAtUtc</c> at most once per hour.
     /// </summary>
     Task<AgentDevice?> ValidateDeviceTokenAsync(
         string rawToken,
-        DeviceScope requiredScope,
         CancellationToken ct = default);
 
     /// <summary>

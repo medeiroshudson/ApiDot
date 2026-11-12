@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ApiDot.Server.Migrations
 {
     [DbContext(typeof(ApiDotDbContext))]
-    [Migration("20261109201414_AddDeviceScopes")]
-    partial class AddDeviceScopes
+    [Migration("20261112204505_AddDeviceCredentials")]
+    partial class AddDeviceCredentials
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -65,9 +65,6 @@ namespace ApiDot.Server.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
-
-                    b.Property<int>("Scopes")
-                        .HasColumnType("INTEGER");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()

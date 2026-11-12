@@ -63,9 +63,6 @@ namespace ApiDot.Server.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("Scopes")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasMaxLength(64)

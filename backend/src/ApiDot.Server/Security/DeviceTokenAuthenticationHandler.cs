@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
-using ApiDot.Server.Enums;
 using ApiDot.Server.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,8 +9,8 @@ using Microsoft.Extensions.Options;
 namespace ApiDot.Server.Security;
 
 /// <summary>
-/// Authenticates REST requests with the unified device credential (scope <c>rest</c>).
-/// A missing, malformed, expired, revoked or out-of-scope token yields
+/// Authenticates REST requests with the unified device credential.
+/// A missing, malformed, expired or revoked token yields
 /// <see cref="AuthenticateResult.NoResult"/> so the cookie and development bypass schemes
 /// can still run.
 /// </summary>
@@ -40,7 +39,7 @@ public sealed class DeviceTokenAuthenticationHandler(
         }
 
         var authService = Context.RequestServices.GetRequiredService<IAuthService>();
-        var device = await authService.ValidateDeviceTokenAsync(rawToken, DeviceScope.Rest, Context.RequestAborted);
+        var device = await authService.ValidateDeviceTokenAsync(rawToken, Context.RequestAborted);
         var user = device?.User;
 
         if (user == null)
