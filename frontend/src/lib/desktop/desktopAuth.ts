@@ -1,7 +1,7 @@
 import { AuthUser } from '@/lib/authApi';
 import { getSidecarInfo } from '@/lib/desktop/runtime';
 import { getApiBase } from '@/lib/api/base';
-import { persistDeviceCredential } from '@/lib/api/session';
+import { getSession, persistDeviceCredential } from '@/lib/api/session';
 
 export interface PollSessionOptions {
   signal?: AbortSignal;
@@ -189,12 +189,15 @@ export async function exchangeDesktopToken(token: string, baseUrl?: string): Pro
 
   // The one-time token travels in the body, so the exchange does not need the
   // cookie session (and the desktop CORS policy does not allow credentials).
+  // The stored device key reuses this machine's device row, exactly as the
+  // local login does; without one the body stays `{ token }`.
+  const deviceKey = getSession()?.deviceKey;
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ token }),
+    body: JSON.stringify(deviceKey ? { token, deviceKey } : { token }),
   });
 
   if (!res.ok) {

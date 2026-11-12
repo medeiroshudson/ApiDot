@@ -170,6 +170,49 @@ describe('authApi', () => {
       setAccessToken(null);
     });
 
+    it('sends the stored device key so the server reuses the device row', async () => {
+      setSession({ deviceKey: 'machine-key-1' });
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'usr-123', email: 'user@example.com' }),
+      } as Response);
+
+      await loginLocal('user@example.com', 'secret123');
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/auth/local', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'user@example.com',
+          password: 'secret123',
+          deviceKey: 'machine-key-1',
+        }),
+      });
+
+      setSession(null);
+    });
+
+    it('omits the device key when no session is stored', async () => {
+      setSession(null);
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'usr-123', email: 'user@example.com' }),
+      } as Response);
+
+      await loginLocal('user@example.com', 'secret123');
+
+      const init = vi.mocked(global.fetch).mock.calls[0][1] as RequestInit;
+      expect(JSON.parse(init.body as string)).toEqual({
+        email: 'user@example.com',
+        password: 'secret123',
+      });
+      expect(init.body as string).not.toContain('deviceKey');
+    });
+
     it('throws error when login fails with 401 problem details', async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: false,
