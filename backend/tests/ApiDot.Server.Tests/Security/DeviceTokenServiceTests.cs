@@ -1,6 +1,5 @@
 using ApiDot.Server.Data;
 using ApiDot.Server.Data.Entities;
-using ApiDot.Server.Enums;
 using ApiDot.Server.Security;
 using ApiDot.Server.Services;
 using FluentAssertions;
@@ -56,20 +55,18 @@ public class DeviceTokenServiceTests : IDisposable
         var user = await AddUserAsync();
 
         var first = await _authService.IssueDeviceTokenAsync(
-            user.Id, "machine-a", "Laptop", "macOS", "1.0.0",
-            DeviceScope.Rest | DeviceScope.Ws, TimeSpan.FromDays(30));
+            user.Id, "machine-a", "Laptop", "macOS", "1.0.0", TimeSpan.FromDays(30));
         var second = await _authService.IssueDeviceTokenAsync(
-            user.Id, "machine-a", "Laptop renamed", "macOS", "1.0.1",
-            DeviceScope.Rest | DeviceScope.Ws, TimeSpan.FromDays(30));
+            user.Id, "machine-a", "Laptop renamed", "macOS", "1.0.1", TimeSpan.FromDays(30));
 
         first.Status.Should().Be(DeviceTokenIssueStatus.Issued);
         second.Status.Should().Be(DeviceTokenIssueStatus.Issued);
         second.Token!.DeviceId.Should().Be(first.Token!.DeviceId);
         second.Token.RawToken.Should().NotBe(first.Token.RawToken);
 
-        (await _authService.ValidateDeviceTokenAsync(first.Token.RawToken, DeviceScope.Rest)).Should().BeNull();
+        (await _authService.ValidateDeviceTokenAsync(first.Token.RawToken)).Should().BeNull();
 
-        var valid = await _authService.ValidateDeviceTokenAsync(second.Token.RawToken, DeviceScope.Rest);
+        var valid = await _authService.ValidateDeviceTokenAsync(second.Token.RawToken);
         valid.Should().NotBeNull();
         valid!.Id.Should().Be(first.Token.DeviceId);
         valid.Name.Should().Be("Laptop renamed");
@@ -83,34 +80,35 @@ public class DeviceTokenServiceTests : IDisposable
         var user = await AddUserAsync();
 
         var issued = await _authService.IssueDeviceTokenAsync(
-            user.Id, "brand-new-key", "Desktop", null, null,
-            DeviceScope.Rest | DeviceScope.Ws, TimeSpan.FromDays(30));
+            user.Id, "brand-new-key", "Desktop", null, null, TimeSpan.FromDays(30));
 
         issued.Status.Should().Be(DeviceTokenIssueStatus.Issued);
         issued.Token!.DeviceKey.Should().Be("brand-new-key");
-        issued.Token.ExpiresAtUtc.Should().NotBeNull();
+        issued.Token.ExpiresAtUtc.Should().BeCloseTo(DateTime.UtcNow.AddDays(30), TimeSpan.FromMinutes(1));
 
         var device = await _db.AgentDevices.SingleAsync();
         device.Id.Should().Be(issued.Token.DeviceId);
         device.UserId.Should().Be(user.Id);
-        device.Scopes.Should().Be(DeviceScope.Rest | DeviceScope.Ws);
         device.TokenHash.Should().Be(DeviceCredentialHelper.ComputeHash(issued.Token.RawToken));
         device.TokenPrefix.Should().Be(DeviceCredentialHelper.Prefix(issued.Token.RawToken));
     }
 
     [Fact]
-    public async Task Missing_Key_Creates_A_Device_With_A_Generated_Key()
+    public async Task Missing_Key_Creates_A_Device_With_A_Generated_Key_And_No_Lifetime()
     {
         var user = await AddUserAsync();
 
         var issued = await _authService.IssueDeviceTokenAsync(
-            user.Id, null, "Desktop", null, null,
-            DeviceScope.Rest | DeviceScope.Ws, null);
+            user.Id, null, "Desktop", null, null, null);
 
         issued.Status.Should().Be(DeviceTokenIssueStatus.Issued);
         issued.Token!.DeviceKey.Should().NotBeNullOrWhiteSpace();
         issued.Token.DeviceKey.Should().HaveLength(32);
-        issued.Token.ExpiresAtUtc.Should().BeCloseTo(DateTime.UtcNow.AddDays(30), TimeSpan.FromMinutes(1));
+        issued.Token.ExpiresAtUtc.Should().BeNull();
+
+        var valid = await _authService.ValidateDeviceTokenAsync(issued.Token.RawToken);
+        valid.Should().NotBeNull();
+        valid!.ExpiresAtUtc.Should().BeNull();
     }
 
     [Fact]
@@ -119,16 +117,14 @@ public class DeviceTokenServiceTests : IDisposable
         var user = await AddUserAsync();
 
         var first = await _authService.IssueDeviceTokenAsync(
-            user.Id, "revoked-key", "Desktop", null, null,
-            DeviceScope.Rest | DeviceScope.Ws, TimeSpan.FromDays(30));
+            user.Id, "revoked-key", "Desktop", null, null, TimeSpan.FromDays(30));
 
         var device = await _db.AgentDevices.SingleAsync(d => d.Id == first.Token!.DeviceId);
         device.IsRevoked = true;
         await _db.SaveChangesAsync();
 
         var retry = await _authService.IssueDeviceTokenAsync(
-            user.Id, "revoked-key", "Desktop", null, null,
-            DeviceScope.Rest | DeviceScope.Ws, TimeSpan.FromDays(30));
+            user.Id, "revoked-key", "Desktop", null, null, TimeSpan.FromDays(30));
 
         retry.Status.Should().Be(DeviceTokenIssueStatus.DeviceRevoked);
         retry.Token.Should().BeNull();
@@ -136,44 +132,23 @@ public class DeviceTokenServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Rest_Tokens_Expire_And_Ws_Only_Tokens_Do_Not()
+    public async Task Expired_Token_Is_Rejected()
     {
         var user = await AddUserAsync();
 
-        var rest = await _authService.IssueDeviceTokenAsync(
-            user.Id, "rest-key", "Desktop", null, null,
-            DeviceScope.Rest, TimeSpan.FromMilliseconds(1));
+        var issued = await _authService.IssueDeviceTokenAsync(
+            user.Id, "short-lived", "Desktop", null, null, TimeSpan.FromMilliseconds(1));
         await Task.Delay(20);
 
-        (await _authService.ValidateDeviceTokenAsync(rest.Token!.RawToken, DeviceScope.Rest)).Should().BeNull();
-
-        var wsOnly = await _authService.IssueDeviceTokenAsync(
-            user.Id, "ws-key", "Agent", null, null,
-            DeviceScope.Ws, null);
-
-        wsOnly.Token!.ExpiresAtUtc.Should().BeNull();
-        var wsDevice = await _authService.ValidateDeviceTokenAsync(wsOnly.Token.RawToken, DeviceScope.Ws);
-        wsDevice.Should().NotBeNull();
-        wsDevice!.ExpiresAtUtc.Should().BeNull();
+        (await _authService.ValidateDeviceTokenAsync(issued.Token!.RawToken)).Should().BeNull();
     }
 
     [Fact]
-    public async Task Validation_Rejects_A_Token_Without_The_Required_Scope()
+    public async Task Unknown_Token_Is_Rejected()
     {
-        var user = await AddUserAsync();
-
-        var restOnly = await _authService.IssueDeviceTokenAsync(
-            user.Id, "rest-only", "Desktop", null, null,
-            DeviceScope.Rest, TimeSpan.FromDays(30));
-        var wsOnly = await _authService.IssueDeviceTokenAsync(
-            user.Id, "ws-only", "Agent", null, null,
-            DeviceScope.Ws, null);
-
-        (await _authService.ValidateDeviceTokenAsync(restOnly.Token!.RawToken, DeviceScope.Ws)).Should().BeNull();
-        (await _authService.ValidateDeviceTokenAsync(restOnly.Token.RawToken, DeviceScope.Rest)).Should().NotBeNull();
-
-        (await _authService.ValidateDeviceTokenAsync(wsOnly.Token!.RawToken, DeviceScope.Rest)).Should().BeNull();
-        (await _authService.ValidateDeviceTokenAsync(wsOnly.Token.RawToken, DeviceScope.Ws)).Should().NotBeNull();
+        (await _authService.ValidateDeviceTokenAsync(DeviceCredentialHelper.CreateRawToken()))
+            .Should().BeNull();
+        (await _authService.ValidateDeviceTokenAsync(string.Empty)).Should().BeNull();
     }
 
     [Fact]
@@ -182,11 +157,9 @@ public class DeviceTokenServiceTests : IDisposable
         var user = await AddUserAsync();
 
         var first = await _authService.IssueDeviceTokenAsync(
-            user.Id, "logout-a", "Device A", null, null,
-            DeviceScope.Rest, TimeSpan.FromDays(30));
+            user.Id, "logout-a", "Device A", null, null, TimeSpan.FromDays(30));
         var second = await _authService.IssueDeviceTokenAsync(
-            user.Id, "logout-b", "Device B", null, null,
-            DeviceScope.Rest, TimeSpan.FromDays(30));
+            user.Id, "logout-b", "Device B", null, null, TimeSpan.FromDays(30));
 
         (await _authService.ClearDeviceTokenAsync(first.Token!.RawToken)).Should().BeTrue();
         (await _authService.ClearDeviceTokenAsync(second.Token!.RawToken)).Should().BeTrue();
@@ -197,16 +170,15 @@ public class DeviceTokenServiceTests : IDisposable
         hashes.Should().OnlyHaveUniqueItems();
         hashes.Should().OnlyContain(hash => hash.StartsWith("revoked:") && hash.Length == 40);
 
-        (await _authService.ValidateDeviceTokenAsync(first.Token.RawToken, DeviceScope.Rest)).Should().BeNull();
-        (await _authService.ValidateDeviceTokenAsync(second.Token.RawToken, DeviceScope.Rest)).Should().BeNull();
+        (await _authService.ValidateDeviceTokenAsync(first.Token.RawToken)).Should().BeNull();
+        (await _authService.ValidateDeviceTokenAsync(second.Token.RawToken)).Should().BeNull();
 
         var reissued = await _authService.IssueDeviceTokenAsync(
-            user.Id, "logout-a", "Device A", null, null,
-            DeviceScope.Rest, TimeSpan.FromDays(30));
+            user.Id, "logout-a", "Device A", null, null, TimeSpan.FromDays(30));
 
         reissued.Status.Should().Be(DeviceTokenIssueStatus.Issued);
         reissued.Token!.DeviceId.Should().Be(first.Token.DeviceId);
-        var valid = await _authService.ValidateDeviceTokenAsync(reissued.Token.RawToken, DeviceScope.Rest);
+        var valid = await _authService.ValidateDeviceTokenAsync(reissued.Token.RawToken);
         valid.Should().NotBeNull();
         valid!.Id.Should().Be(first.Token.DeviceId);
     }
@@ -217,10 +189,9 @@ public class DeviceTokenServiceTests : IDisposable
         var user = await AddUserAsync();
 
         var issued = await _authService.IssueDeviceTokenAsync(
-            user.Id, "throttle-key", "Desktop", null, null,
-            DeviceScope.Rest, TimeSpan.FromDays(30));
+            user.Id, "throttle-key", "Desktop", null, null, TimeSpan.FromDays(30));
 
-        var validated = await _authService.ValidateDeviceTokenAsync(issued.Token!.RawToken, DeviceScope.Rest);
+        var validated = await _authService.ValidateDeviceTokenAsync(issued.Token!.RawToken);
         validated.Should().NotBeNull();
         var firstUse = validated!.LastUsedAtUtc;
         firstUse.Should().NotBeNull();
@@ -231,7 +202,7 @@ public class DeviceTokenServiceTests : IDisposable
         await _db.SaveChangesAsync();
         _db.ChangeTracker.Clear();
 
-        await _authService.ValidateDeviceTokenAsync(issued.Token.RawToken, DeviceScope.Rest);
+        await _authService.ValidateDeviceTokenAsync(issued.Token.RawToken);
         _db.ChangeTracker.Clear();
         device = await _db.AgentDevices.SingleAsync(d => d.Id == issued.Token.DeviceId);
         device.LastUsedAtUtc.Should().BeCloseTo(DateTime.UtcNow.AddMinutes(-30), TimeSpan.FromMinutes(1));
@@ -240,7 +211,7 @@ public class DeviceTokenServiceTests : IDisposable
         await _db.SaveChangesAsync();
         _db.ChangeTracker.Clear();
 
-        await _authService.ValidateDeviceTokenAsync(issued.Token.RawToken, DeviceScope.Rest);
+        await _authService.ValidateDeviceTokenAsync(issued.Token.RawToken);
         _db.ChangeTracker.Clear();
         device = await _db.AgentDevices.SingleAsync(d => d.Id == issued.Token.DeviceId);
         device.LastUsedAtUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(1));

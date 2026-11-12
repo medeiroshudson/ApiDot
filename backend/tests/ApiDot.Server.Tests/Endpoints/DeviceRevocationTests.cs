@@ -3,7 +3,6 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Net.WebSockets;
 using ApiDot.Server.Data;
-using ApiDot.Server.Enums;
 using ApiDot.Server.Models;
 using ApiDot.Server.Security;
 using ApiDot.Server.Services;
@@ -206,7 +205,6 @@ public class DeviceRevocationTests : IClassFixture<WebApplicationFactory<Program
             "WS Device",
             null,
             null,
-            DeviceScope.Rest | DeviceScope.Ws,
             TimeSpan.FromDays(30));
 
         status.Should().Be(DeviceTokenIssueStatus.Issued);
@@ -225,7 +223,7 @@ public class DeviceRevocationTests : IClassFixture<WebApplicationFactory<Program
     }
 
     [Fact]
-    public async Task Headless_Device_Creation_Uses_Ws_Scope_And_No_Expiry()
+    public async Task Headless_Device_Creation_Has_No_Expiry_And_No_Key()
     {
         var rootUserId = await GetRootUserIdAsync();
         var (_, token) = await _authService.IssueDeviceTokenAsync(
@@ -234,7 +232,6 @@ public class DeviceRevocationTests : IClassFixture<WebApplicationFactory<Program
             "Headless Creator",
             null,
             null,
-            DeviceScope.Rest,
             TimeSpan.FromDays(30));
 
         var client = _factory.CreateClient();
@@ -250,7 +247,6 @@ public class DeviceRevocationTests : IClassFixture<WebApplicationFactory<Program
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
         var device = await db.AgentDevices.SingleAsync(d => d.Id == created!.Id);
-        device.Scopes.Should().Be(DeviceScope.Ws);
         device.ExpiresAtUtc.Should().BeNull();
         device.DeviceKey.Should().BeNull();
     }

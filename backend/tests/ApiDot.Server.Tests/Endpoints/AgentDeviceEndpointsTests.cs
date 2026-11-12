@@ -2,8 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Net.WebSockets;
 using ApiDot.Server.Data;
-using ApiDot.Server.Data.Entities;
-using ApiDot.Server.Enums;
 using ApiDot.Server.Models;
 using ApiDot.Server.Tests.WebSockets;
 using ApiDot.Server.WebSockets;
@@ -345,43 +343,28 @@ public class AgentDeviceEndpointsTests : IClassFixture<WebApplicationFactory<Pro
     }
 
     [Fact]
-    public async Task Device_Dtos_Expose_Numeric_Scope_Flags()
+    public async Task Device_Dtos_Carry_Identity_Without_Scope_Flags()
     {
         EnsureDatabaseCreated();
         var client = _factory.CreateClient();
 
-        var createRes = await client.PostAsJsonAsync("/api/agent/devices", new CreateAgentDeviceRequest { Name = "Scope Headless Device" });
+        var createRes = await client.PostAsJsonAsync("/api/agent/devices", new CreateAgentDeviceRequest { Name = "Listing Device" });
         createRes.StatusCode.Should().Be(HttpStatusCode.Created);
         var created = await createRes.Content.ReadFromJsonAsync<CreateAgentDeviceResponse>();
         created.Should().NotBeNull();
         created!.Device.Should().NotBeNull();
-        created.Device!.Scopes.Should().Be((int)DeviceScope.Ws);
-
-        using (var scope = _factory.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
-            var (_, tokenHash, tokenPrefix) = DeviceTokenHelper.GenerateToken();
-            db.AgentDevices.Add(new AgentDevice
-            {
-                Name = "Scope Desktop Device",
-                TokenHash = tokenHash,
-                TokenPrefix = tokenPrefix,
-                DeviceKey = "scope-desktop-key",
-                Scopes = DeviceScope.Rest | DeviceScope.Ws
-            });
-            await db.SaveChangesAsync();
-        }
+        created.Device!.Id.Should().Be(created.Id);
 
         var listRes = await client.GetAsync("/api/agent/devices");
         listRes.StatusCode.Should().Be(HttpStatusCode.OK);
         var devices = await listRes.Content.ReadFromJsonAsync<List<AgentDeviceDto>>();
         devices.Should().NotBeNull();
-        devices!.Single(d => d.Id == created.Id).Scopes.Should().Be(1);
-        devices.Single(d => d.Name == "Scope Desktop Device").Scopes.Should().Be(3);
+        var listed = devices!.Single(d => d.Id == created.Id);
+        listed.Name.Should().Be("Listing Device");
+        listed.IsRevoked.Should().BeFalse();
 
-        var getRes = await client.GetAsync($"/api/agent/devices/{created.Id}");
-        getRes.StatusCode.Should().Be(HttpStatusCode.OK);
-        var detail = await getRes.Content.ReadFromJsonAsync<AgentDeviceDto>();
-        detail!.Scopes.Should().Be(1);
+        // The DTO no longer exposes any scope information.
+        var rawJson = await listRes.Content.ReadAsStringAsync();
+        rawJson.Should().NotContain("scopes");
     }
 }

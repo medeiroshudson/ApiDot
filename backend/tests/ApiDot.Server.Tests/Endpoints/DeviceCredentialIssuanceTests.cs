@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using ApiDot.Server.Data;
-using ApiDot.Server.Enums;
 using ApiDot.Server.Models;
 using ApiDot.Server.Services;
 using FluentAssertions;
@@ -119,7 +118,6 @@ public class DeviceCredentialIssuanceTests : IClassFixture<WebApplicationFactory
         var device = await db.AgentDevices.SingleAsync(d => d.Id == deviceId);
         device.UserId.Should().Be(body.Id);
         device.DeviceKey.Should().Be(deviceKey);
-        device.Scopes.Should().Be(DeviceScope.Rest | DeviceScope.Ws);
         device.Name.Should().Be("MacBook Pro");
         device.LastConnectedOs.Should().Be("macOS");
         device.AgentVersion.Should().Be("1.2.3");
@@ -169,8 +167,8 @@ public class DeviceCredentialIssuanceTests : IClassFixture<WebApplicationFactory
             (await db.AgentDevices.CountAsync(d => d.Id == firstDeviceId)).Should().Be(1);
         }
 
-        (await _authService.ValidateDeviceTokenAsync(firstRawToken, DeviceScope.Rest)).Should().BeNull();
-        var current = await _authService.ValidateDeviceTokenAsync(secondRawToken, DeviceScope.Rest);
+        (await _authService.ValidateDeviceTokenAsync(firstRawToken)).Should().BeNull();
+        var current = await _authService.ValidateDeviceTokenAsync(secondRawToken);
         current.Should().NotBeNull();
         current!.Name.Should().Be("Second Name");
     }
@@ -209,7 +207,6 @@ public class DeviceCredentialIssuanceTests : IClassFixture<WebApplicationFactory
         var db = scope.ServiceProvider.GetRequiredService<ApiDotDbContext>();
         var device = await db.AgentDevices.SingleAsync(d => d.Id == deviceId);
         device.UserId.Should().Be(body!.Id);
-        device.Scopes.Should().Be(DeviceScope.Rest | DeviceScope.Ws);
     }
 
     [Fact]
