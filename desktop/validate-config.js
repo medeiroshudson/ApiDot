@@ -148,8 +148,9 @@ function run() {
   // 6. root package.json
   assert(fs.existsSync(rootPkgPath), 'root package.json must exist');
   const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, 'utf-8'));
-  assert(rootPkg.scripts?.['desktop:dev'], 'missing desktop:dev script');
-  assert(rootPkg.scripts?.['desktop:build'], 'missing desktop:build script');
+  for (const script of ['dev', 'dev:local', 'dev:desktop', 'build', 'build:desktop', 'test', 'check']) {
+    assert(rootPkg.scripts?.[script], `missing root script: ${script}`);
+  }
   console.log('✓ root package.json scripts verified');
 
   // 7. desktop/prepare.js
