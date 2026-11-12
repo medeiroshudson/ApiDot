@@ -4,11 +4,6 @@ using Xunit;
 
 namespace ApiDot.Agent.Tests.Commands;
 
-/// <summary>
-/// Pure coverage of the service/server origin comparison that decides whether the system
-/// service owns a hub connection. The endpoint-level behaviour lives in
-/// <see cref="SidecarConnectionTests"/>.
-/// </summary>
 [Collection("SidecarConnectionTests")]
 public class SidecarServiceServerTests : IDisposable
 {
@@ -42,10 +37,10 @@ public class SidecarServiceServerTests : IDisposable
     }
 
     [Theory]
-    [InlineData("https://hub.example.com", "http://hub.example.com")] // different scheme
-    [InlineData("https://hub.example.com", "https://hub.example.com:8443")] // different port
-    [InlineData("https://hub.example.com", "https://other.example.com")] // different host
-    [InlineData("http://127.0.0.1:5181", "http://localhost:5181")] // host spelling
+    [InlineData("https://hub.example.com", "http://hub.example.com")]
+    [InlineData("https://hub.example.com", "https://hub.example.com:8443")]
+    [InlineData("https://hub.example.com", "https://other.example.com")]
+    [InlineData("http://127.0.0.1:5181", "http://localhost:5181")]
     public void IsServiceActiveForServer_RejectsAnotherOrigin(string serviceServerUrl, string targetServerUrl)
     {
         SidecarCommand.IsServiceActiveCheck = () => true;
@@ -107,9 +102,9 @@ public class SidecarServiceServerTests : IDisposable
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData("hub.example.com")] // relative, not absolute
-    [InlineData("/relative/path")] // absolute file URI on Unix, not a hub URL
-    [InlineData("file:///etc/passwd")] // not an HTTP(S) hub
+    [InlineData("hub.example.com")]
+    [InlineData("/relative/path")]
+    [InlineData("file:///etc/passwd")]
     [InlineData("not a url")]
     public void TryGetOrigin_RejectsMissingOrInvalidInput(string? serverUrl)
     {

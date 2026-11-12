@@ -27,7 +27,7 @@ public class SidecarConnectionTests : IDisposable
         _originalServiceCheck = SidecarCommand.IsServiceActiveCheck;
         _originalServiceServerUrlProvider = SidecarCommand.ServiceServerUrlProvider;
         SidecarCommand.IsServiceActiveCheck = () => false;
-        // Never read the developer's real ~/.apidot/config.json from a test.
+        // Never read the developer's real config.
         SidecarCommand.ServiceServerUrlProvider = () => null;
     }
 
@@ -204,8 +204,7 @@ public class SidecarConnectionTests : IDisposable
 
             var response = await ConnectAsync(host.Client, "https://hub.example.com", "token-123");
 
-            // Read the wire body instead of a deserialized payload: a refusal the app cannot
-            // serialize shows up as a 500 with an empty body.
+            // The wire body matters: an unserializable refusal is a 500 with an empty body.
             var body = await response.Content.ReadAsStringAsync();
             response.StatusCode.Should().Be(HttpStatusCode.OK);
             body.Should().NotBeNullOrWhiteSpace();
@@ -224,9 +223,7 @@ public class SidecarConnectionTests : IDisposable
     [Fact]
     public void Connect_RefusalPayload_IsSerializedByTheAgentJsonContext()
     {
-        // The test host resolves anonymous types through a reflection fallback, so a missing
-        // registration only fails on the shipped agent. Assert the context contract directly:
-        // this stops compiling if the type is dropped and fails if the casing drifts.
+        // The test host falls back to reflection; only this contract catches a missing registration.
         var json = JsonSerializer.Serialize(
             new SidecarConnectRefusal(Connected: false, Reason: "service-active"),
             AgentJsonContext.Default.SidecarConnectRefusal);
@@ -237,17 +234,17 @@ public class SidecarConnectionTests : IDisposable
     }
 
     [Theory]
-    [InlineData("https://hub.example.com/")] // trailing slash only
-    [InlineData("https://hub.example.com/api/hub")] // different path
-    [InlineData("https://HUB.Example.COM")] // different host casing
+    [InlineData("https://hub.example.com/")]
+    [InlineData("https://hub.example.com/api/hub")]
+    [InlineData("https://HUB.Example.COM")]
     public async Task Connect_WhenTheServiceTargetsTheSameOrigin_RefusesTheConnection(string clientServerUrl)
     {
         await AssertServiceRefusalAsync(clientServerUrl, "https://hub.example.com");
     }
 
     [Theory]
-    [InlineData("https://hub.example.com:8443")] // different port
-    [InlineData("http://hub.example.com")] // different scheme
+    [InlineData("https://hub.example.com:8443")]
+    [InlineData("http://hub.example.com")]
     public async Task Connect_WhenTheServiceTargetsAnotherOrigin_StartsTheConnection(string clientServerUrl)
     {
         await AssertServiceAllowsConnectionAsync(clientServerUrl, "https://hub.example.com");
@@ -266,8 +263,8 @@ public class SidecarConnectionTests : IDisposable
     }
 
     [Theory]
-    [InlineData(null)] // provider returns nothing
-    [InlineData("https://production.example.com")] // provider points elsewhere
+    [InlineData(null)]
+    [InlineData("https://production.example.com")]
     public async Task Connect_WhenTheServiceIsNotActive_AllowsTheConnection(string? serviceServerUrl)
     {
         var recorder = new StarterRecorder();

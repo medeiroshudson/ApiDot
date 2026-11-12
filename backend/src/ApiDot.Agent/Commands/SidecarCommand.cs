@@ -23,10 +23,7 @@ public sealed record SidecarAgentStatusDto(
     string? LastConnectionError,
     bool Unauthorized);
 
-/// <summary>
-/// Refusal payload for <c>POST /connect</c>. Set in <see cref="AgentJsonContext"/> like every
-/// other sidecar DTO: the app's source-generated serializer cannot handle anonymous types.
-/// </summary>
+/// <summary>Typed so <see cref="AgentJsonContext"/> can serialize it; anonymous types fail at runtime.</summary>
 public sealed record SidecarConnectRefusal(bool Connected, string Reason);
 
 /// <summary>
@@ -226,19 +223,11 @@ public static class SidecarCommand
 
     public static Func<bool> IsServiceActiveCheck { get; set; } = () => ServiceManager.Status().Success;
 
-    /// <summary>
-    /// Resolves the hub the system service is connected to. The sidecar must only step
-    /// aside for the service when both talk to the same server origin: a development
-    /// desktop on a local hub is a different database and still needs its device.
-    /// </summary>
+    /// <summary>Hub the system service targets, from its config file.</summary>
     public static Func<string?> ServiceServerUrlProvider { get; set; } = () => AgentConfigManager.Load()?.ServerUrl;
 
     public static Func<AgentCliOptions, CancellationToken, Task>? WebSocketStarter { get; set; }
 
-    /// <summary>
-    /// The service only blocks a connection when it is loaded and either target is
-    /// unknown or both URLs share an origin. Unknown input stays conservative.
-    /// </summary>
     public static bool IsServiceActiveForServer(string? targetServerUrl)
     {
         if (!IsServiceActiveCheck())
@@ -255,12 +244,7 @@ public static class SidecarCommand
         return string.Equals(targetOrigin, serviceOrigin, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// Normalizes an absolute URL to its origin so path, query and trailing slash do not
-    /// matter. Returns false for missing or unparseable input. Only HTTP(S) counts as a
-    /// hub URL: a bare path parses as <c>file:///</c> on Unix, which would otherwise
-    /// compare like an origin and make the guard platform dependent.
-    /// </summary>
+    /// <summary>Origin of an absolute HTTP(S) URL; a bare path parses as <c>file:///</c> on Unix, so it is rejected.</summary>
     internal static bool TryGetOrigin(string? serverUrl, out string origin)
     {
         origin = string.Empty;
@@ -491,9 +475,6 @@ public static class SidecarCommand
                 return Results.BadRequest();
             }
 
-            // The system service already owns this machine's agent connection when it
-            // targets the same origin. Opening a second WebSocket from the sidecar would
-            // duplicate the dispatch channel, while a service on another hub is harmless.
             if (IsServiceActiveForServer(request.ServerUrl))
             {
                 return Results.Ok(new SidecarConnectRefusal(Connected: false, Reason: "service-active"));
@@ -564,11 +545,7 @@ public static class SidecarCommand
             {
                 if (IsServiceActiveForServer(options.ServerUrl))
                 {
-                    var hasTargetOrigin = TryGetOrigin(options.ServerUrl, out var targetOrigin);
-                    var hasServiceOrigin = TryGetOrigin(ServiceServerUrlProvider(), out var serviceOrigin);
-                    Console.WriteLine(hasTargetOrigin && hasServiceOrigin
-                        ? $"System background service is already active for {serviceOrigin}; suppressing redundant WebSocket connection."
-                        : "System background service is already active; suppressing redundant WebSocket connection.");
+                    Console.WriteLine("System background service is already active; suppressing redundant WebSocket connection.");
                 }
                 else
                 {

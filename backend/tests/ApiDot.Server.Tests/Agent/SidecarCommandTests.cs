@@ -285,7 +285,6 @@ public class SidecarCommandTests
         };
         SidecarCommand.IsServiceActiveCheck = () => true;
         var originalProvider = SidecarCommand.ServiceServerUrlProvider;
-        // Pin the service's target so the test never reads the developer's real config.
         SidecarCommand.ServiceServerUrlProvider = () => "https://hub.example.com";
 
         using var cts = new CancellationTokenSource();
