@@ -143,9 +143,15 @@ function verifyFrontendOut() {
   console.log(`✓ Static frontend export found at ${frontendOutDir}`);
 }
 
+const isDev = process.argv.includes('--dev');
+
 if (require.main === module) {
   prepareAgentBinary();
-  verifyFrontendOut();
+  if (isDev) {
+    console.log('✓ Skipping the static export check in dev (Tauri loads the Next dev server).');
+  } else {
+    verifyFrontendOut();
+  }
   console.log('✓ Desktop environment preparation completed successfully.');
 }
 
