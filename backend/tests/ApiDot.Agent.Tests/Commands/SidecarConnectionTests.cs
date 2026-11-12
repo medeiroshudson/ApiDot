@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using ApiDot.Agent;
 using ApiDot.Agent.Commands;
 using ApiDot.Core.Enums;
@@ -187,6 +188,52 @@ public class SidecarConnectionTests : IDisposable
             SidecarCommand.ServiceServerUrlProvider = originalProvider;
             SidecarCommand.WebSocketStarter = null;
         }
+    }
+
+    [Fact]
+    public async Task Connect_WhenTheServiceIsActiveForTheSameServer_ReturnsTheTypedRefusalBody()
+    {
+        var originalCheck = SidecarCommand.IsServiceActiveCheck;
+        var originalProvider = SidecarCommand.ServiceServerUrlProvider;
+        SidecarCommand.IsServiceActiveCheck = () => true;
+        SidecarCommand.ServiceServerUrlProvider = () => "https://hub.example.com";
+
+        try
+        {
+            await using var host = await StartedSidecar.StartAsync();
+
+            var response = await ConnectAsync(host.Client, "https://hub.example.com", "token-123");
+
+            // Read the wire body instead of a deserialized payload: a refusal the app cannot
+            // serialize shows up as a 500 with an empty body.
+            var body = await response.Content.ReadAsStringAsync();
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            body.Should().NotBeNullOrWhiteSpace();
+
+            using var document = JsonDocument.Parse(body);
+            document.RootElement.GetProperty("connected").GetBoolean().Should().BeFalse();
+            document.RootElement.GetProperty("reason").GetString().Should().Be("service-active");
+        }
+        finally
+        {
+            SidecarCommand.IsServiceActiveCheck = originalCheck;
+            SidecarCommand.ServiceServerUrlProvider = originalProvider;
+        }
+    }
+
+    [Fact]
+    public void Connect_RefusalPayload_IsSerializedByTheAgentJsonContext()
+    {
+        // The test host resolves anonymous types through a reflection fallback, so a missing
+        // registration only fails on the shipped agent. Assert the context contract directly:
+        // this stops compiling if the type is dropped and fails if the casing drifts.
+        var json = JsonSerializer.Serialize(
+            new SidecarConnectRefusal(Connected: false, Reason: "service-active"),
+            AgentJsonContext.Default.SidecarConnectRefusal);
+
+        using var document = JsonDocument.Parse(json);
+        document.RootElement.GetProperty("connected").GetBoolean().Should().BeFalse();
+        document.RootElement.GetProperty("reason").GetString().Should().Be("service-active");
     }
 
     [Theory]

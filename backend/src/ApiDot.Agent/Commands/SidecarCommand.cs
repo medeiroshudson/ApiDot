@@ -24,6 +24,12 @@ public sealed record SidecarAgentStatusDto(
     bool Unauthorized);
 
 /// <summary>
+/// Refusal payload for <c>POST /connect</c>. Set in <see cref="AgentJsonContext"/> like every
+/// other sidecar DTO: the app's source-generated serializer cannot handle anonymous types.
+/// </summary>
+public sealed record SidecarConnectRefusal(bool Connected, string Reason);
+
+/// <summary>
 /// Owns the single outbound hub connection used by the sidecar. The CLI auto-connect
 /// path and the <c>/connect</c>, <c>/disconnect</c> and <c>/agent-status</c> endpoints
 /// share this manager so a second connect replaces the first instead of stacking clients.
@@ -490,7 +496,7 @@ public static class SidecarCommand
             // duplicate the dispatch channel, while a service on another hub is harmless.
             if (IsServiceActiveForServer(request.ServerUrl))
             {
-                return Results.Ok(new { connected = false, reason = "service-active" });
+                return Results.Ok(new SidecarConnectRefusal(Connected: false, Reason: "service-active"));
             }
 
             await connectionManager.ConnectAsync(request.ServerUrl!, request.Token, agentName: null, defaultIgnoreSsl);
