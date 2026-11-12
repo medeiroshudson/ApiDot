@@ -53,7 +53,7 @@
       }
     },
     "updater": {
-      "pubkey": "REPLACE_WITH_GENERATED_ED25519_PUBLIC_KEY",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFCQTVDMzVBMjlGNzQzQTcKUldTblEvY3BXc09sRzEvN0o4dFBZZVBtK0VKcThLVlpHSEgwc2dpT0Y0OWdsNUV2TldHVGtIY3IK",
       "endpoints": [
         "https://github.com/medeiroshudson/ApiDot/releases/latest/download/latest.json"
       ]
