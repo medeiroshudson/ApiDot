@@ -284,6 +284,8 @@ public class SidecarCommandTests
             return Task.CompletedTask;
         };
         SidecarCommand.IsServiceActiveCheck = () => true;
+        var originalProvider = SidecarCommand.ServiceServerUrlProvider;
+        SidecarCommand.ServiceServerUrlProvider = () => "https://hub.example.com";
 
         using var cts = new CancellationTokenSource();
         cts.CancelAfter(500);
@@ -308,6 +310,7 @@ public class SidecarCommandTests
         {
             SidecarCommand.WebSocketStarter = null;
             SidecarCommand.IsServiceActiveCheck = () => ServiceManager.Status().Success;
+            SidecarCommand.ServiceServerUrlProvider = originalProvider;
         }
 
         webSocketStarted.Should().BeFalse();

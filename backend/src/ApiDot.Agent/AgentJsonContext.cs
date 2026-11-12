@@ -21,6 +21,7 @@ namespace ApiDot.Agent;
 [JsonSerializable(typeof(DesktopSessionDto))]
 [JsonSerializable(typeof(DesktopAuthStateDto))]
 [JsonSerializable(typeof(SidecarConnectRequest))]
+[JsonSerializable(typeof(SidecarConnectRefusal))]
 [JsonSerializable(typeof(SidecarAgentStatusDto))]
 public partial class AgentJsonContext : JsonSerializerContext
 {

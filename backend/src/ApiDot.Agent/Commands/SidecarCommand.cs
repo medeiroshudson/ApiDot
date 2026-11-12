@@ -23,6 +23,9 @@ public sealed record SidecarAgentStatusDto(
     string? LastConnectionError,
     bool Unauthorized);
 
+/// <summary>Typed so <see cref="AgentJsonContext"/> can serialize it; anonymous types fail at runtime.</summary>
+public sealed record SidecarConnectRefusal(bool Connected, string Reason);
+
 /// <summary>
 /// Owns the single outbound hub connection used by the sidecar. The CLI auto-connect
 /// path and the <c>/connect</c>, <c>/disconnect</c> and <c>/agent-status</c> endpoints
@@ -220,7 +223,41 @@ public static class SidecarCommand
 
     public static Func<bool> IsServiceActiveCheck { get; set; } = () => ServiceManager.Status().Success;
 
+    /// <summary>Hub the system service targets, from its config file.</summary>
+    public static Func<string?> ServiceServerUrlProvider { get; set; } = () => AgentConfigManager.Load()?.ServerUrl;
+
     public static Func<AgentCliOptions, CancellationToken, Task>? WebSocketStarter { get; set; }
+
+    public static bool IsServiceActiveForServer(string? targetServerUrl)
+    {
+        if (!IsServiceActiveCheck())
+        {
+            return false;
+        }
+
+        if (!TryGetOrigin(targetServerUrl, out var targetOrigin)
+            || !TryGetOrigin(ServiceServerUrlProvider(), out var serviceOrigin))
+        {
+            return true;
+        }
+
+        return string.Equals(targetOrigin, serviceOrigin, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Origin of an absolute HTTP(S) URL; a bare path parses as <c>file:///</c> on Unix, so it is rejected.</summary>
+    internal static bool TryGetOrigin(string? serverUrl, out string origin)
+    {
+        origin = string.Empty;
+        if (string.IsNullOrWhiteSpace(serverUrl)
+            || !Uri.TryCreate(serverUrl, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return false;
+        }
+
+        origin = $"{uri.Scheme}://{uri.Host}:{uri.Port}";
+        return true;
+    }
 
     internal sealed class SidecarSessionState
     {
@@ -438,11 +475,9 @@ public static class SidecarCommand
                 return Results.BadRequest();
             }
 
-            // The system service already owns this machine's agent connection. Opening a
-            // second WebSocket from the sidecar would duplicate the dispatch channel.
-            if (IsServiceActiveCheck())
+            if (IsServiceActiveForServer(request.ServerUrl))
             {
-                return Results.Ok(new { connected = false, reason = "service-active" });
+                return Results.Ok(new SidecarConnectRefusal(Connected: false, Reason: "service-active"));
             }
 
             await connectionManager.ConnectAsync(request.ServerUrl!, request.Token, agentName: null, defaultIgnoreSsl);
@@ -508,7 +543,7 @@ public static class SidecarCommand
 
             if (!string.IsNullOrWhiteSpace(options.ServerUrl) && !string.IsNullOrWhiteSpace(options.Token))
             {
-                if (IsServiceActiveCheck())
+                if (IsServiceActiveForServer(options.ServerUrl))
                 {
                     Console.WriteLine("System background service is already active; suppressing redundant WebSocket connection.");
                 }
