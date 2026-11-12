@@ -284,6 +284,9 @@ public class SidecarCommandTests
             return Task.CompletedTask;
         };
         SidecarCommand.IsServiceActiveCheck = () => true;
+        var originalProvider = SidecarCommand.ServiceServerUrlProvider;
+        // Pin the service's target so the test never reads the developer's real config.
+        SidecarCommand.ServiceServerUrlProvider = () => "https://hub.example.com";
 
         using var cts = new CancellationTokenSource();
         cts.CancelAfter(500);
@@ -308,6 +311,7 @@ public class SidecarCommandTests
         {
             SidecarCommand.WebSocketStarter = null;
             SidecarCommand.IsServiceActiveCheck = () => ServiceManager.Status().Success;
+            SidecarCommand.ServiceServerUrlProvider = originalProvider;
         }
 
         webSocketStarted.Should().BeFalse();

@@ -220,7 +220,54 @@ public static class SidecarCommand
 
     public static Func<bool> IsServiceActiveCheck { get; set; } = () => ServiceManager.Status().Success;
 
+    /// <summary>
+    /// Resolves the hub the system service is connected to. The sidecar must only step
+    /// aside for the service when both talk to the same server origin: a development
+    /// desktop on a local hub is a different database and still needs its device.
+    /// </summary>
+    public static Func<string?> ServiceServerUrlProvider { get; set; } = () => AgentConfigManager.Load()?.ServerUrl;
+
     public static Func<AgentCliOptions, CancellationToken, Task>? WebSocketStarter { get; set; }
+
+    /// <summary>
+    /// The service only blocks a connection when it is loaded and either target is
+    /// unknown or both URLs share an origin. Unknown input stays conservative.
+    /// </summary>
+    public static bool IsServiceActiveForServer(string? targetServerUrl)
+    {
+        if (!IsServiceActiveCheck())
+        {
+            return false;
+        }
+
+        if (!TryGetOrigin(targetServerUrl, out var targetOrigin)
+            || !TryGetOrigin(ServiceServerUrlProvider(), out var serviceOrigin))
+        {
+            return true;
+        }
+
+        return string.Equals(targetOrigin, serviceOrigin, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Normalizes an absolute URL to its origin so path, query and trailing slash do not
+    /// matter. Returns false for missing or unparseable input. Only HTTP(S) counts as a
+    /// hub URL: a bare path parses as <c>file:///</c> on Unix, which would otherwise
+    /// compare like an origin and make the guard platform dependent.
+    /// </summary>
+    internal static bool TryGetOrigin(string? serverUrl, out string origin)
+    {
+        origin = string.Empty;
+        if (string.IsNullOrWhiteSpace(serverUrl)
+            || !Uri.TryCreate(serverUrl, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return false;
+        }
+
+        origin = $"{uri.Scheme}://{uri.Host}:{uri.Port}";
+        return true;
+    }
 
     internal sealed class SidecarSessionState
     {
@@ -438,9 +485,10 @@ public static class SidecarCommand
                 return Results.BadRequest();
             }
 
-            // The system service already owns this machine's agent connection. Opening a
-            // second WebSocket from the sidecar would duplicate the dispatch channel.
-            if (IsServiceActiveCheck())
+            // The system service already owns this machine's agent connection when it
+            // targets the same origin. Opening a second WebSocket from the sidecar would
+            // duplicate the dispatch channel, while a service on another hub is harmless.
+            if (IsServiceActiveForServer(request.ServerUrl))
             {
                 return Results.Ok(new { connected = false, reason = "service-active" });
             }
@@ -508,9 +556,13 @@ public static class SidecarCommand
 
             if (!string.IsNullOrWhiteSpace(options.ServerUrl) && !string.IsNullOrWhiteSpace(options.Token))
             {
-                if (IsServiceActiveCheck())
+                if (IsServiceActiveForServer(options.ServerUrl))
                 {
-                    Console.WriteLine("System background service is already active; suppressing redundant WebSocket connection.");
+                    var hasTargetOrigin = TryGetOrigin(options.ServerUrl, out var targetOrigin);
+                    var hasServiceOrigin = TryGetOrigin(ServiceServerUrlProvider(), out var serviceOrigin);
+                    Console.WriteLine(hasTargetOrigin && hasServiceOrigin
+                        ? $"System background service is already active for {serviceOrigin}; suppressing redundant WebSocket connection."
+                        : "System background service is already active; suppressing redundant WebSocket connection.");
                 }
                 else
                 {

@@ -16,6 +16,7 @@ public class SidecarConnectionTests : IDisposable
     private const string Secret = "secret-123";
 
     private readonly Func<bool> _originalServiceCheck;
+    private readonly Func<string?> _originalServiceServerUrlProvider;
 
     public SidecarConnectionTests()
     {
@@ -23,12 +24,16 @@ public class SidecarConnectionTests : IDisposable
         // developer machines. Keep the connection tests hermetic and let the
         // service-active case opt in explicitly.
         _originalServiceCheck = SidecarCommand.IsServiceActiveCheck;
+        _originalServiceServerUrlProvider = SidecarCommand.ServiceServerUrlProvider;
         SidecarCommand.IsServiceActiveCheck = () => false;
+        // Never read the developer's real ~/.apidot/config.json from a test.
+        SidecarCommand.ServiceServerUrlProvider = () => null;
     }
 
     public void Dispose()
     {
         SidecarCommand.IsServiceActiveCheck = _originalServiceCheck;
+        SidecarCommand.ServiceServerUrlProvider = _originalServiceServerUrlProvider;
     }
 
     private sealed class StarterRecorder
@@ -154,12 +159,14 @@ public class SidecarConnectionTests : IDisposable
     }
 
     [Fact]
-    public async Task Connect_WhenTheServiceIsActive_DoesNotStartASecondConnection()
+    public async Task Connect_WhenTheServiceIsActiveForTheSameServer_DoesNotStartASecondConnection()
     {
         var recorder = new StarterRecorder();
         SidecarCommand.WebSocketStarter = recorder.RunAsync;
         var originalCheck = SidecarCommand.IsServiceActiveCheck;
+        var originalProvider = SidecarCommand.ServiceServerUrlProvider;
         SidecarCommand.IsServiceActiveCheck = () => true;
+        SidecarCommand.ServiceServerUrlProvider = () => "https://hub.example.com";
 
         try
         {
@@ -177,6 +184,121 @@ public class SidecarConnectionTests : IDisposable
         finally
         {
             SidecarCommand.IsServiceActiveCheck = originalCheck;
+            SidecarCommand.ServiceServerUrlProvider = originalProvider;
+            SidecarCommand.WebSocketStarter = null;
+        }
+    }
+
+    [Theory]
+    [InlineData("https://hub.example.com/")] // trailing slash only
+    [InlineData("https://hub.example.com/api/hub")] // different path
+    [InlineData("https://HUB.Example.COM")] // different host casing
+    public async Task Connect_WhenTheServiceTargetsTheSameOrigin_RefusesTheConnection(string clientServerUrl)
+    {
+        await AssertServiceRefusalAsync(clientServerUrl, "https://hub.example.com");
+    }
+
+    [Theory]
+    [InlineData("https://hub.example.com:8443")] // different port
+    [InlineData("http://hub.example.com")] // different scheme
+    public async Task Connect_WhenTheServiceTargetsAnotherOrigin_StartsTheConnection(string clientServerUrl)
+    {
+        await AssertServiceAllowsConnectionAsync(clientServerUrl, "https://hub.example.com");
+    }
+
+    [Fact]
+    public async Task Connect_WhenTheServiceServerIsUnknown_RefusesTheConnection()
+    {
+        await AssertServiceRefusalAsync("https://hub.example.com", serviceServerUrl: null);
+    }
+
+    [Fact]
+    public async Task Connect_WhenTheServiceServerIsUnparseable_RefusesTheConnection()
+    {
+        await AssertServiceRefusalAsync("https://hub.example.com", "not-a-url");
+    }
+
+    [Theory]
+    [InlineData(null)] // provider returns nothing
+    [InlineData("https://production.example.com")] // provider points elsewhere
+    public async Task Connect_WhenTheServiceIsNotActive_AllowsTheConnection(string? serviceServerUrl)
+    {
+        var recorder = new StarterRecorder();
+        SidecarCommand.WebSocketStarter = recorder.RunAsync;
+        var originalCheck = SidecarCommand.IsServiceActiveCheck;
+        var originalProvider = SidecarCommand.ServiceServerUrlProvider;
+        SidecarCommand.IsServiceActiveCheck = () => false;
+        SidecarCommand.ServiceServerUrlProvider = () => serviceServerUrl;
+
+        try
+        {
+            await using var host = await StartedSidecar.StartAsync();
+
+            var response = await ConnectAsync(host.Client, "https://hub.example.com", "token-123");
+
+            response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+            await WaitUntilAsync(() => recorder.Starts == 1);
+        }
+        finally
+        {
+            SidecarCommand.IsServiceActiveCheck = originalCheck;
+            SidecarCommand.ServiceServerUrlProvider = originalProvider;
+            SidecarCommand.WebSocketStarter = null;
+        }
+    }
+
+    private static async Task AssertServiceRefusalAsync(string clientServerUrl, string? serviceServerUrl)
+    {
+        var recorder = new StarterRecorder();
+        SidecarCommand.WebSocketStarter = recorder.RunAsync;
+        var originalCheck = SidecarCommand.IsServiceActiveCheck;
+        var originalProvider = SidecarCommand.ServiceServerUrlProvider;
+        SidecarCommand.IsServiceActiveCheck = () => true;
+        SidecarCommand.ServiceServerUrlProvider = () => serviceServerUrl;
+
+        try
+        {
+            await using var host = await StartedSidecar.StartAsync();
+
+            var response = await ConnectAsync(host.Client, clientServerUrl, "token-123");
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            var payload = await response.Content.ReadFromJsonAsync<ServiceActiveResponse>();
+            payload.Should().NotBeNull();
+            payload!.Connected.Should().BeFalse();
+            payload.Reason.Should().Be("service-active");
+            recorder.Starts.Should().Be(0);
+        }
+        finally
+        {
+            SidecarCommand.IsServiceActiveCheck = originalCheck;
+            SidecarCommand.ServiceServerUrlProvider = originalProvider;
+            SidecarCommand.WebSocketStarter = null;
+        }
+    }
+
+    private static async Task AssertServiceAllowsConnectionAsync(string clientServerUrl, string? serviceServerUrl)
+    {
+        var recorder = new StarterRecorder();
+        SidecarCommand.WebSocketStarter = recorder.RunAsync;
+        var originalCheck = SidecarCommand.IsServiceActiveCheck;
+        var originalProvider = SidecarCommand.ServiceServerUrlProvider;
+        SidecarCommand.IsServiceActiveCheck = () => true;
+        SidecarCommand.ServiceServerUrlProvider = () => serviceServerUrl;
+
+        try
+        {
+            await using var host = await StartedSidecar.StartAsync();
+
+            var response = await ConnectAsync(host.Client, clientServerUrl, "token-123");
+
+            response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+            await WaitUntilAsync(() => recorder.Starts == 1);
+        }
+        finally
+        {
+            SidecarCommand.IsServiceActiveCheck = originalCheck;
+            SidecarCommand.ServiceServerUrlProvider = originalProvider;
             SidecarCommand.WebSocketStarter = null;
         }
     }
