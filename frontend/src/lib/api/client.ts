@@ -1,78 +1,18 @@
-import { apiUrl } from './base';
-import { getAccessToken } from './authToken';
-
-export type UnauthorizedHandler = () => void | Promise<void>;
-
-let unauthorizedHandler: UnauthorizedHandler | null = null;
-let unauthorizedInFlight = false;
-
 /**
- * Registers the handler invoked when an authenticated request gets a 401.
+ * API client used by the rest of the app.
  *
- * The API client never navigates by itself: the handler decides how to end the
- * session and where to send the user. Returns an unsubscribe function.
+ * Every request waits for the boot to settle first, so a caller cannot fire
+ * before the base and the stored credential are known. The gate that hides the
+ * children is a UI detail; this await is the actual invariant.
  */
-export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): () => void {
-  unauthorizedHandler = handler;
-  unauthorizedInFlight = false;
 
-  return () => {
-    if (unauthorizedHandler === handler) {
-      unauthorizedHandler = null;
-    }
-  };
-}
+import { ensureBooted } from '@/lib/session/boot';
+import { rawFetch } from './rawFetch';
 
-/**
- * Runs the handler at most once for the batch of responses that carried the
- * current token. Once the handler drops the token, later 401s from the same
- * expired credential are ignored, which prevents redirect loops.
- */
-async function notifyUnauthorized(token: string): Promise<void> {
-  if (!unauthorizedHandler || unauthorizedInFlight) {
-    return;
-  }
-  // Another response already ended this session.
-  if (getAccessToken() !== token) {
-    return;
-  }
+export { setUnauthorizedHandler } from './rawFetch';
+export type { UnauthorizedHandler } from './rawFetch';
 
-  unauthorizedInFlight = true;
-  try {
-    await unauthorizedHandler();
-  } finally {
-    unauthorizedInFlight = false;
-  }
-}
-
-/**
- * Sends an API request through the configurable base URL and attaches the
- * bearer token when one is available.
- *
- * Caller-supplied headers win: an explicit Authorization header is never
- * overwritten. Without a base and a token the call is exactly
- * `fetch(path, init)`, which keeps relative-URL behaviour on the web intact.
- * A 401 on a token-authenticated request is routed to the unauthorized handler.
- */
 export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
-  const url = apiUrl(path);
-  const token = getAccessToken();
-
-  let response: Response;
-  if (!token) {
-    response = init === undefined ? await fetch(url) : await fetch(url, init);
-  } else {
-    const headers = new Headers(init?.headers);
-    if (!headers.has('Authorization')) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-
-    response = await fetch(url, { ...init, headers });
-  }
-
-  if (response.status === 401 && token) {
-    await notifyUnauthorized(token);
-  }
-
-  return response;
+  await ensureBooted();
+  return rawFetch(path, init);
 }
