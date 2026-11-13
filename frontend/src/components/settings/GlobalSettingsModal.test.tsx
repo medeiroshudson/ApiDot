@@ -659,7 +659,7 @@ describe('GlobalSettingsModal', () => {
     it('hides the server line on the web', () => {
       render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
 
-      expect(screen.queryByText(/set at build time|definido na compilação/i)).toBeNull();
+      expect(screen.queryByText('Server')).toBeNull();
     });
 
     it('shows the base compiled into the build', () => {
@@ -668,9 +668,8 @@ describe('GlobalSettingsModal', () => {
 
       render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
 
-      expect(
-        screen.getByText('Server: https://stored.example.com (set at build time)')
-      ).toBeInTheDocument();
+      expect(screen.getByText('Server')).toBeInTheDocument();
+      expect(screen.getByText('https://stored.example.com')).toBeInTheDocument();
     });
   });
 

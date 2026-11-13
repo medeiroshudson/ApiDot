@@ -328,7 +328,7 @@ const enUS = {
     agentsTab: 'Devices',
     language: 'Language',
     languageDesc: 'Select application display language',
-    serverAtBuildTime: 'Server: {base} (set at build time)',
+    server: 'Server',
     english: 'English',
     portuguese: 'Portuguese',
     sidebarWidth: 'Sidebar Width',

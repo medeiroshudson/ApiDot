@@ -500,12 +500,10 @@ export function GlobalSettingsModal({
                     </select>
                   </div>
 
-                  {/* Server: fixed at build time, so it is shown read-only. */}
                   {isDesktop() && (
-                    <div className="p-3.5 sm:p-4">
-                      <span className="text-neutral-300">
-                        {t('settings.serverAtBuildTime', { base: getApiBase() })}
-                      </span>
+                    <div className="flex items-center justify-between p-3.5 sm:p-4">
+                      <span className="font-semibold text-white">{t('settings.server')}</span>
+                      <span className="text-neutral-400">{getApiBase()}</span>
                     </div>
                   )}
 
