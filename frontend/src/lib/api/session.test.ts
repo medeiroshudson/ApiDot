@@ -21,6 +21,10 @@ vi.mock('@/lib/desktop/sidecarConnection', () => ({
   disconnectSidecar: vi.fn().mockResolvedValue(true),
 }));
 
+vi.hoisted(() => {
+  process.env.NEXT_PUBLIC_APIDOT_API_BASE = 'https://api.example.com';
+});
+
 describe('api/session', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -44,23 +48,22 @@ describe('api/session', () => {
 
     expect(getSession()).toEqual({ userId: 'u1', accessToken: 'tok-1' });
 
-    patchSession({ deviceKey: 'key-1', serverUrl: 'https://api.example.com' });
+    patchSession({ deviceKey: 'key-1' });
 
     expect(getSession()).toEqual({
       userId: 'u1',
       accessToken: 'tok-1',
       deviceKey: 'key-1',
-      serverUrl: 'https://api.example.com',
     });
   });
 
   it('creates a session from a patch when none is loaded', () => {
-    patchSession({ serverUrl: 'https://api.example.com' });
+    patchSession({ deviceKey: 'key-1' });
 
-    expect(getSession()).toEqual({ serverUrl: 'https://api.example.com' });
+    expect(getSession()).toEqual({ deviceKey: 'key-1' });
   });
 
-  it('clears the identity and token while preserving deviceKey and serverUrl', () => {
+  it('clears the identity and token while preserving deviceKey', () => {
     setAccessToken('tok-1');
     setSession({
       userId: 'u1',
@@ -68,14 +71,12 @@ describe('api/session', () => {
       deviceKey: 'key-1',
       accessToken: 'tok-1',
       expiresAt: '2026-12-09T00:00:00Z',
-      serverUrl: 'https://api.example.com',
     });
 
     clearSessionMemory();
 
     expect(getSession()).toEqual({
       deviceKey: 'key-1',
-      serverUrl: 'https://api.example.com',
     });
     expect(getAccessToken()).toBeNull();
   });
@@ -119,7 +120,6 @@ describe('api/session', () => {
 
     const session = await persistDeviceCredential(response, {
       userId: 'u1',
-      serverUrl: 'https://api.example.com',
     });
 
     expect(session).toMatchObject({
@@ -128,26 +128,10 @@ describe('api/session', () => {
       deviceKey: 'key-1',
       accessToken: 'tok-1',
       expiresAt: '2026-12-09T00:00:00Z',
-      serverUrl: 'https://api.example.com',
     });
     expect(getAccessToken()).toBe('tok-1');
     expect(save).toHaveBeenCalledWith(session);
     expect(connectSidecar).toHaveBeenCalledWith('https://api.example.com', 'tok-1');
-  });
-
-  it('skips the sidecar connection when no server URL is known', async () => {
-    (window as any).__TAURI__ = {};
-
-    const session = await persistDeviceCredential({
-      headers: new Headers({
-        'X-Desktop-Access-Token': 'tok-1',
-        'X-Desktop-Device-Id': 'dev-1',
-      }),
-    } as Response);
-
-    expect(session).toMatchObject({ accessToken: 'tok-1' });
-    expect(getAccessToken()).toBe('tok-1');
-    expect(connectSidecar).not.toHaveBeenCalled();
   });
 
   it('does not fail the login when /connect fails', async () => {
@@ -161,14 +145,11 @@ describe('api/session', () => {
       }),
     } as Response;
 
-    const session = await persistDeviceCredential(response, {
-      serverUrl: 'https://api.example.com',
-    });
+    const session = await persistDeviceCredential(response, { userId: 'u1' });
 
     expect(connectSidecar).toHaveBeenCalledWith('https://api.example.com', 'tok-1');
     expect(session).toMatchObject({ accessToken: 'tok-1' });
     expect(getAccessToken()).toBe('tok-1');
-    expect(getSession()).toMatchObject({ serverUrl: 'https://api.example.com' });
   });
 
   it('ignores a desktop response without a token header', async () => {

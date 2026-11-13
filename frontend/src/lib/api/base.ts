@@ -1,14 +1,14 @@
 /**
- * Runtime API base URL for the webview.
+ * API base URL compiled into the webview.
  *
- * The desktop build is served from `tauri://localhost`, so relative `/api/...`
- * requests cannot reach the server. The origin is configurable at runtime and
- * persisted in localStorage; an empty base keeps the web behaviour unchanged.
+ * This is a build input, not a setting: a release build cannot be pointed at
+ * another host. The desktop bundle is served from `tauri://localhost`, so
+ * relative `/api/...` requests cannot reach a server and the base must be
+ * absolute. The web build leaves it empty and keeps same-origin relative
+ * requests, which is what the Next server in front of it expects.
  */
 
-export const API_BASE_STORAGE_KEY = 'apidot_api_base';
-
-let currentApiBase = '';
+const BUILD_API_BASE = process.env.NEXT_PUBLIC_APIDOT_API_BASE;
 
 /**
  * Normalizes a configured base URL: trims whitespace, drops trailing slashes
@@ -33,31 +33,17 @@ export function normalizeApiBase(value: string | null | undefined): string {
   return trimmed.replace(/\/+$/, '');
 }
 
+const API_BASE = normalizeApiBase(BUILD_API_BASE);
+
+/** The base compiled into this bundle; empty means same-origin relative URLs. */
 export function getApiBase(): string {
-  return currentApiBase;
+  return API_BASE;
 }
 
 /**
- * Sets the in-memory base and mirrors it to localStorage when available.
- * Storage failures (private mode, quota, SSR) are ignored on purpose.
- */
-export function setApiBase(value: string | null | undefined): void {
-  currentApiBase = normalizeApiBase(value);
-
-  if (typeof window === 'undefined') return;
-
-  try {
-    window.localStorage.setItem(API_BASE_STORAGE_KEY, currentApiBase);
-  } catch {
-    // Storage is best effort; the in-memory value still applies.
-  }
-}
-
-/**
- * Resolves an API path against the configured base. Without a base the path is
+ * Resolves an API path against the build base. Without a base the path is
  * returned untouched so the web build keeps its relative request semantics.
  */
 export function apiUrl(path: string): string {
-  if (!currentApiBase) return path;
-  return `${currentApiBase}${path}`;
+  return API_BASE ? `${API_BASE}${path}` : path;
 }

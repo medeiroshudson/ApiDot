@@ -6,6 +6,7 @@ import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useAppRoute } from '@/hooks/useAppRoute';
+import { getApiBase } from '@/lib/api/base';
 import { isDesktop } from '@/lib/desktop/runtime';
 import { WorkspaceRouteShell } from '@/components/workspace/WorkspaceRouteShell';
 import { Loader2, AlertCircle } from 'lucide-react';
@@ -26,6 +27,10 @@ export default function Home() {
   const checkAuth = useAuthStore((s) => s.checkAuth);
 
   const redirectedRef = useRef(false);
+  // The effect below re-runs whenever the stores it touched change. A second run
+  // while the first is still awaiting would create a second workspace, because
+  // the list is still empty for both.
+  const resolvingRef = useRef(false);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
@@ -45,9 +50,22 @@ export default function Home() {
   );
 
   const resolveAndRedirect = useCallback(async () => {
+    if (resolvingRef.current) return;
+    resolvingRef.current = true;
+
     try {
       setHasError(false);
       setErrorMessage(null);
+
+      // Desktop without a server has nothing to ask: `/login` renders without
+      // one and a relative fetch would resolve against `tauri://localhost`.
+      if (isDesktop() && !getApiBase()) {
+        if (!redirectedRef.current) {
+          redirectedRef.current = true;
+          routerRef.current.replace('/login');
+        }
+        return;
+      }
 
       // Check auth status on mount via checkAuth()
       const user = await checkAuth();
@@ -107,6 +125,8 @@ export default function Home() {
       setErrorMessage(
         error instanceof Error ? error.message : t('home.errorDefault')
       );
+    } finally {
+      resolvingRef.current = false;
     }
   }, [activeWorkspaceId, fetchWorkspaces, createWorkspace, executeRedirect, checkAuth, t]);
 

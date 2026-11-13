@@ -145,7 +145,44 @@ function verifyFrontendOut() {
 
 const isDev = process.argv.includes('--dev');
 
+/**
+ * Validates the API server compiled into the desktop frontend.
+ *
+ * The base is a build input, so a release build without one would ship an app
+ * that cannot reach any server; fail the build instead of the first request.
+ * `--dev` is exempt because the dev script supplies the value.
+ */
+function resolveApiBase(env = process.env) {
+  const raw = String(env.NEXT_PUBLIC_APIDOT_API_BASE || '').trim();
+
+  if (!raw) {
+    return { error: 'NEXT_PUBLIC_APIDOT_API_BASE is required for a desktop build: it is the API server compiled into the app.' };
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    parsed = null;
+  }
+
+  if (!parsed || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')) {
+    return { error: `NEXT_PUBLIC_APIDOT_API_BASE must be an absolute http(s) URL, got "${raw}".` };
+  }
+
+  return { base: raw.replace(/\/+$/, '') };
+}
+
 if (require.main === module) {
+  if (!isDev) {
+    const { error } = resolveApiBase();
+    if (error) {
+      console.error(`Error: ${error}`);
+      console.error('Example: NEXT_PUBLIC_APIDOT_API_BASE=https://apidot.example.com node desktop/prepare.js');
+      process.exit(1);
+    }
+  }
+
   prepareAgentBinary();
   if (isDev) {
     console.log('✓ Skipping the static export check in dev (Tauri loads the Next dev server).');
@@ -159,4 +196,5 @@ module.exports = {
   getTargetTriple,
   prepareAgentBinary,
   verifyFrontendOut,
+  resolveApiBase,
 };

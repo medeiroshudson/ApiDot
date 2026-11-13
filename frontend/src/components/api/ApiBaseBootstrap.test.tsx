@@ -2,18 +2,14 @@ import React from 'react';
 import { render, cleanup, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ApiBaseBootstrap } from './ApiBaseBootstrap';
-import { API_BASE_STORAGE_KEY, getApiBase, setApiBase } from '@/lib/api/base';
-import { getAccessToken, setAccessToken } from '@/lib/api/authToken';
-import { getSession, setSession } from '@/lib/api/session';
-import { setUnauthorizedHandler } from '@/lib/api/client';
-import {
-  clearDesktopSession,
-  loadDesktopSession,
-} from '@/lib/desktop/session';
-import {
-  connectSidecar,
-  disconnectSidecar,
-} from '@/lib/desktop/sidecarConnection';
+import { getApiBase } from '@/lib/api/base';
+import { getAccessToken } from '@/lib/api/authToken';
+import { getSession } from '@/lib/api/session';
+import { apiFetch, setUnauthorizedHandler } from '@/lib/api/client';
+import { resetBoot } from '@/lib/session/boot';
+import { sessionStore } from '@/lib/session/state';
+import { clearDesktopSession, loadDesktopSession } from '@/lib/desktop/session';
+import { connectSidecar, disconnectSidecar } from '@/lib/desktop/sidecarConnection';
 import { useAuthStore } from '@/stores/useAuthStore';
 
 const routerMock = vi.hoisted(() => ({ replace: vi.fn() }));
@@ -33,13 +29,24 @@ vi.mock('@/lib/desktop/sidecarConnection', () => ({
   disconnectSidecar: vi.fn().mockResolvedValue(true),
 }));
 
+vi.hoisted(() => {
+  process.env.NEXT_PUBLIC_APIDOT_API_BASE = 'https://apidot.example.com';
+});
+
 const sessionFixture = {
   userId: 'u1',
   deviceId: 'dev-1',
   deviceKey: 'key-1',
   accessToken: 'tok-1',
   expiresAt: '2026-12-09T00:00:00Z',
-  serverUrl: 'https://apidot.example.com',
+};
+
+const userFixture = {
+  id: 'u1',
+  email: 'u1@example.com',
+  displayName: 'User One',
+  isRoot: false,
+  workspaces: [],
 };
 
 const renderWithChild = () =>
@@ -49,20 +56,24 @@ const renderWithChild = () =>
     </ApiBaseBootstrap>
   );
 
+const enableDesktop = () => {
+  (window as any).__TAURI__ = {};
+};
+
 describe('ApiBaseBootstrap', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     localStorage.clear();
-    setApiBase(null);
-    setSession(null);
-    setAccessToken(null);
+    sessionStore.getState().reset();
+    resetBoot();
     setUnauthorizedHandler(null);
     useAuthStore.getState().reset();
     delete (window as any).__TAURI__;
     delete (window as any).__TAURI_INTERNALS__;
     vi.clearAllMocks();
     vi.mocked(loadDesktopSession).mockResolvedValue(null);
+    vi.mocked(connectSidecar).mockResolvedValue(true);
     fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -73,27 +84,13 @@ describe('ApiBaseBootstrap', () => {
 
   afterEach(() => {
     cleanup();
-    setSession(null);
-    setAccessToken(null);
+    sessionStore.getState().reset();
+    resetBoot();
     setUnauthorizedHandler(null);
     useAuthStore.getState().reset();
     delete (window as any).__TAURI__;
     delete (window as any).__TAURI_INTERNALS__;
     vi.unstubAllGlobals();
-  });
-
-  it('reads the stored base on mount', () => {
-    localStorage.setItem(API_BASE_STORAGE_KEY, 'https://apidot.example.com/');
-
-    renderWithChild();
-
-    expect(getApiBase()).toBe('https://apidot.example.com');
-  });
-
-  it('leaves the base empty without a stored value', () => {
-    renderWithChild();
-
-    expect(getApiBase()).toBe('');
   });
 
   it('renders the children immediately on the web', () => {
@@ -105,7 +102,7 @@ describe('ApiBaseBootstrap', () => {
   });
 
   it('holds the children on desktop until the session hydration resolves', async () => {
-    (window as any).__TAURI__ = {};
+    enableDesktop();
     let resolveHydration: (session: typeof sessionFixture | null) => void = () => {};
     vi.mocked(loadDesktopSession).mockReturnValue(
       new Promise((resolve) => {
@@ -125,14 +122,13 @@ describe('ApiBaseBootstrap', () => {
   });
 
   it('validates the stored session with the bearer token, then connects the sidecar', async () => {
-    (window as any).__TAURI__ = {};
+    enableDesktop();
     vi.mocked(loadDesktopSession).mockResolvedValue(sessionFixture);
 
     renderWithChild();
 
-    // The route renders with the token already in the client.
     await waitFor(() => {
-      expect(connectSidecar).toHaveBeenCalledWith(sessionFixture.serverUrl, 'tok-1');
+      expect(connectSidecar).toHaveBeenCalledWith('https://apidot.example.com', 'tok-1');
     });
 
     expect(screen.getByText('app content')).toBeInTheDocument();
@@ -147,18 +143,12 @@ describe('ApiBaseBootstrap', () => {
   });
 
   it('populates the auth store from the hydrated session', async () => {
-    (window as any).__TAURI__ = {};
+    enableDesktop();
     vi.mocked(loadDesktopSession).mockResolvedValue(sessionFixture);
     fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({
-        id: 'u1',
-        email: 'u1@example.com',
-        displayName: 'User One',
-        isRoot: false,
-        workspaces: [],
-      }),
+      json: async () => userFixture,
     } as unknown as Response);
 
     renderWithChild();
@@ -172,7 +162,7 @@ describe('ApiBaseBootstrap', () => {
   });
 
   it('still boots when the session user body is malformed', async () => {
-    (window as any).__TAURI__ = {};
+    enableDesktop();
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.mocked(loadDesktopSession).mockResolvedValue(sessionFixture);
     fetchMock.mockResolvedValue({
@@ -194,8 +184,8 @@ describe('ApiBaseBootstrap', () => {
     consoleError.mockRestore();
   });
 
-  it('clears and disconnects when the stored token is rejected', async () => {
-    (window as any).__TAURI__ = {};
+  it('clears the stored credential when the token is rejected', async () => {
+    enableDesktop();
     vi.mocked(loadDesktopSession).mockResolvedValue(sessionFixture);
     fetchMock.mockResolvedValue({ ok: false, status: 401 } as Response);
 
@@ -205,19 +195,37 @@ describe('ApiBaseBootstrap', () => {
       expect(clearDesktopSession).toHaveBeenCalled();
     });
 
-    expect(disconnectSidecar).toHaveBeenCalled();
-    expect(connectSidecar).not.toHaveBeenCalled();
-    expect(routerMock.replace).toHaveBeenCalledWith('/login');
+    expect(screen.getByText('app content')).toBeInTheDocument();
+    // Boot validates the token itself; it is not a user action, so the
+    // unauthorized handler must not fire.
+    expect(disconnectSidecar).not.toHaveBeenCalled();
+    expect(routerMock.replace).not.toHaveBeenCalled();
     expect(getAccessToken()).toBeNull();
-    // The machine identity survives so the next login reuses the device row.
     expect(getSession()).toMatchObject({
       deviceKey: 'key-1',
-      serverUrl: 'https://apidot.example.com',
     });
   });
 
+  it('routes a later 401 through the unauthorized handler', async () => {
+    enableDesktop();
+    vi.mocked(loadDesktopSession).mockResolvedValue(sessionFixture);
+
+    renderWithChild();
+
+    await waitFor(() => {
+      expect(screen.getByText('app content')).toBeInTheDocument();
+    });
+
+    fetchMock.mockResolvedValue({ ok: false, status: 401 } as Response);
+    await apiFetch('/api/workspaces');
+
+    expect(disconnectSidecar).toHaveBeenCalled();
+    expect(routerMock.replace).toHaveBeenCalledWith('/login');
+    expect(getAccessToken()).toBeNull();
+  });
+
   it('does not call the server without a stored session', async () => {
-    (window as any).__TAURI__ = {};
+    enableDesktop();
     vi.mocked(loadDesktopSession).mockResolvedValue(null);
 
     renderWithChild();
@@ -231,7 +239,7 @@ describe('ApiBaseBootstrap', () => {
   });
 
   it('releases the children when the hydration fails', async () => {
-    (window as any).__TAURI__ = {};
+    enableDesktop();
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.mocked(loadDesktopSession).mockRejectedValue(new Error('IPC unavailable'));
 

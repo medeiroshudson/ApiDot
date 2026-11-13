@@ -500,3 +500,5 @@ web/tsconfig.tsbuildinfo
 frontend/tsconfig.tsbuildinfo
 *.tsbuildinfo
 
+# Local dev database created by the default connection string
+backend/src/ApiDot.Server/apidot.db

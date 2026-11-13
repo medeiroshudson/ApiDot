@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { apiFetch, setUnauthorizedHandler } from './client';
-import { setApiBase } from './base';
 import { setAccessToken } from './authToken';
 
 describe('apiFetch', () => {
@@ -8,7 +7,6 @@ describe('apiFetch', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    setApiBase(null);
     setAccessToken(null);
     setUnauthorizedHandler(null);
     fetchMock = vi.fn().mockResolvedValue({ ok: true } as Response);
@@ -31,14 +29,6 @@ describe('apiFetch', () => {
     await apiFetch('/api/auth/config');
 
     expect(fetchMock).toHaveBeenCalledWith('/api/auth/config');
-  });
-
-  it('resolves the path against the configured base', async () => {
-    setApiBase('https://apidot.example.com/');
-
-    await apiFetch('/api/workspaces');
-
-    expect(fetchMock).toHaveBeenCalledWith('https://apidot.example.com/api/workspaces');
   });
 
   it('does not attach a bearer token when none is set', async () => {

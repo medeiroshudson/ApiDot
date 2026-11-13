@@ -97,6 +97,8 @@ jobs:
           dotnet publish backend/src/ApiDot.Agent/ApiDot.Agent.csproj -c Release -r ${{ matrix.rid }} -p:PublishAot=true -p:InvariantGlobalization=true --self-contained -o ./agent-publish
 
       - name: Build frontend static export
+        env:
+          NEXT_PUBLIC_APIDOT_API_BASE: ${{ vars.APIDOT_API_BASE || 'https://apidot.hmedeiros.dev' }}
         run: |
           npm --prefix frontend ci
           npm --prefix frontend run build:desktop
@@ -106,6 +108,7 @@ jobs:
         env:
           APIDOT_TARGET_TRIPLE: ${{ matrix.target }}
           APIDOT_AGENT_BINARY_PATH: ${{ github.workspace }}/agent-publish/${{ matrix.binary_name }}
+          NEXT_PUBLIC_APIDOT_API_BASE: ${{ vars.APIDOT_API_BASE || 'https://apidot.hmedeiros.dev' }}
         run: |
           node desktop/prepare.js
 

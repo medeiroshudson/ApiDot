@@ -1,18 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  API_BASE_STORAGE_KEY,
-  normalizeApiBase,
-  getApiBase,
-  setApiBase,
-  apiUrl,
-} from './base';
+import { describe, it, expect } from 'vitest';
+import { normalizeApiBase, getApiBase, apiUrl } from './base';
 
 describe('api base', () => {
-  beforeEach(() => {
-    localStorage.clear();
-    setApiBase(null);
-  });
-
   describe('normalizeApiBase', () => {
     it('keeps absolute http(s) URLs', () => {
       expect(normalizeApiBase('https://apidot.example.com')).toBe('https://apidot.example.com');
@@ -38,33 +27,10 @@ describe('api base', () => {
     });
   });
 
-  describe('getApiBase / setApiBase', () => {
-    it('starts empty and persists the normalized value', () => {
+  describe('getApiBase', () => {
+    it('is empty when the build has no base, so the web stays relative', () => {
       expect(getApiBase()).toBe('');
-
-      setApiBase(' https://apidot.example.com/ ');
-
-      expect(getApiBase()).toBe('https://apidot.example.com');
-      expect(localStorage.getItem(API_BASE_STORAGE_KEY)).toBe('https://apidot.example.com');
-    });
-
-    it('clears the stored value for an invalid base', () => {
-      setApiBase('https://apidot.example.com');
-      setApiBase('not-a-url');
-
-      expect(getApiBase()).toBe('');
-      expect(localStorage.getItem(API_BASE_STORAGE_KEY)).toBe('');
-    });
-  });
-
-  describe('apiUrl', () => {
-    it('returns the path unchanged without a base', () => {
       expect(apiUrl('/api/workspaces')).toBe('/api/workspaces');
-    });
-
-    it('prefixes the configured base', () => {
-      setApiBase('https://apidot.example.com/');
-      expect(apiUrl('/api/workspaces')).toBe('https://apidot.example.com/api/workspaces');
     });
   });
 });

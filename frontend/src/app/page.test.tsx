@@ -10,6 +10,7 @@ import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
 import { useRequestStore } from '@/stores/useRequestStore';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { getApiBase } from '@/lib/api/base';
 
 const mockReplace = vi.fn();
 const mockPush = vi.fn();
@@ -25,6 +26,11 @@ vi.mock('next/navigation', () => ({
   useParams: () => ({}),
   usePathname: () => '/',
 }));
+
+vi.mock('@/lib/api/base', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/base')>();
+  return { ...actual, getApiBase: vi.fn(actual.getApiBase) };
+});
 
 vi.mock('@/components/workspace/WorkspaceRouteShell', () => ({
   WorkspaceRouteShell: ({
@@ -44,6 +50,7 @@ vi.mock('@/components/workspace/WorkspaceRouteShell', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(getApiBase).mockReturnValue('');
   delete (window as any).__TAURI__;
   delete (window as any).__TAURI_INTERNALS__;
   window.history.replaceState(null, '', '/');
@@ -250,6 +257,17 @@ describe('Root Redirector (app/page.tsx)', () => {
     expect(screen.getByText(/loading workspace\.\.\.|carregando workspace\.\.\./i)).toBeInTheDocument();
   });
 
+  it('sends a desktop home without a server to the login screen', async () => {
+    (window as any).__TAURI__ = {};
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/login');
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('redirects directly to activeWorkspaceId if already present in useWorkspaceStore', async () => {
     useWorkspaceStore.setState({ activeWorkspaceId: 'ws-existing-123' });
 
@@ -268,6 +286,54 @@ describe('Root Redirector (app/page.tsx)', () => {
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith('/workspace/ws%2Fspecial%20123');
     });
+  });
+
+  it('creates only one workspace when the effect re-runs while it resolves', async () => {
+    const posts: string[] = [];
+    let releaseList: (() => void) | undefined;
+    const listGate = new Promise<void>((resolve) => {
+      releaseList = resolve;
+    });
+    let listRequests = 0;
+
+    vi.spyOn(global, 'fetch').mockImplementation((input: any, init?: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces') && init?.method === 'POST') {
+        posts.push(url);
+        return Promise.resolve({
+          ok: true,
+          status: 201,
+          json: async () => ({ id: `ws-created-${posts.length}`, name: 'Workspace' }),
+        } as any);
+      }
+      if (url.includes('/api/workspaces')) {
+        listRequests += 1;
+        return listGate.then(() => ({ ok: true, status: 200, json: async () => [] }) as any);
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 'user-1',
+          email: 'u@example.com',
+          displayName: 'U',
+          isRoot: true,
+          workspaces: [],
+        }),
+      } as any);
+    });
+
+    render(<Home />);
+
+    // The first resolution is parked on the list request; changing the active
+    // workspace re-runs the effect, which is the real-world overlap.
+    await waitFor(() => expect(listRequests).toBe(1));
+    useWorkspaceStore.setState({ activeWorkspaceId: 'ws-trigger' });
+    await Promise.resolve();
+
+    releaseList?.();
+
+    await waitFor(() => expect(posts).toHaveLength(1));
   });
 
   it('ensures redirect idempotency so executeRedirect only fires once', async () => {
@@ -514,6 +580,7 @@ describe('Root Redirector (app/page.tsx)', () => {
 
   it('drives the desktop fallback workspace through the hash instead of the web path', async () => {
     (window as any).__TAURI_INTERNALS__ = {};
+    vi.mocked(getApiBase).mockReturnValue('https://apidot.example.com');
     useWorkspaceStore.setState({ activeWorkspaceId: 'ws-fallback' });
 
     render(<Home />);

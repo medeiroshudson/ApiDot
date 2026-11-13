@@ -11,8 +11,13 @@ import {
 } from './authApi';
 import { getSession, setSession } from './api/session';
 import { setAccessToken } from './api/authToken';
-import { setApiBase } from './api/base';
+import { getApiBase } from './api/base';
 import { clearSidecarInfoCache } from './desktop/runtime';
+
+vi.mock('./api/base', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./api/base')>();
+  return { ...actual, getApiBase: vi.fn(actual.getApiBase) };
+});
 
 describe('authApi', () => {
   const originalFetch = global.fetch;
@@ -104,7 +109,7 @@ describe('authApi', () => {
         return undefined;
       });
       (window as any).__TAURI__ = { core: { invoke } };
-      setApiBase('https://api.example.com');
+      vi.mocked(getApiBase).mockReturnValue('https://api.example.com');
       clearSidecarInfoCache();
 
       const mockUser: AuthUser = {
@@ -140,7 +145,6 @@ describe('authApi', () => {
         deviceId: 'dev-local',
         deviceKey: 'key-local',
         accessToken: 'tok-local',
-        serverUrl: 'https://api.example.com',
       });
       expect(invoke).toHaveBeenCalledWith(
         'save_session',
@@ -164,7 +168,7 @@ describe('authApi', () => {
       });
 
       delete (window as any).__TAURI__;
-      setApiBase(null);
+      vi.mocked(getApiBase).mockReturnValue('');
       clearSidecarInfoCache();
       setSession(null);
       setAccessToken(null);

@@ -8,15 +8,14 @@ import { useI18nStore } from '@/stores/useI18nStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { AgentDeviceDto } from '@/lib/deviceApi';
 import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
-import {
-  API_BASE_STORAGE_KEY,
-  apiUrl,
-  getApiBase,
-  setApiBase,
-} from '@/lib/api/base';
-import { clearSessionMemory, getSession, setSession } from '@/lib/api/session';
-import { saveDesktopSession } from '@/lib/desktop/session';
+import { getApiBase } from '@/lib/api/base';
+import { clearSessionMemory, setSession } from '@/lib/api/session';
 import { useAuthStore } from '@/stores/useAuthStore';
+
+vi.mock('@/lib/api/base', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/base')>();
+  return { ...actual, getApiBase: vi.fn(actual.getApiBase) };
+});
 
 vi.mock('@/lib/desktop/session', () => ({
   loadDesktopSession: vi.fn().mockResolvedValue(null),
@@ -76,6 +75,7 @@ describe('GlobalSettingsModal', () => {
     delete (window as any).__TAURI__;
     delete (window as any).__TAURI_INTERNALS__;
     localStorage.clear();
+    vi.mocked(getApiBase).mockReturnValue('');
     clearSessionMemory();
 
     Object.assign(navigator, {
@@ -655,84 +655,21 @@ describe('GlobalSettingsModal', () => {
     });
   });
 
-  describe('Desktop Server URL', () => {
-    beforeEach(() => {
-      setApiBase(null);
-    });
-
-    it('hides the server URL field on the web', () => {
+  describe('Server (build time)', () => {
+    it('hides the server line on the web', () => {
       render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
 
-      expect(screen.queryByLabelText(/server url/i)).toBeNull();
+      expect(screen.queryByText('Server')).toBeNull();
     });
 
-    it('shows the stored base in the desktop field', () => {
+    it('shows the base compiled into the build', () => {
       (window as any).__TAURI__ = {};
-      setApiBase('https://stored.example.com');
+      vi.mocked(getApiBase).mockReturnValue('https://stored.example.com');
 
       render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
 
-      expect(screen.getByLabelText(/server url/i)).toHaveValue('https://stored.example.com');
-    });
-
-    it('normalizes, persists and applies a valid server URL', () => {
-      (window as any).__TAURI__ = {};
-
-      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
-
-      fireEvent.change(screen.getByLabelText(/server url/i), {
-        target: { value: ' https://apidot.example.com/ ' },
-      });
-      fireEvent.click(screen.getByRole('button', { name: /save|salvar/i }));
-
-      expect(getApiBase()).toBe('https://apidot.example.com');
-      expect(localStorage.getItem(API_BASE_STORAGE_KEY)).toBe('https://apidot.example.com');
-      expect(apiUrl('/api/workspaces')).toBe('https://apidot.example.com/api/workspaces');
-      expect(screen.getByLabelText(/server url/i)).toHaveValue('https://apidot.example.com');
-    });
-
-    it('shows an inline error and keeps the previous base for an invalid value', () => {
-      (window as any).__TAURI__ = {};
-      setApiBase('https://stored.example.com');
-
-      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
-
-      fireEvent.change(screen.getByLabelText(/server url/i), {
-        target: { value: 'not-a-url' },
-      });
-      fireEvent.click(screen.getByRole('button', { name: /save|salvar/i }));
-
-      expect(screen.getByRole('alert')).toHaveTextContent(/valid http\(s\) url/i);
-      expect(getApiBase()).toBe('https://stored.example.com');
-      expect(localStorage.getItem(API_BASE_STORAGE_KEY)).toBe('https://stored.example.com');
-    });
-
-    it('persists the new server URL into the desktop session', async () => {
-      (window as any).__TAURI__ = {};
-      setSession({
-        deviceId: 'device-1',
-        deviceKey: 'key-1',
-        accessToken: 'tok-1',
-        serverUrl: 'https://old.example.com',
-      });
-
-      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
-
-      fireEvent.change(screen.getByLabelText(/server url/i), {
-        target: { value: ' https://new.example.com/ ' },
-      });
-      fireEvent.click(screen.getByRole('button', { name: /save|salvar/i }));
-
-      await waitFor(() => {
-        expect(saveDesktopSession).toHaveBeenCalled();
-      });
-
-      expect(getSession()?.serverUrl).toBe('https://new.example.com');
-      expect(vi.mocked(saveDesktopSession).mock.calls.at(-1)?.[0]).toMatchObject({
-        deviceKey: 'key-1',
-        accessToken: 'tok-1',
-        serverUrl: 'https://new.example.com',
-      });
+      expect(screen.getByText('Server')).toBeInTheDocument();
+      expect(screen.getByText('https://stored.example.com')).toBeInTheDocument();
     });
   });
 

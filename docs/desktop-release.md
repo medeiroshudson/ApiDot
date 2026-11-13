@@ -18,6 +18,25 @@ npx tauri signer generate -w ~/.tauri/apidot.key
 2. The workflow publishes the AOT agent, builds the frontend static export (`npm --prefix frontend run build:desktop`), runs `prepare.js` (fails if `out/index.html` is missing or is the old `localhost:3000` redirect), validates the config (fails on a placeholder updater key), then `tauri-action` builds and signs.
 3. Local builds: `npm --prefix desktop run build` now builds the export first, then `prepare.js`, then `tauri build`.
 
+## The API server is a build input
+
+The desktop app talks to exactly one API server and that server is chosen when the
+frontend is compiled. Nothing at runtime can point a release build at another host.
+
+```bash
+NEXT_PUBLIC_APIDOT_API_BASE=https://apidot.example.com npm --prefix frontend run build:desktop
+NEXT_PUBLIC_APIDOT_API_BASE=https://apidot.example.com node desktop/prepare.js
+npm --prefix desktop run build
+```
+
+- The value must be an absolute `http(s)` URL. `prepare.js` exits non-zero otherwise, so a
+  release cannot be built without a server.
+- The release workflow takes it from the repository variable `APIDOT_API_BASE` (default
+  `https://apidot.hmedeiros.dev`).
+- The web build leaves it empty: requests stay relative and the Next server proxies them.
+- Changing the server requires recompiling and republishing the desktop app; it is not a
+  setting a user can edit.
+
 ## R3 — validate an installed app (macOS)
 
 ```bash
@@ -31,10 +50,10 @@ cp -R desktop/src-tauri/target/release/bundle/macos/ApiDot.app /Applications/
 2. **Deep link, app closed.** Quit, then `open "apidot://workspace/<ws>/request/<rid>"`. Sign in when prompted; the app must resume at that request (`pendingRoute`), not at the scratchpad.
 3. **Deep link, app running.** Same command with the app open: the window focuses and navigates.
 4. **Asset routing.** Open the app at `/`, go to the login screen and reload the webview (Cmd+R). The exported shell must load (no 404), and `/auth/desktop-success` must load too. A 404 here means the Tauri asset protocol is not resolving extensionless paths; fix with `trailingSlash: true` in the export or a protocol fallback.
-5. **Unified auth.** Sign in: `~/.apidot/session.json` exists with mode 0600 and `userId`, `deviceId`, `deviceKey`, `accessToken`, `expiresAt`, `serverUrl`. The device appears in the list marked as the current device, `GET /api/agent/devices` carries no scope field, and the sidecar connects (device online).
+5. **Unified auth.** Sign in: `~/.apidot/session.json` exists with mode 0600 and `userId`, `deviceId`, `deviceKey`, `accessToken`, `expiresAt`. The device appears in the list marked as the current device, `GET /api/agent/devices` carries no scope field, and the sidecar connects (device online).
 6. **Service coexistence.** With the system service installed, restart the app: `/connect` must answer `{ connected: false, reason: "service-active" }` and only the service device is online. No second WebSocket.
 7. **Revocation.** Revoke the desktop device from another session: the app must get 401, clear the session, disconnect the sidecar and land on `/login`.
-8. **Logout.** The token fields are cleared, `deviceKey`/`serverUrl` survive, `IsRevoked` stays false, and the next login reuses the same device id.
+8. **Logout.** The token fields are cleared, `deviceKey` survives, `IsRevoked` stays false, and the next login reuses the same device id.
 9. **Updater.** Publish a test release, install the previous version and confirm the update downloads and passes signature verification.
 
 `tauri dev` runs an unregistered binary, so steps 1–3 only work from an installed `.app`.

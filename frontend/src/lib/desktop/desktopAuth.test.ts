@@ -10,6 +10,10 @@ import { clearSidecarInfoCache } from './runtime';
 import { getAccessToken, setAccessToken } from '@/lib/api/authToken';
 import { getSession, setSession } from '@/lib/api/session';
 
+vi.hoisted(() => {
+  process.env.NEXT_PUBLIC_APIDOT_API_BASE = 'https://api.apidot.dev';
+});
+
 describe('desktopAuth', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -33,11 +37,12 @@ describe('desktopAuth', () => {
         exchangeToken: mockExchange,
         getState: vi.fn().mockResolvedValue('state-abc'),
         port: 54321,
-        serverUrl: 'https://apidot.hmedeiros.dev',
       });
 
       expect(mockOpen).toHaveBeenCalledWith(
-        expect.stringContaining('desktop_callback=http%3A%2F%2F127.0.0.1%3A54321%2Fauth%2Fcallback%3Fstate%3Dstate-abc')
+        expect.stringContaining(
+          'https://api.apidot.dev/api/auth/login?desktop_callback=http%3A%2F%2F127.0.0.1%3A54321%2Fauth%2Fcallback%3Fstate%3Dstate-abc'
+        )
       );
       expect(result.success).toBe(true);
       expect(result.user).toEqual({ id: 'u1', email: 'test@hmedeiros.dev' });
@@ -61,7 +66,7 @@ describe('desktopAuth', () => {
         expect.stringContaining('desktop_callback=http%3A%2F%2F127.0.0.1%3A42000%2Fauth%2Fcallback%3Fstate%3Dstate-auto')
       );
       expect(mockPoll).toHaveBeenCalledWith(42000, 'sidecar-sec', expect.any(Object));
-      expect(mockExchange).toHaveBeenCalledWith('tok-auto', undefined);
+      expect(mockExchange).toHaveBeenCalledWith('tok-auto');
       expect(result.success).toBe(true);
     });
 
@@ -74,28 +79,11 @@ describe('desktopAuth', () => {
         exchangeToken: vi.fn().mockResolvedValue({ id: 'u1' } as any),
         getState: vi.fn().mockResolvedValue('state-123'),
         port: 12345,
-        serverUrl: 'https://app.apidot.dev',
         returnUrl: '/workspace/ws-1',
       });
 
       expect(mockOpen).toHaveBeenCalledWith(
-        'https://app.apidot.dev/api/auth/login?desktop_callback=http%3A%2F%2F127.0.0.1%3A12345%2Fauth%2Fcallback%3Fstate%3Dstate-123&returnUrl=%2Fworkspace%2Fws-1'
-      );
-    });
-
-    it('defaults base to window.location.origin when serverUrl is not provided', async () => {
-      const mockOpen = vi.fn().mockResolvedValue(undefined);
-
-      await startDesktopSsoFlow({
-        openBrowser: mockOpen,
-        pollSession: vi.fn().mockResolvedValue('tok-1'),
-        exchangeToken: vi.fn().mockResolvedValue({ id: 'u1' } as any),
-        getState: vi.fn().mockResolvedValue('state-default'),
-        port: 12345,
-      });
-
-      expect(mockOpen).toHaveBeenCalledWith(
-        `${window.location.origin}/api/auth/login?desktop_callback=http%3A%2F%2F127.0.0.1%3A12345%2Fauth%2Fcallback%3Fstate%3Dstate-default`
+        'https://api.apidot.dev/api/auth/login?desktop_callback=http%3A%2F%2F127.0.0.1%3A12345%2Fauth%2Fcallback%3Fstate%3Dstate-123&returnUrl=%2Fworkspace%2Fws-1'
       );
     });
 
@@ -236,7 +224,7 @@ describe('desktopAuth', () => {
         json: async () => mockUser,
       } as Response);
 
-      const user = await exchangeDesktopToken('desktop-token-xyz', 'https://api.apidot.dev');
+      const user = await exchangeDesktopToken('desktop-token-xyz');
 
       expect(global.fetch).toHaveBeenCalledWith('https://api.apidot.dev/api/auth/desktop-exchange', {
         method: 'POST',
@@ -257,7 +245,7 @@ describe('desktopAuth', () => {
         json: async () => ({ id: 'u100', email: 'user@apidot.dev' }),
       } as Response);
 
-      await exchangeDesktopToken('desktop-token-xyz', 'https://api.apidot.dev');
+      await exchangeDesktopToken('desktop-token-xyz');
 
       expect(global.fetch).toHaveBeenCalledWith('https://api.apidot.dev/api/auth/desktop-exchange', {
         method: 'POST',
@@ -279,7 +267,7 @@ describe('desktopAuth', () => {
         json: async () => ({ id: 'u100', email: 'user@apidot.dev' }),
       } as Response);
 
-      await exchangeDesktopToken('desktop-token-xyz', 'https://api.apidot.dev');
+      await exchangeDesktopToken('desktop-token-xyz');
 
       const init = vi.mocked(global.fetch).mock.calls[0][1] as RequestInit;
       expect(JSON.parse(init.body as string)).toEqual({ token: 'desktop-token-xyz' });
@@ -316,7 +304,7 @@ describe('desktopAuth', () => {
       });
       global.fetch = fetchMock;
 
-      await exchangeDesktopToken('desktop-token-xyz', 'https://api.apidot.dev');
+      await exchangeDesktopToken('desktop-token-xyz');
 
       expect(getAccessToken()).toBe('device-token-abc');
       expect(getSession()).toMatchObject({
@@ -325,7 +313,6 @@ describe('desktopAuth', () => {
         deviceKey: 'machine-key-1',
         accessToken: 'device-token-abc',
         expiresAt: '2026-12-09T00:00:00.0000000Z',
-        serverUrl: 'https://api.apidot.dev',
       });
       expect(invoke).toHaveBeenCalledWith('save_session', {
         session: {
@@ -334,7 +321,6 @@ describe('desktopAuth', () => {
           device_key: 'machine-key-1',
           access_token: 'device-token-abc',
           expires_at: '2026-12-09T00:00:00.0000000Z',
-          server_url: 'https://api.apidot.dev',
         },
       });
       expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:43210/connect', {
@@ -383,12 +369,11 @@ describe('desktopAuth', () => {
       });
       global.fetch = fetchMock;
 
-      const user = await exchangeDesktopToken('desktop-token-xyz', 'https://api.apidot.dev');
+      const user = await exchangeDesktopToken('desktop-token-xyz');
 
       expect(user).toEqual(mockUser);
       expect(getAccessToken()).toBe('device-token-abc');
       expect(getSession()).toMatchObject({
-        serverUrl: 'https://api.apidot.dev',
         accessToken: 'device-token-abc',
       });
 
@@ -433,21 +418,6 @@ describe('desktopAuth', () => {
       await openExternalBrowser('https://apidot.hmedeiros.dev/fallback');
 
       expect(mockWindowOpen).toHaveBeenCalledWith('https://apidot.hmedeiros.dev/fallback', '_blank');
-    });
-
-    it('resolves relative URLs to absolute URLs using window.location.origin before invoking Tauri IPC', async () => {
-      const mockInvoke = vi.fn().mockResolvedValue(undefined);
-      (window as any).__TAURI__ = {
-        core: {
-          invoke: mockInvoke,
-        },
-      };
-
-      await openExternalBrowser('/api/auth/login?desktop_callback=http%3A%2F%2F127.0.0.1%3A123%2Fauth%2Fcallback');
-
-      expect(mockInvoke).toHaveBeenCalledWith('plugin:shell|open', {
-        path: `${window.location.origin}/api/auth/login?desktop_callback=http%3A%2F%2F127.0.0.1%3A123%2Fauth%2Fcallback`,
-      });
     });
   });
 });
