@@ -283,6 +283,54 @@ describe('Root Redirector (app/page.tsx)', () => {
     });
   });
 
+  it('creates only one workspace when the effect re-runs while it resolves', async () => {
+    const posts: string[] = [];
+    let releaseList: (() => void) | undefined;
+    const listGate = new Promise<void>((resolve) => {
+      releaseList = resolve;
+    });
+    let listRequests = 0;
+
+    vi.spyOn(global, 'fetch').mockImplementation((input: any, init?: any) => {
+      const url = String(input);
+      if (url.includes('/api/workspaces') && init?.method === 'POST') {
+        posts.push(url);
+        return Promise.resolve({
+          ok: true,
+          status: 201,
+          json: async () => ({ id: `ws-created-${posts.length}`, name: 'Workspace' }),
+        } as any);
+      }
+      if (url.includes('/api/workspaces')) {
+        listRequests += 1;
+        return listGate.then(() => ({ ok: true, status: 200, json: async () => [] }) as any);
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 'user-1',
+          email: 'u@example.com',
+          displayName: 'U',
+          isRoot: true,
+          workspaces: [],
+        }),
+      } as any);
+    });
+
+    render(<Home />);
+
+    // The first resolution is parked on the list request; changing the active
+    // workspace re-runs the effect, which is the real-world overlap.
+    await waitFor(() => expect(listRequests).toBe(1));
+    useWorkspaceStore.setState({ activeWorkspaceId: 'ws-trigger' });
+    await Promise.resolve();
+
+    releaseList?.();
+
+    await waitFor(() => expect(posts).toHaveLength(1));
+  });
+
   it('ensures redirect idempotency so executeRedirect only fires once', async () => {
     useWorkspaceStore.setState({ activeWorkspaceId: 'ws-idempotent' });
 

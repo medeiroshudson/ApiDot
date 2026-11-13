@@ -27,6 +27,10 @@ export default function Home() {
   const checkAuth = useAuthStore((s) => s.checkAuth);
 
   const redirectedRef = useRef(false);
+  // The effect below re-runs whenever the stores it touched change. A second run
+  // while the first is still awaiting would create a second workspace, because
+  // the list is still empty for both.
+  const resolvingRef = useRef(false);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
@@ -46,6 +50,9 @@ export default function Home() {
   );
 
   const resolveAndRedirect = useCallback(async () => {
+    if (resolvingRef.current) return;
+    resolvingRef.current = true;
+
     try {
       setHasError(false);
       setErrorMessage(null);
@@ -119,6 +126,8 @@ export default function Home() {
       setErrorMessage(
         error instanceof Error ? error.message : t('home.errorDefault')
       );
+    } finally {
+      resolvingRef.current = false;
     }
   }, [activeWorkspaceId, fetchWorkspaces, createWorkspace, executeRedirect, checkAuth, t]);
 
