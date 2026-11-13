@@ -1,26 +1,16 @@
 import { apiFetch } from '@/lib/api/client';
 import { getApiBase } from '@/lib/api/base';
 import { getSession, persistDeviceCredential } from '@/lib/api/session';
+import type { AuthUser, AuthWorkspace } from '@/lib/session/types';
+
+// Defined in `lib/session/types` so the session store can use them without
+// importing this module, which reaches the API client.
+export type { AuthUser, AuthWorkspace } from '@/lib/session/types';
 
 export interface AuthConfig {
   oidcEnabled: boolean;
   localAuthEnabled: boolean;
   providerName: string;
-}
-
-export interface AuthWorkspace {
-  id: string;
-  name: string;
-  role: string;
-}
-
-export interface AuthUser {
-  id: string;
-  email: string;
-  displayName: string;
-  isRoot: boolean;
-  locale?: string | null;
-  workspaces: AuthWorkspace[];
 }
 
 export type AuthConfigDto = AuthConfig;

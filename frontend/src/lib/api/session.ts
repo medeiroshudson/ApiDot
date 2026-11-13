@@ -5,21 +5,18 @@
  * device key, bearer token, expiry and the server URL used to reach the API.
  * The token itself is also held by `lib/api/authToken.ts`; this module keeps
  * both in sync when a credential arrives and when the session ends.
+ *
+ * Both values live in the session store; this module keeps the existing facade.
  */
 
 import { isDesktop } from '@/lib/desktop/runtime';
 import { saveDesktopSession } from '@/lib/desktop/session';
 import { connectSidecar } from '@/lib/desktop/sidecarConnection';
+import { sessionStore } from '@/lib/session/state';
+import type { DesktopSession } from '@/lib/session/types';
 import { setAccessToken } from './authToken';
 
-export interface DesktopSession {
-  userId?: string | null;
-  deviceId?: string | null;
-  deviceKey?: string | null;
-  accessToken?: string | null;
-  expiresAt?: string | null;
-  serverUrl?: string | null;
-}
+export type { DesktopSession } from '@/lib/session/types';
 
 /** Response headers that carry the device credential on login. */
 export const DEVICE_CREDENTIAL_HEADERS = {
@@ -29,16 +26,13 @@ export const DEVICE_CREDENTIAL_HEADERS = {
   deviceKey: 'X-Desktop-Device-Key',
 } as const;
 
-let currentSession: DesktopSession | null = null;
-
 export function getSession(): DesktopSession | null {
-  return currentSession;
+  return sessionStore.getState().session;
 }
 
 /** Replaces the in-memory session. The access token is synced by callers. */
 export function setSession(session: DesktopSession | null): DesktopSession | null {
-  currentSession = session ? { ...session } : null;
-  return currentSession;
+  return sessionStore.getState().setSession(session);
 }
 
 /**
@@ -47,8 +41,8 @@ export function setSession(session: DesktopSession | null): DesktopSession | nul
  * before the first login.
  */
 export function patchSession(patch: Partial<DesktopSession>): DesktopSession | null {
-  currentSession = { ...(currentSession ?? {}), ...patch };
-  return currentSession;
+  const current = sessionStore.getState().session;
+  return sessionStore.getState().setSession({ ...(current ?? {}), ...patch });
 }
 
 /**
@@ -59,18 +53,7 @@ export function patchSession(patch: Partial<DesktopSession>): DesktopSession | n
  * sign in again. The bearer token is always dropped.
  */
 export function clearSessionMemory(): DesktopSession | null {
-  const preserved: DesktopSession = {};
-
-  if (currentSession?.deviceKey) {
-    preserved.deviceKey = currentSession.deviceKey;
-  }
-  if (currentSession?.serverUrl) {
-    preserved.serverUrl = currentSession.serverUrl;
-  }
-
-  currentSession = Object.keys(preserved).length > 0 ? preserved : null;
-  setAccessToken(null);
-  return currentSession;
+  return sessionStore.getState().clearKeepingDeviceIdentity();
 }
 
 export interface PersistDeviceCredentialOptions {

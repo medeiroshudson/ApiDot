@@ -12,7 +12,7 @@
  * thrown: a session that cannot be read must not prevent the app from starting.
  */
 
-import type { DesktopSession } from '@/lib/api/session';
+import type { DesktopSession } from '@/lib/session/types';
 import { isDesktop } from './runtime';
 
 interface WireDesktopSession {
