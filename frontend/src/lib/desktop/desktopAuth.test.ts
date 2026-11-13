@@ -248,6 +248,44 @@ describe('desktopAuth', () => {
       expect(user).toEqual(mockUser);
     });
 
+    it('sends the stored device key so the exchange reuses the device row', async () => {
+      setSession({ deviceKey: 'machine-key-1' });
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'u100', email: 'user@apidot.dev' }),
+      } as Response);
+
+      await exchangeDesktopToken('desktop-token-xyz', 'https://api.apidot.dev');
+
+      expect(global.fetch).toHaveBeenCalledWith('https://api.apidot.dev/api/auth/desktop-exchange', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token: 'desktop-token-xyz', deviceKey: 'machine-key-1' }),
+      });
+
+      setSession(null);
+    });
+
+    it('omits the device key when no session is stored', async () => {
+      setSession(null);
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'u100', email: 'user@apidot.dev' }),
+      } as Response);
+
+      await exchangeDesktopToken('desktop-token-xyz', 'https://api.apidot.dev');
+
+      const init = vi.mocked(global.fetch).mock.calls[0][1] as RequestInit;
+      expect(JSON.parse(init.body as string)).toEqual({ token: 'desktop-token-xyz' });
+      expect(init.body as string).not.toContain('deviceKey');
+    });
+
     it('persists the device credential and connects the sidecar after a desktop exchange', async () => {
       const invoke = vi.fn().mockImplementation(async (cmd: string) => {
         if (cmd === 'get_sidecar_info') {

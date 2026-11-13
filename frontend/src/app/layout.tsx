@@ -16,9 +16,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="min-h-screen bg-neutral-950 text-neutral-100 antialiased font-sans">
-        {children}
-        <ApiBaseBootstrap />
+        {/* Deep links stay outside the gate: a link that arrives while the
+            session hydrates must still be parked for the login screen. */}
         <DeepLinkBridge />
+        <ApiBaseBootstrap>{children}</ApiBaseBootstrap>
       </body>
     </html>
   );

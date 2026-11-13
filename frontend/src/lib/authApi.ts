@@ -1,6 +1,6 @@
 import { apiFetch } from '@/lib/api/client';
 import { getApiBase } from '@/lib/api/base';
-import { persistDeviceCredential } from '@/lib/api/session';
+import { getSession, persistDeviceCredential } from '@/lib/api/session';
 
 export interface AuthConfig {
   oidcEnabled: boolean;
@@ -62,10 +62,14 @@ export async function getAuthConfig(): Promise<AuthConfig> {
 }
 
 export async function loginLocal(email: string, password: string): Promise<AuthUser> {
+  // The stored key reuses this machine's device row; without it the body is the web request.
+  const deviceKey = getSession()?.deviceKey;
+  const body = deviceKey ? { email, password, deviceKey } : { email, password };
+
   const res = await apiFetch('/api/auth/local', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(body),
   });
   const user = await handleResponse<AuthUser>(res);
 
