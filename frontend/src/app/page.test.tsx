@@ -10,6 +10,7 @@ import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
 import { useRequestStore } from '@/stores/useRequestStore';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { setApiBase } from '@/lib/api/base';
 
 const mockReplace = vi.fn();
 const mockPush = vi.fn();
@@ -248,6 +249,18 @@ describe('Root Redirector (app/page.tsx)', () => {
 
     expect(screen.getByRole('status')).toBeInTheDocument();
     expect(screen.getByText(/loading workspace\.\.\.|carregando workspace\.\.\./i)).toBeInTheDocument();
+  });
+
+  it('sends a desktop home without a server to the login screen', async () => {
+    (window as any).__TAURI__ = {};
+    setApiBase(null);
+
+    render(<Home />);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/login');
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('redirects directly to activeWorkspaceId if already present in useWorkspaceStore', async () => {
@@ -514,6 +527,7 @@ describe('Root Redirector (app/page.tsx)', () => {
 
   it('drives the desktop fallback workspace through the hash instead of the web path', async () => {
     (window as any).__TAURI_INTERNALS__ = {};
+    setApiBase('https://apidot.example.com');
     useWorkspaceStore.setState({ activeWorkspaceId: 'ws-fallback' });
 
     render(<Home />);

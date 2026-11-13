@@ -36,18 +36,6 @@ export function ApiBaseBootstrap({ children }: { children: React.ReactNode }): R
     }
   }, [user]);
 
-  // A failed boot has no usable API base: the login screen is the only place
-  // where the user can set one, so the home route would dead-end on an error.
-  useEffect(() => {
-    if (!desktop || status !== 'failed') {
-      return;
-    }
-    if (typeof window !== 'undefined' && window.location?.pathname?.startsWith('/login')) {
-      return;
-    }
-    router.replace('/login');
-  }, [desktop, status, router]);
-
   useEffect(() => {
     let cancelled = false;
 

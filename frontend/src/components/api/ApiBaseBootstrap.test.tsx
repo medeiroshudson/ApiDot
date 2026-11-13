@@ -265,7 +265,6 @@ describe('ApiBaseBootstrap', () => {
     });
 
     expect(connectSidecar).not.toHaveBeenCalled();
-    expect(routerMock.replace).toHaveBeenCalledWith('/login');
     consoleError.mockRestore();
   });
 });

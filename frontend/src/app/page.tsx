@@ -6,6 +6,7 @@ import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useAppRoute } from '@/hooks/useAppRoute';
+import { getApiBase } from '@/lib/api/base';
 import { isDesktop } from '@/lib/desktop/runtime';
 import { WorkspaceRouteShell } from '@/components/workspace/WorkspaceRouteShell';
 import { Loader2, AlertCircle } from 'lucide-react';
@@ -48,6 +49,17 @@ export default function Home() {
     try {
       setHasError(false);
       setErrorMessage(null);
+
+      // Desktop without a server has nothing to ask: `/login` is the only screen
+      // that can set one, and a relative fetch would resolve against
+      // `tauri://localhost`.
+      if (isDesktop() && !getApiBase()) {
+        if (!redirectedRef.current) {
+          redirectedRef.current = true;
+          routerRef.current.replace('/login');
+        }
+        return;
+      }
 
       // Check auth status on mount via checkAuth()
       const user = await checkAuth();
