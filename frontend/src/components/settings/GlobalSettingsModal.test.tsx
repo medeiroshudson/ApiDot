@@ -8,8 +8,14 @@ import { useI18nStore } from '@/stores/useI18nStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { AgentDeviceDto } from '@/lib/deviceApi';
 import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
+import { getApiBase } from '@/lib/api/base';
 import { clearSessionMemory, setSession } from '@/lib/api/session';
 import { useAuthStore } from '@/stores/useAuthStore';
+
+vi.mock('@/lib/api/base', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/base')>();
+  return { ...actual, getApiBase: vi.fn(actual.getApiBase) };
+});
 
 vi.mock('@/lib/desktop/session', () => ({
   loadDesktopSession: vi.fn().mockResolvedValue(null),
@@ -69,6 +75,7 @@ describe('GlobalSettingsModal', () => {
     delete (window as any).__TAURI__;
     delete (window as any).__TAURI_INTERNALS__;
     localStorage.clear();
+    vi.mocked(getApiBase).mockReturnValue('');
     clearSessionMemory();
 
     Object.assign(navigator, {
@@ -645,6 +652,25 @@ describe('GlobalSettingsModal', () => {
 
       expect(screen.getByText('Nova versão disponível')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Baixar e Atualizar' })).toBeInTheDocument();
+    });
+  });
+
+  describe('Server (build time)', () => {
+    it('hides the server line on the web', () => {
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
+
+      expect(screen.queryByText(/set at build time|definido na compilação/i)).toBeNull();
+    });
+
+    it('shows the base compiled into the build', () => {
+      (window as any).__TAURI__ = {};
+      vi.mocked(getApiBase).mockReturnValue('https://stored.example.com');
+
+      render(<GlobalSettingsModal isOpen={true} onClose={vi.fn()} defaultTab="general" />);
+
+      expect(
+        screen.getByText('Server: https://stored.example.com (set at build time)')
+      ).toBeInTheDocument();
     });
   });
 

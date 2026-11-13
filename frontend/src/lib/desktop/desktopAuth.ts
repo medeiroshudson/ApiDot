@@ -3,6 +3,9 @@ import { getSidecarInfo } from '@/lib/desktop/runtime';
 import { getApiBase } from '@/lib/api/base';
 import { getSession, persistDeviceCredential } from '@/lib/api/session';
 
+/** A desktop build without `NEXT_PUBLIC_APIDOT_API_BASE` cannot reach any server. */
+const NO_API_SERVER = 'This build has no API server configured';
+
 export interface PollSessionOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -49,14 +52,9 @@ export async function openExternalBrowser(url: string): Promise<void> {
     invokeFn = tauriGlobal.invoke.bind(tauriGlobal);
   }
 
-  let targetUrl = url;
-  if (typeof window !== 'undefined' && url.startsWith('/') && window.location?.origin) {
-    targetUrl = `${window.location.origin.replace(/\/+$/, '')}${url}`;
-  }
-
   if (invokeFn) {
     try {
-      await invokeFn('plugin:shell|open', { path: targetUrl });
+      await invokeFn('plugin:shell|open', { path: url });
       return;
     } catch {
       // Fallback if invoke fails
@@ -64,7 +62,7 @@ export async function openExternalBrowser(url: string): Promise<void> {
   }
 
   if (typeof window.open === 'function') {
-    window.open(targetUrl, '_blank');
+    window.open(url, '_blank');
   }
 }
 
@@ -183,7 +181,10 @@ export async function fetchDesktopSidecarAuthState(
  * Exchanges a one-time ephemeral desktop token for an authenticated user session.
  */
 export async function exchangeDesktopToken(token: string): Promise<AuthUser> {
-  const base = getApiBase().replace(/\/+$/, '');
+  const base = getApiBase();
+  if (!base) {
+    throw new Error(NO_API_SERVER);
+  }
   const url = `${base}/api/auth/desktop-exchange`;
 
   // The one-time token travels in the body, so the exchange does not need the
@@ -229,6 +230,9 @@ export async function exchangeDesktopToken(token: string): Promise<AuthUser> {
  * 3. Polls the local sidecar /auth/session for the single-use token
  * 4. Exchanges the token at /api/auth/desktop-exchange
  * 5. Returns the authenticated user
+ *
+ * The login URL is built from the API base compiled into the app, so a build
+ * with no base fails here instead of opening a `tauri://` address.
  */
 export async function startDesktopSsoFlow(
   options: DesktopSsoOptions = {}
@@ -236,6 +240,11 @@ export async function startDesktopSsoFlow(
   try {
     if (options.signal?.aborted) {
       return { success: false, error: 'Authentication cancelled' };
+    }
+
+    const base = getApiBase();
+    if (!base) {
+      return { success: false, error: NO_API_SERVER };
     }
 
     let port = options.port;
@@ -257,10 +266,6 @@ export async function startDesktopSsoFlow(
     }
 
     const callbackUrl = `http://127.0.0.1:${port}/auth/callback`;
-    const defaultBase = typeof window !== 'undefined' && window.location?.origin
-      ? window.location.origin
-      : 'https://apidot.hmedeiros.dev';
-    const base = (getApiBase() || defaultBase).replace(/\/+$/, '');
 
     const resolveState = options.getState ?? fetchDesktopSidecarAuthState;
     const state = await resolveState(port, secret, options.signal);

@@ -18,6 +18,25 @@ npx tauri signer generate -w ~/.tauri/apidot.key
 2. The workflow publishes the AOT agent, builds the frontend static export (`npm --prefix frontend run build:desktop`), runs `prepare.js` (fails if `out/index.html` is missing or is the old `localhost:3000` redirect), validates the config (fails on a placeholder updater key), then `tauri-action` builds and signs.
 3. Local builds: `npm --prefix desktop run build` now builds the export first, then `prepare.js`, then `tauri build`.
 
+## The API server is a build input
+
+The desktop app talks to exactly one API server and that server is chosen when the
+frontend is compiled. Nothing at runtime can point a release build at another host.
+
+```bash
+NEXT_PUBLIC_APIDOT_API_BASE=https://apidot.example.com npm --prefix frontend run build:desktop
+NEXT_PUBLIC_APIDOT_API_BASE=https://apidot.example.com node desktop/prepare.js
+npm --prefix desktop run build
+```
+
+- The value must be an absolute `http(s)` URL. `prepare.js` exits non-zero otherwise, so a
+  release cannot be built without a server.
+- The release workflow takes it from the repository variable `APIDOT_API_BASE` (default
+  `https://apidot.hmedeiros.dev`).
+- The web build leaves it empty: requests stay relative and the Next server proxies them.
+- Changing the server requires recompiling and republishing the desktop app; it is not a
+  setting a user can edit.
+
 ## R3 — validate an installed app (macOS)
 
 ```bash

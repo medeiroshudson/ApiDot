@@ -330,6 +330,7 @@ const ptBR = {
     agentsTab: 'Dispositivos',
     language: 'Idioma',
     languageDesc: 'Selecione o idioma de exibição da aplicação',
+    serverAtBuildTime: 'Servidor: {base} (definido na compilação)',
     english: 'Inglês',
     portuguese: 'Português',
     sidebarWidth: 'Largura da Barra Lateral',

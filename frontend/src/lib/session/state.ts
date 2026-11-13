@@ -18,12 +18,10 @@ export type SessionStatus = 'idle' | 'hydrating' | 'ready' | 'failed';
 
 export interface SessionState {
   status: SessionStatus;
-  baseUrl: string;
   accessToken: string | null;
   session: DesktopSession | null;
   user: AuthUser | null;
 
-  setBaseUrl: (value: string) => void;
   setAccessToken: (token: string | null) => void;
   setSession: (session: DesktopSession | null) => DesktopSession | null;
   setUser: (user: AuthUser | null) => void;
@@ -34,7 +32,6 @@ export interface SessionState {
 
 export const INITIAL_SESSION_STATE = {
   status: 'idle' as SessionStatus,
-  baseUrl: '',
   accessToken: null as string | null,
   session: null as DesktopSession | null,
   user: null as AuthUser | null,
@@ -42,10 +39,6 @@ export const INITIAL_SESSION_STATE = {
 
 export const sessionStore = createStore<SessionState>()((set, get) => ({
   ...INITIAL_SESSION_STATE,
-
-  setBaseUrl: (value: string) => {
-    set({ baseUrl: value });
-  },
 
   setAccessToken: (token: string | null) => {
     set({ accessToken: token && token.length > 0 ? token : null });

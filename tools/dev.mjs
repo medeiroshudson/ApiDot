@@ -37,7 +37,7 @@ const services = {
   desktop: {
     command: 'npm',
     args: ['--prefix', 'desktop', 'run', 'dev'],
-    env: { API_BASE_URL: apiBase },
+    env: { API_BASE_URL: apiBase, NEXT_PUBLIC_APIDOT_API_BASE: apiBase },
   },
 };
 

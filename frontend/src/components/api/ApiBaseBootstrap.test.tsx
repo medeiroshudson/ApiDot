@@ -2,7 +2,7 @@ import React from 'react';
 import { render, cleanup, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ApiBaseBootstrap } from './ApiBaseBootstrap';
-import { API_BASE_STORAGE_KEY, getApiBase, setApiBase } from '@/lib/api/base';
+import { getApiBase } from '@/lib/api/base';
 import { getAccessToken } from '@/lib/api/authToken';
 import { getSession } from '@/lib/api/session';
 import { apiFetch, setUnauthorizedHandler } from '@/lib/api/client';
@@ -28,6 +28,10 @@ vi.mock('@/lib/desktop/sidecarConnection', () => ({
   connectSidecar: vi.fn().mockResolvedValue(true),
   disconnectSidecar: vi.fn().mockResolvedValue(true),
 }));
+
+vi.hoisted(() => {
+  process.env.NEXT_PUBLIC_APIDOT_API_BASE = 'https://apidot.example.com';
+});
 
 const sessionFixture = {
   userId: 'u1',
@@ -61,8 +65,6 @@ describe('ApiBaseBootstrap', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    localStorage.setItem(API_BASE_STORAGE_KEY, 'https://apidot.example.com');
-    setApiBase('https://apidot.example.com');
     sessionStore.getState().reset();
     resetBoot();
     setUnauthorizedHandler(null);

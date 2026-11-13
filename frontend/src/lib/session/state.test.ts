@@ -8,18 +8,11 @@ describe('session store', () => {
     state().reset();
   });
 
-  it('starts idle with no base, token, session or user', () => {
+  it('starts idle with no token, session or user', () => {
     expect(state().status).toBe('idle');
-    expect(state().baseUrl).toBe('');
     expect(state().accessToken).toBeNull();
     expect(state().session).toBeNull();
     expect(state().user).toBeNull();
-  });
-
-  it('records the base url', () => {
-    state().setBaseUrl('https://api.example.com');
-
-    expect(state().baseUrl).toBe('https://api.example.com');
   });
 
   it('treats an empty token as signed out', () => {
@@ -72,8 +65,7 @@ describe('session store', () => {
     }
   });
 
-  it('clears the identity and token while preserving deviceKey and the base', () => {
-    state().setBaseUrl('https://api.example.com');
+  it('clears the identity and token while preserving deviceKey', () => {
     state().setAccessToken('tok-1');
     state().setSession({
       userId: 'u1',
@@ -107,7 +99,6 @@ describe('session store', () => {
   });
 
   it('reset restores the initial state', () => {
-    state().setBaseUrl('https://api.example.com');
     state().setAccessToken('tok-1');
     state().setSession({ deviceKey: 'key-1' });
     state().setStatus('ready');

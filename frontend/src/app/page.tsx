@@ -57,9 +57,8 @@ export default function Home() {
       setHasError(false);
       setErrorMessage(null);
 
-      // Desktop without a server has nothing to ask: `/login` is the only screen
-      // that can set one, and a relative fetch would resolve against
-      // `tauri://localhost`.
+      // Desktop without a server has nothing to ask: `/login` renders without
+      // one and a relative fetch would resolve against `tauri://localhost`.
       if (isDesktop() && !getApiBase()) {
         if (!redirectedRef.current) {
           redirectedRef.current = true;

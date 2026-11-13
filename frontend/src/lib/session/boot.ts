@@ -13,7 +13,7 @@
  * `lib/desktop/deviceSession`; each of those reaches back here.
  */
 
-import { API_BASE_STORAGE_KEY, normalizeApiBase } from '@/lib/api/base';
+import { getApiBase } from '@/lib/api/base';
 import { rawFetch } from '@/lib/api/rawFetch';
 import { isDesktop } from '@/lib/desktop/runtime';
 import { clearDesktopSession, loadDesktopSession } from '@/lib/desktop/session';
@@ -36,25 +36,11 @@ export function resetBoot(): void {
   bootPromise = null;
 }
 
-function readStoredBase(): string {
-  if (typeof window === 'undefined') {
-    return '';
-  }
-
-  try {
-    return normalizeApiBase(window.localStorage.getItem(API_BASE_STORAGE_KEY));
-  } catch {
-    return '';
-  }
-}
-
 async function runBoot(): Promise<void> {
   const store = sessionStore.getState();
   store.setStatus('hydrating');
 
   try {
-    store.setBaseUrl(readStoredBase());
-
     if (!isDesktop()) {
       store.setStatus('ready');
       return;
@@ -104,7 +90,7 @@ async function runBoot(): Promise<void> {
       console.error('Failed to parse the desktop session user:', err);
     }
 
-    const base = sessionStore.getState().baseUrl;
+    const base = getApiBase();
     if (base) {
       await connectSidecar(base, token);
     }

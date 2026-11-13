@@ -27,6 +27,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import type { Locale } from '@/i18n';
 import { AgentDeviceDto } from '@/lib/deviceApi';
 import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
+import { getApiBase } from '@/lib/api/base';
 import { getSession } from '@/lib/api/session';
 import { useAuthStore } from '@/stores/useAuthStore';
 
@@ -498,6 +499,15 @@ export function GlobalSettingsModal({
                       <option value="pt-BR">{t('settings.portuguese')}</option>
                     </select>
                   </div>
+
+                  {/* Server: fixed at build time, so it is shown read-only. */}
+                  {isDesktop() && (
+                    <div className="p-3.5 sm:p-4">
+                      <span className="text-neutral-300">
+                        {t('settings.serverAtBuildTime', { base: getApiBase() })}
+                      </span>
+                    </div>
+                  )}
 
                   {/* Default Execution Target */}
                   <div className="flex items-center justify-between p-3.5 sm:p-4">

@@ -7,7 +7,6 @@ import {
   setSession,
 } from './session';
 import { getAccessToken, setAccessToken } from './authToken';
-import { setApiBase } from '@/lib/api/base';
 import { saveDesktopSession } from '@/lib/desktop/session';
 import { connectSidecar } from '@/lib/desktop/sidecarConnection';
 
@@ -22,6 +21,10 @@ vi.mock('@/lib/desktop/sidecarConnection', () => ({
   disconnectSidecar: vi.fn().mockResolvedValue(true),
 }));
 
+vi.hoisted(() => {
+  process.env.NEXT_PUBLIC_APIDOT_API_BASE = 'https://api.example.com';
+});
+
 describe('api/session', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -29,7 +32,6 @@ describe('api/session', () => {
     vi.mocked(connectSidecar).mockResolvedValue(true);
     setSession(null);
     setAccessToken(null);
-    setApiBase('https://api.example.com');
     delete (window as any).__TAURI__;
     delete (window as any).__TAURI_INTERNALS__;
   });
@@ -37,7 +39,6 @@ describe('api/session', () => {
   afterEach(() => {
     setSession(null);
     setAccessToken(null);
-    setApiBase(null);
     delete (window as any).__TAURI__;
     delete (window as any).__TAURI_INTERNALS__;
   });
@@ -131,22 +132,6 @@ describe('api/session', () => {
     expect(getAccessToken()).toBe('tok-1');
     expect(save).toHaveBeenCalledWith(session);
     expect(connectSidecar).toHaveBeenCalledWith('https://api.example.com', 'tok-1');
-  });
-
-  it('skips the sidecar connection without a configured base', async () => {
-    (window as any).__TAURI__ = {};
-    setApiBase(null);
-
-    const session = await persistDeviceCredential({
-      headers: new Headers({
-        'X-Desktop-Access-Token': 'tok-1',
-        'X-Desktop-Device-Id': 'dev-1',
-      }),
-    } as Response);
-
-    expect(session).toMatchObject({ accessToken: 'tok-1' });
-    expect(getAccessToken()).toBe('tok-1');
-    expect(connectSidecar).not.toHaveBeenCalled();
   });
 
   it('does not fail the login when /connect fails', async () => {

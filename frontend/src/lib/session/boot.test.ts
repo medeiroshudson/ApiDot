@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ensureBooted, resetBoot } from './boot';
 import { sessionStore } from './state';
 import { apiFetch, setUnauthorizedHandler } from '@/lib/api/client';
-import { API_BASE_STORAGE_KEY } from '@/lib/api/base';
 import { clearDesktopSession, loadDesktopSession } from '@/lib/desktop/session';
 import { connectSidecar } from '@/lib/desktop/sidecarConnection';
 
@@ -16,6 +15,10 @@ vi.mock('@/lib/desktop/sidecarConnection', () => ({
   connectSidecar: vi.fn().mockResolvedValue(true),
   disconnectSidecar: vi.fn().mockResolvedValue(true),
 }));
+
+vi.hoisted(() => {
+  process.env.NEXT_PUBLIC_APIDOT_API_BASE = 'https://apidot.example.com';
+});
 
 const sessionFixture = {
   userId: 'u1',
@@ -51,7 +54,6 @@ describe('session boot', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    localStorage.setItem(API_BASE_STORAGE_KEY, 'https://apidot.example.com');
     state().reset();
     resetBoot();
     setUnauthorizedHandler(null);
@@ -200,20 +202,27 @@ describe('session boot', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('boots a module-level apiFetch against the configured base', async () => {
-    localStorage.setItem(API_BASE_STORAGE_KEY, 'https://stored.example.com/');
-
+  it('boots a module-level apiFetch against the build base', async () => {
     await apiFetch('/api/workspaces');
 
-    expect(fetchMock).toHaveBeenCalledWith('https://stored.example.com/api/workspaces');
+    expect(fetchMock).toHaveBeenCalledWith('https://apidot.example.com/api/workspaces');
   });
 
-  it('uses the stored base on the web and ignores the desktop session', async () => {
+  it('ignores localStorage and the session file for the base', async () => {
+    enableDesktop();
+    localStorage.setItem('apidot_api_base', 'https://stale.example.com');
     vi.mocked(loadDesktopSession).mockResolvedValue(sessionFixture);
 
     await ensureBooted();
 
-    expect(state().baseUrl).toBe('https://apidot.example.com');
+    expect(fetchMock.mock.calls[0][0]).toBe('https://apidot.example.com/api/auth/me');
+  });
+
+  it('leaves the web boot to the build base and ignores the desktop session', async () => {
+    vi.mocked(loadDesktopSession).mockResolvedValue(sessionFixture);
+
+    await ensureBooted();
+
     expect(loadDesktopSession).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
   });

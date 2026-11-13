@@ -10,7 +10,7 @@ import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useEnvironmentStore } from '@/stores/useEnvironmentStore';
 import { useRequestStore } from '@/stores/useRequestStore';
 import { useAuthStore } from '@/stores/useAuthStore';
-import { setApiBase } from '@/lib/api/base';
+import { getApiBase } from '@/lib/api/base';
 
 const mockReplace = vi.fn();
 const mockPush = vi.fn();
@@ -26,6 +26,11 @@ vi.mock('next/navigation', () => ({
   useParams: () => ({}),
   usePathname: () => '/',
 }));
+
+vi.mock('@/lib/api/base', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/base')>();
+  return { ...actual, getApiBase: vi.fn(actual.getApiBase) };
+});
 
 vi.mock('@/components/workspace/WorkspaceRouteShell', () => ({
   WorkspaceRouteShell: ({
@@ -45,6 +50,7 @@ vi.mock('@/components/workspace/WorkspaceRouteShell', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(getApiBase).mockReturnValue('');
   delete (window as any).__TAURI__;
   delete (window as any).__TAURI_INTERNALS__;
   window.history.replaceState(null, '', '/');
@@ -253,7 +259,6 @@ describe('Root Redirector (app/page.tsx)', () => {
 
   it('sends a desktop home without a server to the login screen', async () => {
     (window as any).__TAURI__ = {};
-    setApiBase(null);
 
     render(<Home />);
 
@@ -575,7 +580,7 @@ describe('Root Redirector (app/page.tsx)', () => {
 
   it('drives the desktop fallback workspace through the hash instead of the web path', async () => {
     (window as any).__TAURI_INTERNALS__ = {};
-    setApiBase('https://apidot.example.com');
+    vi.mocked(getApiBase).mockReturnValue('https://apidot.example.com');
     useWorkspaceStore.setState({ activeWorkspaceId: 'ws-fallback' });
 
     render(<Home />);
