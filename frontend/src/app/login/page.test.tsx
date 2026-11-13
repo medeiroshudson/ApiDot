@@ -6,9 +6,6 @@ import { useAuthStore, INITIAL_AUTH_STATE } from '@/stores/useAuthStore';
 import { AuthConfig, AuthUser } from '@/lib/authApi';
 import * as authApi from '@/lib/authApi';
 import * as desktopAuth from '@/lib/desktop/desktopAuth';
-import { getApiBase, setApiBase } from '@/lib/api/base';
-import { getSession, setSession } from '@/lib/api/session';
-import { saveDesktopSession } from '@/lib/desktop/session';
 
 vi.mock('@/lib/desktop/desktopAuth', () => ({
   startDesktopSsoFlow: vi.fn(),
@@ -438,120 +435,6 @@ describe('LoginPage (/login)', () => {
         expect(screen.getByText('Authentication timed out. Please try again.')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /sign in with sso/i })).toBeInTheDocument();
       });
-    });
-  });
-
-  describe('Desktop server URL', () => {
-    beforeEach(() => {
-      (window as any).__TAURI__ = { core: { invoke: vi.fn() } };
-      setApiBase(null);
-      setSession(null);
-      vi.mocked(saveDesktopSession).mockClear();
-    });
-
-    afterEach(() => {
-      delete (window as any).__TAURI__;
-      setApiBase(null);
-      setSession(null);
-    });
-
-    const fillCredentialsAndSubmit = () => {
-      fireEvent.change(screen.getByLabelText(/email|e-?mail/i), {
-        target: { value: 'dev@apidot.dev' },
-      });
-      fireEvent.change(screen.getByLabelText(/password|senha/i), {
-        target: { value: 'secret123' },
-      });
-      fireEvent.click(
-        screen.getByRole('button', {
-          name: /sign in with local credentials|entrar com credenciais locais/i,
-        })
-      );
-    };
-
-    it('hides the field on the web', () => {
-      delete (window as any).__TAURI__;
-
-      render(<LoginPage />);
-
-      expect(screen.queryByLabelText(/server url|url do servidor/i)).not.toBeInTheDocument();
-    });
-
-    it('prefills the field from the configured API base', () => {
-      setApiBase('https://stored.example.com');
-
-      render(<LoginPage />);
-
-      expect(screen.getByLabelText(/server url|url do servidor/i)).toHaveValue(
-        'https://stored.example.com'
-      );
-    });
-
-    it('persists the typed URL before calling the login API', async () => {
-      let baseAtLoginCall: string | null = null;
-      const loginLocalSpy = vi.fn().mockImplementation(async () => {
-        baseAtLoginCall = getApiBase();
-        return mockUser;
-      });
-      useAuthStore.setState({ loginLocal: loginLocalSpy });
-
-      render(<LoginPage />);
-
-      fireEvent.change(screen.getByLabelText(/server url|url do servidor/i), {
-        target: { value: ' https://typed.example.com/ ' },
-      });
-      fillCredentialsAndSubmit();
-
-      await waitFor(() => {
-        expect(loginLocalSpy).toHaveBeenCalledWith('dev@apidot.dev', 'secret123');
-      });
-
-      expect(baseAtLoginCall).toBe('https://typed.example.com');
-      expect(getApiBase()).toBe('https://typed.example.com');
-      expect(getSession()?.serverUrl).toBe('https://typed.example.com');
-      expect(vi.mocked(saveDesktopSession).mock.calls.at(-1)?.[0]).toMatchObject({
-        serverUrl: 'https://typed.example.com',
-      });
-    });
-
-    it.each(['ftp://x', 'not a url'])(
-      'rejects the invalid URL %s and never calls the login API',
-      async (invalidUrl) => {
-        const loginLocalSpy = vi.fn().mockResolvedValue(mockUser);
-        useAuthStore.setState({ loginLocal: loginLocalSpy });
-        setApiBase('https://stored.example.com');
-
-        render(<LoginPage />);
-
-        fireEvent.change(screen.getByLabelText(/server url|url do servidor/i), {
-          target: { value: invalidUrl },
-        });
-        fillCredentialsAndSubmit();
-
-        await waitFor(() => {
-          expect(screen.getByText(/valid http\(s\) url/i)).toBeInTheDocument();
-        });
-
-        expect(loginLocalSpy).not.toHaveBeenCalled();
-        expect(getApiBase()).toBe('https://stored.example.com');
-        expect(saveDesktopSession).not.toHaveBeenCalled();
-        expect(mockReplace).not.toHaveBeenCalled();
-      }
-    );
-
-    it('blocks desktop SSO with an invalid URL', async () => {
-      render(<LoginPage />);
-
-      fireEvent.change(screen.getByLabelText(/server url|url do servidor/i), {
-        target: { value: 'ftp://x' },
-      });
-      fireEvent.click(screen.getByRole('button', { name: /sign in with sso/i }));
-
-      await waitFor(() => {
-        expect(screen.getByText(/valid http\(s\) url/i)).toBeInTheDocument();
-      });
-
-      expect(desktopAuth.startDesktopSsoFlow).not.toHaveBeenCalled();
     });
   });
 

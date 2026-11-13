@@ -12,11 +12,10 @@ export interface PollSessionOptions {
 export interface DesktopSsoOptions {
   openBrowser?: (url: string) => Promise<void>;
   pollSession?: (port: number, secret?: string, options?: PollSessionOptions) => Promise<string | null>;
-  exchangeToken?: (token: string, baseUrl?: string) => Promise<AuthUser>;
+  exchangeToken?: (token: string) => Promise<AuthUser>;
   getState?: (port: number, secret?: string, signal?: AbortSignal) => Promise<string>;
   port?: number;
   secret?: string;
-  serverUrl?: string;
   returnUrl?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -183,8 +182,8 @@ export async function fetchDesktopSidecarAuthState(
 /**
  * Exchanges a one-time ephemeral desktop token for an authenticated user session.
  */
-export async function exchangeDesktopToken(token: string, baseUrl?: string): Promise<AuthUser> {
-  const base = (baseUrl || '').replace(/\/+$/, '');
+export async function exchangeDesktopToken(token: string): Promise<AuthUser> {
+  const base = getApiBase().replace(/\/+$/, '');
   const url = `${base}/api/auth/desktop-exchange`;
 
   // The one-time token travels in the body, so the exchange does not need the
@@ -218,7 +217,6 @@ export async function exchangeDesktopToken(token: string, baseUrl?: string): Pro
   // headers. Persisting it here keeps SSO and local login on one path.
   await persistDeviceCredential(res, {
     userId: user.id,
-    serverUrl: base || null,
   });
 
   return user;
@@ -262,7 +260,7 @@ export async function startDesktopSsoFlow(
     const defaultBase = typeof window !== 'undefined' && window.location?.origin
       ? window.location.origin
       : 'https://apidot.hmedeiros.dev';
-    const base = (options.serverUrl || getApiBase() || defaultBase).replace(/\/+$/, '');
+    const base = (getApiBase() || defaultBase).replace(/\/+$/, '');
 
     const resolveState = options.getState ?? fetchDesktopSidecarAuthState;
     const state = await resolveState(port, secret, options.signal);
@@ -300,7 +298,7 @@ export async function startDesktopSsoFlow(
     }
 
     const exchange = options.exchangeToken ?? exchangeDesktopToken;
-    const user = await exchange(token, options.serverUrl || getApiBase() || undefined);
+    const user = await exchange(token);
 
     return {
       success: true,

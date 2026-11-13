@@ -72,7 +72,7 @@ describe('session store', () => {
     }
   });
 
-  it('keeps the device identity while dropping the credential and user', () => {
+  it('clears the identity and token while preserving deviceKey and the base', () => {
     state().setBaseUrl('https://api.example.com');
     state().setAccessToken('tok-1');
     state().setSession({
@@ -81,7 +81,6 @@ describe('session store', () => {
       deviceKey: 'key-1',
       accessToken: 'tok-1',
       expiresAt: '2026-12-09T00:00:00Z',
-      serverUrl: 'https://api.example.com',
     });
     state().setUser({
       id: 'u1',
@@ -93,10 +92,7 @@ describe('session store', () => {
 
     const cleared = state().clearKeepingDeviceIdentity();
 
-    expect(cleared).toEqual({
-      deviceKey: 'key-1',
-      serverUrl: 'https://api.example.com',
-    });
+    expect(cleared).toEqual({ deviceKey: 'key-1' });
     expect(state().session).toEqual(cleared);
     expect(state().accessToken).toBeNull();
     expect(state().user).toBeNull();

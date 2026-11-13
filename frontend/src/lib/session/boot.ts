@@ -53,17 +53,14 @@ async function runBoot(): Promise<void> {
   store.setStatus('hydrating');
 
   try {
+    store.setBaseUrl(readStoredBase());
+
     if (!isDesktop()) {
-      store.setBaseUrl(readStoredBase());
       store.setStatus('ready');
       return;
     }
 
     const session = await loadDesktopSession();
-
-    // The session file is the only desktop base source: localStorage can hold a
-    // stale origin from an earlier server and must not win over the credential.
-    store.setBaseUrl(normalizeApiBase(session?.serverUrl));
 
     if (!session) {
       store.setStatus('ready');
@@ -107,8 +104,9 @@ async function runBoot(): Promise<void> {
       console.error('Failed to parse the desktop session user:', err);
     }
 
-    if (session.serverUrl) {
-      await connectSidecar(session.serverUrl, token);
+    const base = sessionStore.getState().baseUrl;
+    if (base) {
+      await connectSidecar(base, token);
     }
 
     store.setStatus('ready');

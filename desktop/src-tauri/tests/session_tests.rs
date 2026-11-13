@@ -28,7 +28,6 @@ fn full_session() -> DesktopSession {
         device_key: Some("key-1".to_string()),
         access_token: Some("token-1".to_string()),
         expires_at: Some("2026-12-09T00:00:00Z".to_string()),
-        server_url: Some("https://api.example.test".to_string()),
     }
 }
 
@@ -61,7 +60,7 @@ fn corrupt_json_loads_as_none() {
 }
 
 #[test]
-fn clear_session_keeps_device_key_and_server_url() {
+fn clear_session_keeps_only_the_device_key() {
     with_temp_session(|_| {
         save_session(full_session()).expect("save_session should succeed");
 
@@ -73,7 +72,28 @@ fn clear_session_keeps_device_key_and_server_url() {
         assert_eq!(cleared.access_token, None);
         assert_eq!(cleared.expires_at, None);
         assert_eq!(cleared.device_key.as_deref(), Some("key-1"));
-        assert_eq!(cleared.server_url.as_deref(), Some("https://api.example.test"));
+    });
+}
+
+#[test]
+fn load_session_ignores_an_unknown_server_url_field() {
+    with_temp_session(|path| {
+        std::fs::create_dir_all(path.parent().expect("session path has a parent"))
+            .expect("create parent directory");
+        std::fs::write(
+            path,
+            r#"{
+                "user_id": "user-1",
+                "device_id": "device-1",
+                "device_key": "key-1",
+                "access_token": "token-1",
+                "expires_at": "2026-12-09T00:00:00Z",
+                "server_url": "https://api.example.test"
+            }"#,
+        )
+        .expect("write legacy session file");
+
+        assert_eq!(load_session(), Some(full_session()));
     });
 }
 

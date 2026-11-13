@@ -67,8 +67,7 @@ export const sessionStore = createStore<SessionState>()((set, get) => ({
 
   /**
    * Drops the credential but keeps the machine row identity so the next login
-   * reuses it. `deviceKey` is not a secret; `serverUrl` tells the app where to
-   * sign in again.
+   * reuses it. `deviceKey` is not a secret.
    */
   clearKeepingDeviceIdentity: () => {
     const current = get().session;
@@ -76,9 +75,6 @@ export const sessionStore = createStore<SessionState>()((set, get) => ({
 
     if (current?.deviceKey) {
       preserved.deviceKey = current.deviceKey;
-    }
-    if (current?.serverUrl) {
-      preserved.serverUrl = current.serverUrl;
     }
 
     const next = Object.keys(preserved).length > 0 ? preserved : null;

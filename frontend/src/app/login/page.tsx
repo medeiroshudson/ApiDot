@@ -7,19 +7,9 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { isDesktop } from '@/lib/desktop/runtime';
 import { toHash } from '@/lib/routing/route';
 import { startDesktopSsoFlow } from '@/lib/desktop/desktopAuth';
-import { apiUrl, getApiBase, normalizeApiBase, setApiBase } from '@/lib/api/base';
-import { getSession, patchSession } from '@/lib/api/session';
-import { saveDesktopSession } from '@/lib/desktop/session';
-import { LogIn, Lock, Mail, AlertCircle, Loader2, Server } from 'lucide-react';
+import { apiUrl } from '@/lib/api/base';
+import { LogIn, Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
 import ApiDotLogo from '@assets/api-dot-white.svg';
-
-/** Prefers the base in memory, then the session's URL: it is empty before the first sign-in. */
-function initialServerUrl(): string {
-  if (!isDesktop()) {
-    return '';
-  }
-  return getApiBase() || getSession()?.serverUrl || '';
-}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -37,8 +27,6 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [serverUrl, setServerUrl] = useState(initialServerUrl);
-  const [serverUrlError, setServerUrlError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isWaitingBrowserAuth, setIsWaitingBrowserAuth] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -123,39 +111,9 @@ export default function LoginPage() {
 
   const isOidcEnabled = config === null || config.oidcEnabled === true;
 
-  /** Persists the Server URL before the request that depends on it; null means invalid. */
-  const persistServerUrl = async (): Promise<string | null> => {
-    if (!isDesktop()) {
-      return '';
-    }
-
-    const trimmed = serverUrl.trim();
-    const normalized = normalizeApiBase(trimmed);
-    if (trimmed && !normalized) {
-      setServerUrlError(t('auth.serverUrlInvalid'));
-      return null;
-    }
-
-    setServerUrlError(null);
-    setApiBase(normalized);
-
-    const updated = patchSession({ serverUrl: normalized });
-    if (updated) {
-      await saveDesktopSession(updated);
-    }
-
-    return normalized;
-  };
-
   const handleDesktopSso = async () => {
     if (isWaitingBrowserAuth) return;
     setError(null);
-
-    // Persist first, or the SSO URL falls back to the webview origin.
-    const base = await persistServerUrl();
-    if (base === null) {
-      return;
-    }
 
     setIsWaitingBrowserAuth(true);
 
@@ -212,11 +170,6 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const base = await persistServerUrl();
-      if (base === null) {
-        return;
-      }
-
       await loginLocal(email.trim(), password);
       redirectAfterLogin();
     } catch (err: unknown) {
@@ -311,44 +264,6 @@ export default function LoginPage() {
 
         {/* Local Login Form */}
         <form onSubmit={handleLocalSubmit} className="flex flex-col gap-4">
-          {/* Server URL (desktop only): a fresh install has no other way to
-              point the app at a server before it is authenticated. */}
-          {isDesktop() && (
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="server-url"
-                className="text-xs font-medium text-neutral-300 flex items-center gap-1.5"
-              >
-                <Server className="w-3.5 h-3.5 text-neutral-400" aria-hidden="true" />
-                <span>{t('auth.serverUrlLabel')}</span>
-              </label>
-              <input
-                id="server-url"
-                name="server-url"
-                type="text"
-                inputMode="url"
-                autoComplete="url"
-                autoCapitalize="none"
-                spellCheck={false}
-                placeholder={t('auth.serverUrlHint')}
-                aria-invalid={serverUrlError ? true : undefined}
-                aria-describedby={serverUrlError ? 'server-url-error' : undefined}
-                value={serverUrl}
-                disabled={isSubmitting}
-                onChange={(e) => {
-                  setServerUrl(e.target.value);
-                  if (serverUrlError) setServerUrlError(null);
-                }}
-                className="w-full px-3.5 py-2 rounded-lg bg-neutral-950 border border-neutral-800 text-neutral-100 placeholder:text-neutral-500 text-sm focus:outline-none focus:border-neutral-700 focus:ring-1 focus:ring-neutral-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-              {serverUrlError && (
-                <p id="server-url-error" role="alert" className="text-xs text-rose-400">
-                  {serverUrlError}
-                </p>
-              )}
-            </div>
-          )}
-
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="email"

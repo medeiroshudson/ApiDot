@@ -8,24 +8,28 @@ import {
 import * as runtime from './runtime';
 import { clearSidecarInfoCache } from './runtime';
 import { getAccessToken, setAccessToken } from '@/lib/api/authToken';
+import { setApiBase } from '@/lib/api/base';
 import { getSession, setSession } from '@/lib/api/session';
 
 describe('desktopAuth', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearSidecarInfoCache();
+    setApiBase(null);
     delete (window as any).__TAURI_INTERNALS__;
     delete (window as any).__TAURI__;
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    setApiBase(null);
   });
 
   describe('startDesktopSsoFlow', () => {
     it('initiates desktop SSO flow, opens browser, polls sidecar session and exchanges token', async () => {
       const mockOpen = vi.fn().mockResolvedValue(undefined);
       const mockExchange = vi.fn().mockResolvedValue({ id: 'u1', email: 'test@hmedeiros.dev' });
+      setApiBase('https://apidot.hmedeiros.dev');
 
       const result = await startDesktopSsoFlow({
         openBrowser: mockOpen,
@@ -33,7 +37,6 @@ describe('desktopAuth', () => {
         exchangeToken: mockExchange,
         getState: vi.fn().mockResolvedValue('state-abc'),
         port: 54321,
-        serverUrl: 'https://apidot.hmedeiros.dev',
       });
 
       expect(mockOpen).toHaveBeenCalledWith(
@@ -61,12 +64,13 @@ describe('desktopAuth', () => {
         expect.stringContaining('desktop_callback=http%3A%2F%2F127.0.0.1%3A42000%2Fauth%2Fcallback%3Fstate%3Dstate-auto')
       );
       expect(mockPoll).toHaveBeenCalledWith(42000, 'sidecar-sec', expect.any(Object));
-      expect(mockExchange).toHaveBeenCalledWith('tok-auto', undefined);
+      expect(mockExchange).toHaveBeenCalledWith('tok-auto');
       expect(result.success).toBe(true);
     });
 
     it('includes returnUrl in desktop login URL when provided', async () => {
       const mockOpen = vi.fn().mockResolvedValue(undefined);
+      setApiBase('https://app.apidot.dev');
 
       await startDesktopSsoFlow({
         openBrowser: mockOpen,
@@ -74,7 +78,6 @@ describe('desktopAuth', () => {
         exchangeToken: vi.fn().mockResolvedValue({ id: 'u1' } as any),
         getState: vi.fn().mockResolvedValue('state-123'),
         port: 12345,
-        serverUrl: 'https://app.apidot.dev',
         returnUrl: '/workspace/ws-1',
       });
 
@@ -230,13 +233,14 @@ describe('desktopAuth', () => {
   describe('exchangeDesktopToken', () => {
     it('sends POST to /api/auth/desktop-exchange with token in body and returns AuthUser', async () => {
       const mockUser = { id: 'u100', email: 'user@apidot.dev', displayName: 'Dev' };
+      setApiBase('https://api.apidot.dev');
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
         json: async () => mockUser,
       } as Response);
 
-      const user = await exchangeDesktopToken('desktop-token-xyz', 'https://api.apidot.dev');
+      const user = await exchangeDesktopToken('desktop-token-xyz');
 
       expect(global.fetch).toHaveBeenCalledWith('https://api.apidot.dev/api/auth/desktop-exchange', {
         method: 'POST',
@@ -250,6 +254,7 @@ describe('desktopAuth', () => {
 
     it('sends the stored device key so the exchange reuses the device row', async () => {
       setSession({ deviceKey: 'machine-key-1' });
+      setApiBase('https://api.apidot.dev');
 
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -257,7 +262,7 @@ describe('desktopAuth', () => {
         json: async () => ({ id: 'u100', email: 'user@apidot.dev' }),
       } as Response);
 
-      await exchangeDesktopToken('desktop-token-xyz', 'https://api.apidot.dev');
+      await exchangeDesktopToken('desktop-token-xyz');
 
       expect(global.fetch).toHaveBeenCalledWith('https://api.apidot.dev/api/auth/desktop-exchange', {
         method: 'POST',
@@ -272,6 +277,7 @@ describe('desktopAuth', () => {
 
     it('omits the device key when no session is stored', async () => {
       setSession(null);
+      setApiBase('https://api.apidot.dev');
 
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -279,7 +285,7 @@ describe('desktopAuth', () => {
         json: async () => ({ id: 'u100', email: 'user@apidot.dev' }),
       } as Response);
 
-      await exchangeDesktopToken('desktop-token-xyz', 'https://api.apidot.dev');
+      await exchangeDesktopToken('desktop-token-xyz');
 
       const init = vi.mocked(global.fetch).mock.calls[0][1] as RequestInit;
       expect(JSON.parse(init.body as string)).toEqual({ token: 'desktop-token-xyz' });
@@ -294,6 +300,7 @@ describe('desktopAuth', () => {
         return undefined;
       });
       (window as any).__TAURI__ = { core: { invoke } };
+      setApiBase('https://api.apidot.dev');
 
       const mockUser = { id: 'u100', email: 'user@apidot.dev', displayName: 'Dev' };
       const headers = new Headers({
@@ -316,7 +323,7 @@ describe('desktopAuth', () => {
       });
       global.fetch = fetchMock;
 
-      await exchangeDesktopToken('desktop-token-xyz', 'https://api.apidot.dev');
+      await exchangeDesktopToken('desktop-token-xyz');
 
       expect(getAccessToken()).toBe('device-token-abc');
       expect(getSession()).toMatchObject({
@@ -325,7 +332,6 @@ describe('desktopAuth', () => {
         deviceKey: 'machine-key-1',
         accessToken: 'device-token-abc',
         expiresAt: '2026-12-09T00:00:00.0000000Z',
-        serverUrl: 'https://api.apidot.dev',
       });
       expect(invoke).toHaveBeenCalledWith('save_session', {
         session: {
@@ -334,7 +340,6 @@ describe('desktopAuth', () => {
           device_key: 'machine-key-1',
           access_token: 'device-token-abc',
           expires_at: '2026-12-09T00:00:00.0000000Z',
-          server_url: 'https://api.apidot.dev',
         },
       });
       expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:43210/connect', {
@@ -362,6 +367,7 @@ describe('desktopAuth', () => {
         return undefined;
       });
       (window as any).__TAURI__ = { core: { invoke } };
+      setApiBase('https://api.apidot.dev');
       vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const mockUser = { id: 'u100', email: 'user@apidot.dev', displayName: 'Dev' };
@@ -383,12 +389,11 @@ describe('desktopAuth', () => {
       });
       global.fetch = fetchMock;
 
-      const user = await exchangeDesktopToken('desktop-token-xyz', 'https://api.apidot.dev');
+      const user = await exchangeDesktopToken('desktop-token-xyz');
 
       expect(user).toEqual(mockUser);
       expect(getAccessToken()).toBe('device-token-abc');
       expect(getSession()).toMatchObject({
-        serverUrl: 'https://api.apidot.dev',
         accessToken: 'device-token-abc',
       });
 

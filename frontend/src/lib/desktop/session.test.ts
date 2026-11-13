@@ -22,9 +22,7 @@ describe('desktop/session', () => {
     vi.stubGlobal('fetch', fetchSpy);
 
     await expect(loadDesktopSession()).resolves.toBeNull();
-    await expect(
-      saveDesktopSession({ accessToken: 'tok', serverUrl: 'https://api.example.com' })
-    ).resolves.toBeUndefined();
+    await expect(saveDesktopSession({ accessToken: 'tok' })).resolves.toBeUndefined();
     await expect(clearDesktopSession()).resolves.toBeUndefined();
 
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -38,7 +36,6 @@ describe('desktop/session', () => {
       device_key: 'key-1',
       access_token: 'tok-1',
       expires_at: '2026-12-09T00:00:00Z',
-      server_url: 'https://api.example.com',
     });
     (window as any).__TAURI_INTERNALS__ = { invoke };
 
@@ -51,7 +48,6 @@ describe('desktop/session', () => {
       deviceKey: 'key-1',
       accessToken: 'tok-1',
       expiresAt: '2026-12-09T00:00:00Z',
-      serverUrl: 'https://api.example.com',
     });
   });
 
@@ -77,7 +73,6 @@ describe('desktop/session', () => {
       deviceKey: 'key-1',
       accessToken: 'tok-1',
       expiresAt: '2026-12-09T00:00:00Z',
-      serverUrl: 'https://api.example.com',
     });
 
     expect(invoke).toHaveBeenCalledWith('save_session', {
@@ -87,7 +82,6 @@ describe('desktop/session', () => {
         device_key: 'key-1',
         access_token: 'tok-1',
         expires_at: '2026-12-09T00:00:00Z',
-        server_url: 'https://api.example.com',
       },
     });
   });

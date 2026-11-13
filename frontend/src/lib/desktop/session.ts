@@ -21,7 +21,6 @@ interface WireDesktopSession {
   device_key?: string | null;
   access_token?: string | null;
   expires_at?: string | null;
-  server_url?: string | null;
 }
 
 type InvokeFn = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
@@ -54,7 +53,6 @@ function toWireSession(session: DesktopSession): WireDesktopSession {
     device_key: session.deviceKey ?? null,
     access_token: session.accessToken ?? null,
     expires_at: session.expiresAt ?? null,
-    server_url: session.serverUrl ?? null,
   };
 }
 
@@ -65,7 +63,6 @@ function fromWireSession(wire: WireDesktopSession): DesktopSession {
     deviceKey: wire.device_key ?? null,
     accessToken: wire.access_token ?? null,
     expiresAt: wire.expires_at ?? null,
-    serverUrl: wire.server_url ?? null,
   };
 }
 
@@ -109,8 +106,8 @@ export async function saveDesktopSession(session: DesktopSession): Promise<void>
 }
 
 /**
- * Clears the token fields on disk while preserving `device_key` and
- * `server_url`. No-op on the web.
+ * Clears the token fields on disk while preserving `device_key`. No-op on the
+ * web.
  */
 export async function clearDesktopSession(): Promise<void> {
   const invoke = resolveInvoke();

@@ -140,7 +140,6 @@ describe('authApi', () => {
         deviceId: 'dev-local',
         deviceKey: 'key-local',
         accessToken: 'tok-local',
-        serverUrl: 'https://api.example.com',
       });
       expect(invoke).toHaveBeenCalledWith(
         'save_session',

@@ -1,5 +1,4 @@
 import { apiFetch } from '@/lib/api/client';
-import { getApiBase } from '@/lib/api/base';
 import { getSession, persistDeviceCredential } from '@/lib/api/session';
 import type { AuthUser, AuthWorkspace } from '@/lib/session/types';
 
@@ -67,7 +66,6 @@ export async function loginLocal(email: string, password: string): Promise<AuthU
   // SSO exchange; on the web the helper is a no-op.
   await persistDeviceCredential(res, {
     userId: user.id,
-    serverUrl: getApiBase() || null,
   });
 
   return user;

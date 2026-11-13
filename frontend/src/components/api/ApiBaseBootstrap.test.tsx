@@ -35,7 +35,6 @@ const sessionFixture = {
   deviceKey: 'key-1',
   accessToken: 'tok-1',
   expiresAt: '2026-12-09T00:00:00Z',
-  serverUrl: 'https://apidot.example.com',
 };
 
 const userFixture = {
@@ -62,7 +61,8 @@ describe('ApiBaseBootstrap', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    setApiBase(null);
+    localStorage.setItem(API_BASE_STORAGE_KEY, 'https://apidot.example.com');
+    setApiBase('https://apidot.example.com');
     sessionStore.getState().reset();
     resetBoot();
     setUnauthorizedHandler(null);
@@ -89,20 +89,6 @@ describe('ApiBaseBootstrap', () => {
     delete (window as any).__TAURI__;
     delete (window as any).__TAURI_INTERNALS__;
     vi.unstubAllGlobals();
-  });
-
-  it('reads the stored base on mount', () => {
-    localStorage.setItem(API_BASE_STORAGE_KEY, 'https://apidot.example.com/');
-
-    renderWithChild();
-
-    expect(getApiBase()).toBe('https://apidot.example.com');
-  });
-
-  it('leaves the base empty without a stored value', () => {
-    renderWithChild();
-
-    expect(getApiBase()).toBe('');
   });
 
   it('renders the children immediately on the web', () => {
@@ -140,7 +126,7 @@ describe('ApiBaseBootstrap', () => {
     renderWithChild();
 
     await waitFor(() => {
-      expect(connectSidecar).toHaveBeenCalledWith(sessionFixture.serverUrl, 'tok-1');
+      expect(connectSidecar).toHaveBeenCalledWith('https://apidot.example.com', 'tok-1');
     });
 
     expect(screen.getByText('app content')).toBeInTheDocument();
@@ -215,7 +201,6 @@ describe('ApiBaseBootstrap', () => {
     expect(getAccessToken()).toBeNull();
     expect(getSession()).toMatchObject({
       deviceKey: 'key-1',
-      serverUrl: 'https://apidot.example.com',
     });
   });
 

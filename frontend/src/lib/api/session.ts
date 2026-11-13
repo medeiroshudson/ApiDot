@@ -2,13 +2,14 @@
  * In-memory desktop session and device credential persistence.
  *
  * The session is the client-side mirror of `~/.apidot/session.json`: identity,
- * device key, bearer token, expiry and the server URL used to reach the API.
- * The token itself is also held by `lib/api/authToken.ts`; this module keeps
- * both in sync when a credential arrives and when the session ends.
+ * device key, bearer token and expiry. The token itself is also held by
+ * `lib/api/authToken.ts`; this module keeps both in sync when a credential
+ * arrives and when the session ends.
  *
  * Both values live in the session store; this module keeps the existing facade.
  */
 
+import { getApiBase } from '@/lib/api/base';
 import { isDesktop } from '@/lib/desktop/runtime';
 import { saveDesktopSession } from '@/lib/desktop/session';
 import { connectSidecar } from '@/lib/desktop/sidecarConnection';
@@ -37,8 +38,7 @@ export function setSession(session: DesktopSession | null): DesktopSession | nul
 
 /**
  * Merges a partial session into the current one. When no session is loaded
- * yet the patch becomes the session, which lets the server URL be recorded
- * before the first login.
+ * yet the patch becomes the session.
  */
 export function patchSession(patch: Partial<DesktopSession>): DesktopSession | null {
   const current = sessionStore.getState().session;
@@ -49,8 +49,7 @@ export function patchSession(patch: Partial<DesktopSession>): DesktopSession | n
  * Ends the session in memory while keeping the machine identity.
  *
  * `deviceKey` is not a secret: it identifies the machine so the next login
- * reuses the same device row. `serverUrl` is kept so the app knows where to
- * sign in again. The bearer token is always dropped.
+ * reuses the same device row. The bearer token is always dropped.
  */
 export function clearSessionMemory(): DesktopSession | null {
   return sessionStore.getState().clearKeepingDeviceIdentity();
@@ -58,7 +57,6 @@ export function clearSessionMemory(): DesktopSession | null {
 
 export interface PersistDeviceCredentialOptions {
   userId?: string | null;
-  serverUrl?: string | null;
 }
 
 /**
@@ -98,7 +96,6 @@ export async function persistDeviceCredential(
     deviceKey: headers.get(DEVICE_CREDENTIAL_HEADERS.deviceKey),
     expiresAt: headers.get(DEVICE_CREDENTIAL_HEADERS.expiresAt),
     ...(options.userId ? { userId: options.userId } : {}),
-    ...(options.serverUrl ? { serverUrl: options.serverUrl } : {}),
   });
 
   setAccessToken(token);
@@ -106,8 +103,9 @@ export async function persistDeviceCredential(
   if (next) {
     await saveDesktopSession(next);
 
-    if (next.serverUrl) {
-      await connectSidecar(next.serverUrl, token);
+    const base = getApiBase();
+    if (base) {
+      await connectSidecar(base, token);
     }
   }
 

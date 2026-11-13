@@ -27,5 +27,4 @@ export interface DesktopSession {
   deviceKey?: string | null;
   accessToken?: string | null;
   expiresAt?: string | null;
-  serverUrl?: string | null;
 }

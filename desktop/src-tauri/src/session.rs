@@ -11,7 +11,8 @@ use std::path::{Path, PathBuf};
 /// Test-only override for the session file location.
 const SESSION_PATH_ENV: &str = "APIDOT_SESSION_PATH";
 
-/// The desktop session restored at boot.
+/// The desktop session restored at boot: the signed-in user, the device row
+/// this machine owns, the bearer token and its expiry.
 ///
 /// `device_key` is a machine identifier rather than a secret, so it survives
 /// `clear_session`; the token fields and the user/device identity do not.
@@ -22,7 +23,6 @@ pub struct DesktopSession {
     pub device_key: Option<String>,
     pub access_token: Option<String>,
     pub expires_at: Option<String>,
-    pub server_url: Option<String>,
 }
 
 /// Returns the session file path (`~/.apidot/session.json` by default).
@@ -167,6 +167,9 @@ fn write_session_file(session: &DesktopSession) -> Result<(), String> {
 /// Tauri IPC command to read `~/.apidot/session.json`.
 ///
 /// A missing or corrupt file yields `None`; the app must still start.
+///
+/// Files written before `server_url` was dropped still load: serde ignores
+/// unknown fields unless `deny_unknown_fields` is set, which it is not.
 #[tauri::command]
 pub fn load_session() -> Option<DesktopSession> {
     let path = session_file_path();
@@ -182,8 +185,8 @@ pub fn save_session(session: DesktopSession) -> Result<(), String> {
 
 /// Tauri IPC command to end the local session while keeping the machine identity.
 ///
-/// Clears the user, device, token and expiry fields; `device_key` and
-/// `server_url` survive so the next login reuses the same device.
+/// Clears the user, device, token and expiry fields; only `device_key` survives
+/// so the next login reuses the same device.
 #[tauri::command]
 pub fn clear_session() -> Result<(), String> {
     let path = session_file_path();

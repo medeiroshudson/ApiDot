@@ -27,9 +27,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import type { Locale } from '@/i18n';
 import { AgentDeviceDto } from '@/lib/deviceApi';
 import { APP_VERSION, formatDisplayVersion } from '@/lib/version';
-import { API_BASE_STORAGE_KEY, getApiBase, normalizeApiBase, setApiBase } from '@/lib/api/base';
-import { getSession, patchSession } from '@/lib/api/session';
-import { saveDesktopSession } from '@/lib/desktop/session';
+import { getSession } from '@/lib/api/session';
 import { useAuthStore } from '@/stores/useAuthStore';
 
 export type SettingsTab = 'agents' | 'general';
@@ -91,10 +89,6 @@ export function GlobalSettingsModal({
   const requestResponseRatio = useLayoutStore((s) => s.requestResponseRatio);
   const resetRequestResponseRatio = useLayoutStore((s) => s.resetRequestResponseRatio);
 
-  // Server URL (desktop only): stored API base used for absolute requests
-  const [serverUrl, setServerUrl] = useState('');
-  const [serverUrlError, setServerUrlError] = useState<string | null>(null);
-
   // Update Store
   const updateStatus = useUpdateStore((s) => s.status);
   const availableVersion = useUpdateStore((s) => s.availableVersion);
@@ -122,22 +116,6 @@ export function GlobalSettingsModal({
       stopPolling();
     };
   }, [isOpen, startPolling, stopPolling]);
-
-  // Restore the persisted server URL whenever the modal opens in the desktop app
-  useEffect(() => {
-    if (!isOpen || !isDesktop()) return;
-
-    let stored = getApiBase();
-    if (!stored) {
-      try {
-        stored = window.localStorage.getItem(API_BASE_STORAGE_KEY) ?? '';
-      } catch {
-        stored = '';
-      }
-    }
-    setServerUrl(stored);
-    setServerUrlError(null);
-  }, [isOpen]);
 
   // Focus management on open/close
   useEffect(() => {
@@ -369,28 +347,6 @@ export function GlobalSettingsModal({
     }
   };
 
-  const handleSaveServerUrl = () => {
-    const normalized = normalizeApiBase(serverUrl);
-    if (serverUrl.trim() && !normalized) {
-      setServerUrlError(t('settings.serverUrlInvalid'));
-      return;
-    }
-
-    setServerUrlError(null);
-    setApiBase(normalized);
-    setServerUrl(normalized);
-
-    // Keep the persisted desktop session pointing at the same server so boot
-    // hydration and the sidecar connect use the newly saved URL.
-    const session = getSession();
-    if (session) {
-      const updated = patchSession({ serverUrl: normalized });
-      if (updated) {
-        void saveDesktopSession(updated);
-      }
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -542,45 +498,6 @@ export function GlobalSettingsModal({
                       <option value="pt-BR">{t('settings.portuguese')}</option>
                     </select>
                   </div>
-
-                  {/* Server URL (desktop only) */}
-                  {isDesktop() && (
-                    <div className="flex flex-col gap-2 p-3.5 sm:p-4">
-                      <div className="flex flex-col gap-0.5">
-                        <label htmlFor="api-base-url" className="font-semibold text-white">
-                          {t('settings.serverUrl')}
-                        </label>
-                        <span className="text-neutral-400">{t('settings.serverUrlDesc')}</span>
-                      </div>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <input
-                          id="api-base-url"
-                          type="url"
-                          value={serverUrl}
-                          onChange={(e) => {
-                            setServerUrl(e.target.value);
-                            if (serverUrlError) setServerUrlError(null);
-                          }}
-                          placeholder={t('settings.serverUrlPlaceholder')}
-                          aria-invalid={serverUrlError ? true : undefined}
-                          aria-describedby={serverUrlError ? 'api-base-url-error' : undefined}
-                          className="flex-1 min-w-0 bg-neutral-900 border border-neutral-800 text-xs text-neutral-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 hover:border-neutral-700 transition-colors"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleSaveServerUrl}
-                          className="h-8 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition-colors cursor-pointer shrink-0"
-                        >
-                          {t('settings.serverUrlSave')}
-                        </button>
-                      </div>
-                      {serverUrlError && (
-                        <p id="api-base-url-error" role="alert" className="text-rose-400">
-                          {serverUrlError}
-                        </p>
-                      )}
-                    </div>
-                  )}
 
                   {/* Default Execution Target */}
                   <div className="flex items-center justify-between p-3.5 sm:p-4">
