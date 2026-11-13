@@ -59,14 +59,11 @@ async function runBoot(): Promise<void> {
       return;
     }
 
-    // Parity with the component gate: pick up the stored base first.
-    store.setBaseUrl(readStoredBase());
-
     const session = await loadDesktopSession();
 
-    if (session?.serverUrl) {
-      store.setBaseUrl(normalizeApiBase(session.serverUrl));
-    }
+    // The session file is the only desktop base source: localStorage can hold a
+    // stale origin from an earlier server and must not win over the credential.
+    store.setBaseUrl(normalizeApiBase(session?.serverUrl));
 
     if (!session) {
       store.setStatus('ready');

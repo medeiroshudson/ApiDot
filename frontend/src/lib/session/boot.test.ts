@@ -208,4 +208,45 @@ describe('session boot', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('https://stored.example.com/api/workspaces');
   });
+
+  it('uses the session server url on desktop even when localStorage is stale', async () => {
+    enableDesktop();
+    localStorage.setItem(API_BASE_STORAGE_KEY, 'https://stale.example.com');
+    vi.mocked(loadDesktopSession).mockResolvedValue({
+      ...sessionFixture,
+      serverUrl: 'https://fresh.example.com',
+    });
+
+    await ensureBooted();
+
+    expect(state().baseUrl).toBe('https://fresh.example.com');
+    expect(fetchMock.mock.calls[0][0]).toBe('https://fresh.example.com/api/auth/me');
+  });
+
+  it('never takes the desktop base from localStorage', async () => {
+    enableDesktop();
+    localStorage.setItem(API_BASE_STORAGE_KEY, 'https://stale.example.com');
+    vi.mocked(loadDesktopSession).mockResolvedValue({
+      ...sessionFixture,
+      serverUrl: null,
+    });
+
+    await ensureBooted();
+
+    expect(state().baseUrl).toBe('');
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/auth/me');
+    // The write mirror still owns the stored value; only the read side changed.
+    expect(localStorage.getItem(API_BASE_STORAGE_KEY)).toBe('https://stale.example.com');
+  });
+
+  it('uses localStorage on the web and ignores the desktop session', async () => {
+    localStorage.setItem(API_BASE_STORAGE_KEY, 'https://web.example.com');
+    vi.mocked(loadDesktopSession).mockResolvedValue(sessionFixture);
+
+    await ensureBooted();
+
+    expect(state().baseUrl).toBe('https://web.example.com');
+    expect(loadDesktopSession).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
