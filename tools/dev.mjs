@@ -12,6 +12,7 @@
  */
 
 import { spawn } from 'node:child_process';
+import net from 'node:net';
 import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +23,21 @@ const dryRun = args.includes('--dry-run');
 const targets = args.filter((arg) => !arg.startsWith('--'));
 const defaultApiPort = 5181;
 const apiBase = (process.env.APIDOT_API_BASE || `http://127.0.0.1:${defaultApiPort}`).replace(/\/+$/, '');
+
+/** True when something already accepts connections on the local backend port. */
+function portInUse(port) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: '127.0.0.1', port });
+    const done = (inUse) => {
+      socket.destroy();
+      resolve(inUse);
+    };
+    socket.setTimeout(1000);
+    socket.once('connect', () => done(true));
+    socket.once('timeout', () => done(false));
+    socket.once('error', () => done(false));
+  });
+}
 
 const services = {
   backend: {
@@ -82,14 +98,40 @@ function exitWhenDone() {
   }, 100);
 }
 
+function signalGroup({ child }, signal) {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+  if (process.platform === 'win32') {
+    child.kill(signal);
+    return;
+  }
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    child.kill(signal);
+  }
+}
+
 function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
-  for (const { child } of children.values()) {
-    child.kill('SIGTERM');
+  for (const entry of children.values()) {
+    signalGroup(entry, 'SIGTERM');
   }
   exitWhenDone();
-  setTimeout(() => process.exit(exitCode), 3000).unref();
+  setTimeout(() => {
+    for (const entry of children.values()) {
+      signalGroup(entry, 'SIGKILL');
+    }
+    process.exit(exitCode);
+  }, 3000).unref();
+}
+
+if (targets.includes('backend') && (await portInUse(defaultApiPort))) {
+  console.error(`[backend] port ${defaultApiPort} is already in use, most likely a dev run that never exited.`);
+  console.error(`[backend] stop it first: lsof -ti tcp:${defaultApiPort} | xargs kill`);
+  process.exit(1);
 }
 
 for (const target of targets) {
@@ -99,6 +141,9 @@ for (const target of targets) {
     cwd: repoRoot,
     env: { ...process.env, ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
+    // Own process group: dotnet watch spawns the server as a grandchild, which a
+    // plain kill would leave holding the port.
+    detached: process.platform !== 'win32',
   });
   children.set(target, { child });
   prefixLines(child.stdout, target);
@@ -118,6 +163,6 @@ for (const target of targets) {
   });
 }
 
-for (const signal of ['SIGINT', 'SIGTERM']) {
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
   process.on(signal, shutdown);
 }
