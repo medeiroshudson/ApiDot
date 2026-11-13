@@ -12,6 +12,7 @@
  */
 
 import { spawn } from 'node:child_process';
+import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -23,6 +24,32 @@ const dryRun = args.includes('--dry-run');
 const targets = args.filter((arg) => !arg.startsWith('--'));
 const defaultApiPort = 5181;
 const apiBase = (process.env.APIDOT_API_BASE || `http://127.0.0.1:${defaultApiPort}`).replace(/\/+$/, '');
+
+/** Resolves true once the API answers /health, false on timeout. */
+function waitForApi(timeoutMs = 90000) {
+  const deadline = Date.now() + timeoutMs;
+  const probe = () =>
+    new Promise((resolve) => {
+      const request = http.get(`${apiBase}/health`, { timeout: 2000 }, (response) => {
+        response.resume();
+        resolve(response.statusCode !== undefined);
+      });
+      request.on('timeout', () => {
+        request.destroy();
+        resolve(false);
+      });
+      request.on('error', () => resolve(false));
+    });
+
+  return (async () => {
+    while (Date.now() < deadline) {
+      if (await probe()) return true;
+      if (shuttingDown) return false;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    return false;
+  })();
+}
 
 /** True when something already accepts connections on the local backend port. */
 function portInUse(port) {
@@ -134,7 +161,19 @@ if (targets.includes('backend') && (await portInUse(defaultApiPort))) {
   process.exit(1);
 }
 
+const spawnsBackend = targets.includes('backend');
+const uiTargets = targets.filter((target) => target !== 'backend');
+
 for (const target of targets) {
+  if (spawnsBackend && target !== 'backend' && uiTargets[0] === target) {
+    // The app boots as soon as the dev server answers; starting it before the API
+    // is listening leaves the first screen on a network error.
+    console.log(`[${target}] waiting for the API at ${apiBase} ...`);
+    if (!(await waitForApi())) {
+      console.error(`[${target}] the API did not answer /health in time; starting anyway.`);
+    }
+  }
+
   const { command, args: commandArgs, env } = services[target];
   console.log(`[${target}] starting: ${command} ${commandArgs.join(' ')}`);
   const child = spawn(command, commandArgs, {
